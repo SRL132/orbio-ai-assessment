@@ -169,3 +169,14 @@ def test_spoken_postal_code_and_slot(state: ConversationState, config: ClientCon
     assert fields.postal_code.value == "28010"
     state.stage = Stage.SCHEDULING
     assert KeywordExtractor().extract(state, "la dos", config, TODAY).slot_choice == 2
+
+
+def test_options_are_read_by_the_clients_own_labels(config: ClientConfig) -> None:
+    # A client that words an option its own way needs no change to the extractor.
+    es = {**config.templates["es"], "value_weekends": "sábados y domingos"}
+    renamed = config.model_copy(update={"templates": {**config.templates, "es": es}})
+    state = ConversationState(client_id=config.client_id, stage=Stage.COLLECTING)
+    state.awaiting = FieldName.AVAILABILITY
+    result = KeywordExtractor().extract(state, "Sábados y domingos", renamed, date(2026, 11, 2))
+    assert result.fields.availability is not None
+    assert result.fields.availability.value == [Availability.WEEKENDS]

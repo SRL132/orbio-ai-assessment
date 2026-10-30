@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import date, timedelta
+from enum import StrEnum
 from typing import Any
 
 from app.domain.config import ClientConfig
@@ -147,6 +148,33 @@ def _has(text: str, *needles: str) -> bool:
     return any(re.search(rf"\b{re.escape(n)}\b", text) for n in needles)
 
 
+# Words for each option beyond the client's own labels for it (`value_<option>` templates,
+# read by `_options`): partial phrases, plurals and synonyms people use.
+_AVAILABILITY_WORDS = {
+    Availability.FULL_TIME: _vocab("completa|full|cuando sea|whenever|todo el dia"),
+    Availability.PART_TIME: _vocab("media|part|parcial"),
+    Availability.WEEKENDS: _vocab("finde|findes|weekend"),
+}
+_SCHEDULE_WORDS = {
+    Schedule.MORNING: _vocab("mananas|mornings"),
+    Schedule.AFTERNOON: _vocab("tardes|afternoons"),
+    Schedule.EVENING: _vocab("noches|evenings|night|nights"),
+    Schedule.FLEXIBLE: _vocab("cualquiera|any|da igual|whatever"),
+}
+
+
+def _labels(config: ClientConfig, option: StrEnum) -> list[str]:
+    """The client's own words for an option in every language (its `value_<option>` template),
+    so renaming an option in the config needs no change here."""
+    key = f"value_{option.value}"
+    return [normalize(labels[key]) for labels in config.templates.values() if key in labels]
+
+
+def _options[O: StrEnum](t: str, config: ClientConfig, words: dict[O, frozenset[str]]) -> list[O]:
+    """The options the text names, by the client's label or by one of the extra words."""
+    return [option for option, extra in words.items() if _has(t, *extra, *_labels(config, option))]
+
+
 class KeywordExtractor:
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
@@ -189,11 +217,11 @@ class KeywordExtractor:
 
         self._license(t, awaiting, put)
         self._location(text, t, awaiting, config, put)
-        self._availability(t, put)
+        self._availability(t, config, put)
         if awaiting == FieldName.SCHEDULE or _has(
             t, "morning", "afternoon", "evening", "noches", "tardes", "mananas"
         ):
-            self._schedule(t, put)
+            self._schedule(t, config, put)
         if awaiting == FieldName.EXPERIENCE:
             self._experience(t, config, put)
         if awaiting == FieldName.START_DATE:
@@ -278,29 +306,13 @@ class KeywordExtractor:
             put("postal_code", postal.group(0))
 
     @staticmethod
-    def _availability(t: str, put: Put) -> None:
-        found: list[Availability] = []
-        if _has(t, "completa", "full", "cuando sea", "whenever", "todo el dia"):
-            found.append(Availability.FULL_TIME)
-        if _has(t, "media", "part", "parcial"):
-            found.append(Availability.PART_TIME)
-        if _has(t, "fines de semana", "finde", "findes", "weekend", "weekends"):
-            found.append(Availability.WEEKENDS)
-        if found:
+    def _availability(t: str, config: ClientConfig, put: Put) -> None:
+        if found := _options(t, config, _AVAILABILITY_WORDS):
             put("availability", found)
 
     @staticmethod
-    def _schedule(t: str, put: Put) -> None:
-        found: list[Schedule] = []
-        if _has(t, "manana", "mananas", "morning", "mornings"):
-            found.append(Schedule.MORNING)
-        if _has(t, "tarde", "tardes", "afternoon", "afternoons"):
-            found.append(Schedule.AFTERNOON)
-        if _has(t, "noche", "noches", "evening", "evenings", "night", "nights"):
-            found.append(Schedule.EVENING)
-        if _has(t, "flexible", "cualquiera", "any", "da igual", "whatever"):
-            found.append(Schedule.FLEXIBLE)
-        if found:
+    def _schedule(t: str, config: ClientConfig, put: Put) -> None:
+        if found := _options(t, config, _SCHEDULE_WORDS):
             put("schedule", found)
 
     @staticmethod

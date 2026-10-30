@@ -221,36 +221,42 @@ def _on_recap_reply(t: _Turn, extraction: ExtractionResult, applied: ApplyResult
 
 
 def _ask_next(t: _Turn, extraction: ExtractionResult, applied: ApplyResult) -> None:
-    state = t.state
-    awaited = state.awaiting
-    reask_reason: InvalidReason | None = None
-    if (
-        awaited is not None
-        and state.candidate.meta[awaited].status == FieldStatus.MISSING
-        and extraction.intent in _ANSWER_INTENTS
-        and not applied.progressed
-    ):
-        if register_failed_attempt(state, awaited, t.config):
-            t.event(EventType.FIELD_GAVE_UP, field=awaited.value)
-        else:
-            reask_reason = applied.rejected.get(awaited, "unclear")
-
-    if extraction.sentiment == "frustrated" and not state.offered_human:
-        state.offered_human = True
+    """After the candidate's answers: offer a person if they're frustrated, then ask the next
+    missing field (again, with the reason, if the answer to it didn't count), or recap."""
+    reask_reason = _count_unusable_answer(t, extraction, applied)
+    if extraction.sentiment == "frustrated" and not t.state.offered_human:
+        t.state.offered_human = True
         t.say("offer_human")
 
-    nxt = next_missing_field(state.candidate, t.config)
+    awaited = t.state.awaiting
+    nxt = next_missing_field(t.state.candidate, t.config)
+    t.state.awaiting = nxt
     if nxt is None:
-        state.stage = Stage.RECAP
-        state.awaiting = None
+        t.state.stage = Stage.RECAP
         t.actions.append(Recap())
         return
-    state.awaiting = nxt
     reason = (reask_reason or applied.rejected.get(nxt)) if nxt == awaited else None
     if reason:
         t.actions.append(ReAsk(field=nxt, reason=reason, offer_options=extraction.confused))
     else:
         t.actions.append(AskField(field=nxt, offer_options=extraction.confused))
+
+
+def _count_unusable_answer(
+    t: _Turn, extraction: ExtractionResult, applied: ApplyResult
+) -> InvalidReason | None:
+    """The candidate tried to answer the field we asked for, but nothing usable came out.
+    Count the attempt: returns why (to re-ask), or None once the field gives up and moves on."""
+    awaited = t.state.awaiting
+    tried = extraction.intent in _ANSWER_INTENTS and not applied.progressed
+    if awaited is None or not tried:
+        return None
+    if t.state.candidate.meta[awaited].status != FieldStatus.MISSING:
+        return None
+    if register_failed_attempt(t.state, awaited, t.config):
+        t.event(EventType.FIELD_GAVE_UP, field=awaited.value)
+        return None
+    return applied.rejected.get(awaited, "unclear")
 
 
 def _on_keep_on_file(t: _Turn, extraction: ExtractionResult) -> None:
