@@ -111,6 +111,7 @@ def candidate_list(
         availability=params.get("availability") or None,
         schedule=params.get("schedule") or None,
         language=params.get("language") or None,
+        channel=params.get("channel") or None,
         search=params.get("q") or None,
         start_before=_date(params.get("start_before")),
     )

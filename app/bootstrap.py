@@ -14,6 +14,7 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.storage.dashboard import DashboardQueries
 from app.adapters.storage.sql import SqlRepository, make_engine
+from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
 from app.domain.ports import Clock, Extractor, Ports, Responder
 from app.settings import Settings
@@ -30,6 +31,7 @@ class Container:
     runner: Runner
     queries: DashboardQueries
     db: Engine
+    tts: ElevenLabsTTS | None = None
 
     def close(self) -> None:
         self.db.dispose()
@@ -76,4 +78,11 @@ def build(settings: Settings | None = None) -> Container:
     service = ScreeningService(SqlRepository(db, clock), config, ports)
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
-    return Container(settings, config, clock, service, runner, queries, db)
+    tts = None
+    if settings.elevenlabs_api_key is not None:
+        tts = ElevenLabsTTS(
+            settings.elevenlabs_api_key.get_secret_value(),
+            settings.elevenlabs_voice_id,
+            settings.elevenlabs_model,
+        )
+    return Container(settings, config, clock, service, runner, queries, db, tts)

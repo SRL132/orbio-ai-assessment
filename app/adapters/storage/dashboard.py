@@ -26,6 +26,7 @@ class CandidateItem(BaseModel):
     location_id: str | None
     status: str
     stage: str
+    channel: str
     language: str
     availability: list[str]
     schedule: list[str]
@@ -42,6 +43,7 @@ class Filters:
     availability: str | None = None
     schedule: str | None = None
     language: str | None = None
+    channel: str | None = None
     search: str | None = None
     start_before: date | None = None
 
@@ -68,6 +70,8 @@ class DashboardQueries:
             query = query.where(ConversationRow.location_id == filters.location_id)
         if filters.language:
             query = query.where(ConversationRow.language == filters.language)
+        if filters.channel:
+            query = query.where(ConversationRow.channel == filters.channel)
         if filters.search:
             query = query.where(ConversationRow.full_name.ilike(f"%{filters.search.strip()}%"))
         if filters.start_before:
@@ -134,6 +138,7 @@ class Analytics(BaseModel):
     drop_off: dict[str, int]
     median_minutes: float | None
     by_language: dict[str, tuple[int, int]]
+    by_channel: dict[str, tuple[int, int]]
     by_location: dict[str, tuple[int, int]]
     interviews_booked: int
 
@@ -197,6 +202,7 @@ def compute_analytics(states: list[ConversationState], field_order: list[FieldNa
         drop_off=dict(sorted(drop_off.items(), key=lambda kv: -kv[1])),
         median_minutes=round(median, 1) if median is not None else None,
         by_language=breakdown(lambda s: s.language),
+        by_channel=breakdown(lambda s: s.channel),
         by_location=breakdown(lambda s: s.candidate.location_id),
         interviews_booked=sum(s.interview_at is not None for s in states),
     )

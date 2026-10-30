@@ -44,7 +44,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 • Area: Valencia  
 • Availability: full time  
 • Hours: evening  
-• Experience: 1 years · Uber Eats  
+• Experience: 1 year · Uber Eats  
 • Start: 03/11/2026  
 Is everything correct?  
 

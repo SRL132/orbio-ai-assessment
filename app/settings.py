@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
 
+    # Optional: speak voice-channel replies with ElevenLabs instead of the browser's voice.
+    elevenlabs_api_key: SecretStr | None = None
+    elevenlabs_voice_id: str = ""
+    elevenlabs_model: str = "eleven_multilingual_v2"
+
     database_url: str = "sqlite:///./data/sazon.db"
     client_id: str = "grupo_sazon"
 
@@ -28,3 +33,16 @@ class Settings(BaseSettings):
 
     recruiter_users: SecretStr | None = None
     session_secret: SecretStr | None = None
+
+    @field_validator(
+        "openrouter_api_key",
+        "anthropic_api_key",
+        "elevenlabs_api_key",
+        "recruiter_users",
+        "session_secret",
+        mode="before",
+    )
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        """`KEY=` in .env means "not set", never an empty secret."""
+        return None if isinstance(value, str) and not value.strip() else value

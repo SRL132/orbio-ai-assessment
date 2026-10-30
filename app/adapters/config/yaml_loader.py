@@ -12,10 +12,14 @@ CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 def load_client_config(client_id: str, config_dir: Path = CONFIG_DIR) -> ClientConfig:
     raw = yaml.safe_load((config_dir / f"{client_id}.yaml").read_text(encoding="utf-8"))
     templates: dict[str, dict[str, str]] = {}
+    voice: dict[str, dict[str, str]] = {}
     for lang_dir in sorted((config_dir / "templates").iterdir()):
         if lang_dir.is_dir():
-            templates[lang_dir.name] = {}
-            for path in sorted(lang_dir.glob("*.yaml")):
-                templates[lang_dir.name].update(yaml.safe_load(path.read_text(encoding="utf-8")))
+            chat_file = lang_dir / "chat.yaml"
+            voice_file = lang_dir / "voice.yaml"
+            templates[lang_dir.name] = yaml.safe_load(chat_file.read_text(encoding="utf-8"))
+            if voice_file.exists():
+                voice[lang_dir.name] = yaml.safe_load(voice_file.read_text(encoding="utf-8"))
     raw["templates"] = templates
+    raw["voice_templates"] = voice
     return ClientConfig.model_validate(raw)

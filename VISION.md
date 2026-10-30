@@ -71,7 +71,7 @@ A **modular monolith with a lightweight hexagonal core**. Full detail: [`docs/ar
 6. **Guardrails:** on-script behaviour, inappropriate input, minimal personal data. Mostly comes from the intent classification in the core loop.
 7. **Interview scheduling** with mocked slots. The qualified path in the process design books an interview in the chat.
 8. **Analytics:** the metrics in the table above.
-9. **Voice agent, only if time remains.** The brief singles out voice as the "Great" bonus tier. We rank it last on purpose: tools like ElevenLabs run their own conversation loop, so doing it properly means re-plugging our policy into theirs, for at most part of a 10% bonus. We'll say so in the presentation.
+9. **Voice agent.** Done: `/voice` runs the same engine with browser speech recognition and spoken replies (browser voice or ElevenLabs). See [architecture → Voice channel](docs/architecture.md#voice-channel).
 
 *Design only, if time remains:* ATS integration spec, deployment design for 10K candidates/week.
 

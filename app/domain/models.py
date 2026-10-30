@@ -72,6 +72,7 @@ class FieldStatus(StrEnum):
 
 
 Language = Literal["es", "en"]
+Channel = Literal["chat", "voice"]
 
 
 # --- Candidate record ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ class Candidate(BaseModel):
 class ConversationState(BaseModel):
     conversation_id: UUID = Field(default_factory=uuid4)
     client_id: str
+    channel: Channel = "chat"
     candidate: Candidate = Field(default_factory=Candidate)
     status: Status = Status.IN_PROGRESS
     stage: Stage = Stage.CONSENT

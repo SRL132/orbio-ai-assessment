@@ -42,7 +42,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 • Zona: Condesa, Ciudad de México  
 • Disponibilidad: jornada completa  
 • Horario: noche  
-• Experiencia: 1 años · Rappi  
+• Experiencia: 1 año · Rappi  
 • Inicio: 03/11/2026  
 ¿Es todo correcto?  
 

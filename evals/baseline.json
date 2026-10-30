@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 18,
+    "passed": 21,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -111,9 +111,27 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 10
+      },
+      "voice_books_interview": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "voice_cooperative_es": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "voice_no_license": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 4
       }
     },
-    "seconds": 0.2,
-    "total": 18
+    "seconds": 0.4,
+    "total": 21
   }
 }

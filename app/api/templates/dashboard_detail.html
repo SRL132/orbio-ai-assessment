@@ -5,7 +5,7 @@
 <p><a href="/dashboard">← Candidates</a></p>
 <h1>{{ state.candidate.full_name or 'Unnamed candidate' }}
   <span class="chip s-{{ state.status.value }}">{{ state.status.value.replace('_', ' ') }}</span>
-  <span class="muted" style="font-size:13px">· {{ location.city if location else 'location unknown' }} · {{ state.language }}</span>
+  <span class="muted" style="font-size:13px">· {{ location.city if location else 'location unknown' }} · {{ state.language }} · {{ 'voice call' if state.channel == 'voice' else 'chat' }}</span>
 </h1>
 <div class="grid">
   <div>

@@ -65,6 +65,7 @@ class ConversationRow(Base):
     client_id: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True)
     stage: Mapped[str] = mapped_column(String(32))
+    channel: Mapped[str] = mapped_column(String(16), default="chat", index=True)
     language: Mapped[str] = mapped_column(String(8))
     full_name: Mapped[str | None] = mapped_column(String(200))
     city: Mapped[str | None] = mapped_column(String(120))
@@ -312,6 +313,7 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.client_id = state.client_id
     row.status = state.status.value
     row.stage = state.stage.value
+    row.channel = state.channel
     row.language = state.language
     row.full_name = candidate.full_name
     row.city = candidate.city

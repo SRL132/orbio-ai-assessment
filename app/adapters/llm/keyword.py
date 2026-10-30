@@ -150,6 +150,126 @@ _SENSITIVE = re.compile(
 )
 
 
+_UNITS = {
+    "cero": 0,
+    "uno": 1,
+    "un": 1,
+    "una": 1,
+    "dos": 2,
+    "tres": 3,
+    "cuatro": 4,
+    "cinco": 5,
+    "seis": 6,
+    "siete": 7,
+    "ocho": 8,
+    "nueve": 9,
+    "diez": 10,
+    "once": 11,
+    "doce": 12,
+    "trece": 13,
+    "catorce": 14,
+    "quince": 15,
+    "dieciseis": 16,
+    "diecisiete": 17,
+    "dieciocho": 18,
+    "diecinueve": 19,
+    "veinte": 20,
+    "veintiuno": 21,
+    "veintiun": 21,
+    "veintidos": 22,
+    "veintitres": 23,
+    "veinticuatro": 24,
+    "veinticinco": 25,
+    "veintiseis": 26,
+    "veintisiete": 27,
+    "veintiocho": 28,
+    "veintinueve": 29,
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
+_TENS = {
+    "treinta": 30,
+    "cuarenta": 40,
+    "cincuenta": 50,
+    "sesenta": 60,
+    "setenta": 70,
+    "ochenta": 80,
+    "noventa": 90,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
+}
+_POSTAL_RUN = 3  # three or more spoken numbers in a row are a code read in pieces
+
+
+def spoken_numbers(text: str) -> str:
+    """Turn spoken numbers into digits, as speech-to-text often leaves them.
+
+    'veintiocho cero uno cero' -> '28010', 'treinta y dos' -> '32', 'dos años' -> '2 años'.
+    Expects normalized text (lowercase, no accents).
+    """
+    tokens = text.split()
+    out: list[str] = []
+    run: list[str] = []
+
+    def flush() -> None:
+        if len(run) >= _POSTAL_RUN:
+            out.append("".join(run))
+        else:
+            out.extend(run)
+        run.clear()
+
+    i = 0
+    while i < len(tokens):
+        word = tokens[i].strip(",.")
+        if word in _TENS:
+            value = _TENS[word]
+            if i + 2 < len(tokens) and tokens[i + 1] in ("y", "and") and tokens[i + 2] in _UNITS:
+                value += _UNITS[tokens[i + 2]]
+                i += 2
+            run.append(str(value))
+        elif word in _UNITS and not (
+            word in ("un", "una", "uno", "one") and not run and _next_is_unit_noun(tokens, i)
+        ):
+            run.append(str(_UNITS[word]))
+        elif word.isdigit():
+            run.append(word)
+        else:
+            flush()
+            out.append(tokens[i])
+        i += 1
+    flush()
+    return " ".join(out)
+
+
+def _next_is_unit_noun(tokens: list[str], i: int) -> bool:
+    """Keep 'un año' / 'one year' as words: the experience rules read them as phrases."""
+    return i + 1 < len(tokens) and tokens[i + 1] in ("ano", "anos", "year", "years", "mes", "month")
+
+
 def _words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text)
 
@@ -162,7 +282,7 @@ class KeywordExtractor:
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
-        t = normalize(text)
+        t = spoken_numbers(normalize(text))
         words = _words(t)
         fields: dict[str, Any] = {}
 
@@ -258,7 +378,7 @@ class KeywordExtractor:
     @staticmethod
     def _license(t: str, awaiting: FieldName | None, put: Put) -> None:
         vehicle = None
-        if _has(t, "ambos", "both", "las dos", "los dos"):
+        if _has(t, "ambos", "both", "las dos", "los dos", "las 2", "los 2"):
             vehicle = Vehicle.BOTH
         elif _has(t, "moto", "scooter", "motorbike", "motocicleta", "ciclomotor"):
             vehicle = Vehicle.MOTO
@@ -287,7 +407,7 @@ class KeywordExtractor:
             for z in loc.zones:
                 if _has(t, normalize(z)):
                     zone = z
-        postal = re.search(r"\b\d{5}\b", text)
+        postal = re.search(r"\b\d{5}\b", t)
         if awaiting == FieldName.LOCATION and city is None and zone is None and not postal:
             words = [w for w in re.split(r"[,.\s]+", text.strip()) if w]
             if 0 < len(words) <= 3 and all(w.isalpha() for w in words):

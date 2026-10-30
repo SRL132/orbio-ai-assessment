@@ -25,8 +25,8 @@ from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.engine import check_reply
-from app.domain.models import ConversationState, Stage
+from app.domain.engine import check_reply, speakable
+from app.domain.models import Channel, ConversationState, Stage
 from app.domain.ports import Extractor, Ports, Responder
 from app.domain.validators import normalize
 from app.worker.service import ScreeningService
@@ -55,6 +55,7 @@ class Expect(BaseModel):
 class Scenario(BaseModel):
     id: str
     description: str
+    channel: Channel = "chat"
     persona: str
     steps: list[str | dict[str, float]]
     expect: Expect
@@ -119,7 +120,7 @@ class Harness:
     def run_scripted(self, scenario: Scenario) -> ScenarioResult:
         service, clock, repo = self._service()
         started = time.monotonic()
-        cid = service.start_conversation()
+        cid = service.start_conversation(scenario.channel)
         turns = 0
         for step in scenario.steps:
             if isinstance(step, dict):
@@ -136,7 +137,7 @@ class Harness:
     def run_simulated(self, scenario: Scenario, candidate: Completer) -> ScenarioResult:
         service, _, repo = self._service()
         started = time.monotonic()
-        cid = service.start_conversation()
+        cid = service.start_conversation(scenario.channel)
         system = (
             "You are role-playing a job candidate chatting with a hiring assistant on WhatsApp. "
             f"Persona: {scenario.persona}\n"
@@ -221,9 +222,10 @@ class Harness:
                 failures.append(f"field {name}: {actual!r} != {expected!r}")
         accuracy = matched / len(expect.fields) if expect.fields else 1.0
 
-        # Output guardrail on every agent message (the recap is allowed to be longer).
+        # Output guardrail on every agent message. The recap and the slot offer may be longer;
+        # on voice, nothing may contain emoji or "·" lists, whatever its length.
         outbound = [m.text for m in messages if m.direction == "out"]
-        bad = [t for t in outbound if "\n•" not in t and not check_reply(t, self.config)]
+        bad = [t for t in outbound if not _reply_ok(t, scenario.channel, self.config)]
         if bad:
             failures.append(f"{len(bad)} replies failed the output check")
 
@@ -258,3 +260,12 @@ def _same(actual: object, expected: object) -> bool:
 
 def _norm(value: object) -> str:
     return normalize(str(value)) if value is not None else ""
+
+
+LONG_ALLOWED = ("Repasemos", "Let's recap", "Elige un horario", "Pick a time")
+
+
+def _reply_ok(text: str, channel: Channel, config: ClientConfig) -> bool:
+    if "\n•" in text or text.startswith(LONG_ALLOWED):
+        return channel == "chat" or speakable(text)  # length and question count exempt
+    return check_reply(text, config, channel)

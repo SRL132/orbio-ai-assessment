@@ -14,7 +14,14 @@ from uuid import UUID
 
 from app.domain import engine
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, DomainEvent, InboundMessage, Status, TurnResult
+from app.domain.models import (
+    Channel,
+    ConversationState,
+    DomainEvent,
+    InboundMessage,
+    Status,
+    TurnResult,
+)
 from app.domain.ports import Ports, Repository
 
 logger = logging.getLogger("app.service")
@@ -34,11 +41,11 @@ class ScreeningService:
         with self._locks_guard:
             return self._locks[conversation_id]
 
-    def start_conversation(self) -> UUID:
-        state = ConversationState(client_id=self.config.client_id)
+    def start_conversation(self, channel: Channel = "chat") -> UUID:
+        state = ConversationState(client_id=self.config.client_id, channel=channel)
         result = engine.start(state, self.config, self.ports)
         self.repo.create(result.state, result.events, result.replies)
-        logger.info("conversation_started id=%s", state.conversation_id)
+        logger.info("conversation_started id=%s channel=%s", state.conversation_id, channel)
         return state.conversation_id
 
     def receive(

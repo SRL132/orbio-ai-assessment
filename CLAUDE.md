@@ -38,7 +38,7 @@ When code and design disagree, don't let them drift silently: update the relevan
 ```bash
 uv sync                                       # install (Python 3.13, pinned in .python-version)
 cp .env.example .env                          # LLM_PROVIDER=fake needs no API key
-uv run uvicorn --factory app.api.main:create_app --reload   # chat at /chat, dashboard at /dashboard
+uv run uvicorn --factory app.api.main:create_app --reload   # /chat, /voice (Chrome/Edge), /dashboard
 uv run ruff format . && uv run ruff check .   # format and lint
 uv run mypy app                               # types (strict on app.domain)
 uv run lint-imports                           # architecture boundaries

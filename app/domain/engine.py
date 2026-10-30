@@ -7,7 +7,8 @@ state and events.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import re
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
@@ -17,6 +18,7 @@ from app.domain.models import (
     AnswerQuestion,
     AskField,
     Candidate,
+    Channel,
     ConversationState,
     Disqualify,
     DomainEvent,
@@ -373,10 +375,22 @@ class _SafeDict(dict[str, str]):
         return ""
 
 
-def check_reply(text: str, config: ClientConfig) -> bool:
-    """Output guardrail: one short message with at most one question."""
+_EMOJI = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf]")
+
+
+def check_reply(text: str, config: ClientConfig, channel: Channel = "chat") -> bool:
+    """Output guardrail: one short message with at most one question.
+
+    Voice replies are read aloud, so they also can't contain emoji or "·" option lists.
+    """
     stripped = text.strip()
-    return 0 < len(stripped) <= config.max_reply_chars and stripped.count("?") <= 1
+    ok = 0 < len(stripped) <= config.max_reply_chars and stripped.count("?") <= 1
+    return ok and (channel == "chat" or speakable(stripped))
+
+
+def speakable(text: str) -> bool:
+    """Can be read aloud as is: no emoji and no "·" option lists."""
+    return not _EMOJI.search(text) and "·" not in text
 
 
 def _fill(template: str, state: ConversationState, config: ClientConfig, **extra: str) -> str:
@@ -395,7 +409,9 @@ def _label(config: ClientConfig, language: Language, key: str) -> str:
     return config.templates[language].get(key, key)
 
 
-def recap_summary(candidate: Candidate, config: ClientConfig, language: Language) -> str:
+def recap_summary(
+    candidate: Candidate, config: ClientConfig, language: Language, channel: Channel = "chat"
+) -> str:
     def values(prefix: str, items: list[str]) -> str:
         return ", ".join(_label(config, language, f"{prefix}{item}") for item in items)
 
@@ -416,7 +432,11 @@ def recap_summary(candidate: Candidate, config: ClientConfig, language: Language
         (FieldName.SCHEDULE, values("value_", [s.value for s in candidate.schedule])),
         (
             FieldName.EXPERIENCE,
-            _label(config, language, "experience_value").format(
+            _label(
+                config,
+                language,
+                "experience_value_one" if candidate.experience_years == 1 else "experience_value",
+            ).format(
                 years=f"{candidate.experience_years:g}"
                 if candidate.experience_years is not None
                 else "-",
@@ -425,12 +445,30 @@ def recap_summary(candidate: Candidate, config: ClientConfig, language: Language
         ),
         (
             FieldName.START_DATE,
-            candidate.start_date.strftime("%d/%m/%Y") if candidate.start_date else "-",
+            _date_text(candidate.start_date, config, language, channel)
+            if candidate.start_date
+            else "-",
         ),
     ]
     return "\n".join(
         f"• {_label(config, language, f'label_{name.value}')}: {value}" for name, value in lines
     )
+
+
+def _date_text(day: date, config: ClientConfig, language: Language, channel: Channel) -> str:
+    """'04/11/2026' in chat; '4 de noviembre' / 'November 4' when it will be read aloud."""
+    if channel == "voice":
+        months = config.template(language, "months", channel).split(",")
+        return config.template(language, "date_format", channel).format(
+            day=day.day, month=months[day.month - 1], year=day.year
+        )
+    return day.strftime("%d/%m/%Y")
+
+
+def recap_spoken(candidate: Candidate, config: ClientConfig, language: Language) -> str:
+    """The recap as one sentence for text-to-speech: no bullets, no symbols."""
+    lines = recap_summary(candidate, config, language, "voice").splitlines()
+    return "; ".join(line.removeprefix("• ").replace(" · ", ", ") for line in lines)
 
 
 def render(
@@ -439,10 +477,15 @@ def render(
     replies: list[str] = []
     events: list[DomainEvent] = []
     lang = state.language
+    channel = state.channel
+
+    def t(key: str) -> str:
+        return config.template(lang, key, channel)
+
     for action in actions:
         match action:
             case Say(template=key):
-                replies.append(_fill(config.template(lang, key), state, config))
+                replies.append(_fill(t(key), state, config))
             case AskField() | ReAsk() | AnswerQuestion():
                 text: str | None
                 try:
@@ -452,51 +495,62 @@ def render(
                         DomainEvent(type="responder_failed", data={"error": type(exc).__name__})
                     )
                     text = None
-                if text is None or not check_reply(text, config):
+                if text is None or not check_reply(text, config, channel):
                     if text is not None:
                         events.append(
                             DomainEvent(type="reply_rejected", data={"kind": action.kind})
                         )
-                    text = _fill(config.template(lang, _fallback_key(action)), state, config)
+                    text = _fill(t(_fallback_key(action)), state, config)
                 replies.append(text)
             case Disqualify(reason=reason):
-                replies.append(
-                    _fill(config.template(lang, f"disqualified_{reason}"), state, config)
-                )
+                replies.append(_fill(t(f"disqualified_{reason}"), state, config))
             case HandOff(reason=reason):
                 key = "handoff_human" if reason == "human_requested" else "needs_review"
-                replies.append(_fill(config.template(lang, key), state, config))
+                replies.append(_fill(t(key), state, config))
             case Recap():
-                summary = recap_summary(state.candidate, config, lang)
-                replies.append(
-                    _fill(config.template(lang, "recap"), state, config, summary=summary)
+                summary = (
+                    recap_spoken(state.candidate, config, lang)
+                    if channel == "voice"
+                    else recap_summary(state.candidate, config, lang)
                 )
+                replies.append(_fill(t("recap"), state, config, summary=summary))
             case Qualified():
-                replies.append(_fill(config.template(lang, "qualified"), state, config))
+                replies.append(_fill(t("qualified"), state, config))
             case OfferSlots(slots=slots, location_id=location_id):
-                listed = "\n".join(
-                    f"{i}) {_slot_text(slot, location_id, config, lang)}"
-                    for i, slot in enumerate(slots, start=1)
-                )
-                replies.append(
-                    _fill(config.template(lang, "offer_slots"), state, config, slots=listed)
-                )
+                if channel == "voice":
+                    ordinals = t("slot_ordinals").split(",")
+                    listed = "; ".join(
+                        f"{ordinals[i]}, {_slot_text(slot, location_id, config, lang, channel)}"
+                        for i, slot in enumerate(slots)
+                    )
+                else:
+                    listed = "\n".join(
+                        f"{i}) {_slot_text(slot, location_id, config, lang)}"
+                        for i, slot in enumerate(slots, start=1)
+                    )
+                replies.append(_fill(t("offer_slots"), state, config, slots=listed))
             case InterviewBooked(at=at, location_id=location_id):
-                when = _slot_text(at, location_id, config, lang)
-                replies.append(
-                    _fill(config.template(lang, "interview_booked"), state, config, when=when)
-                )
+                when = _slot_text(at, location_id, config, lang, channel)
+                replies.append(_fill(t("interview_booked"), state, config, when=when))
             case ScheduleReminder():
                 pass
     return replies, events
 
 
-def _slot_text(slot: datetime, location_id: str, config: ClientConfig, language: Language) -> str:
-    """'jue 5/11 10:00' in the location's own timezone."""
+def _slot_text(
+    slot: datetime,
+    location_id: str,
+    config: ClientConfig,
+    language: Language,
+    channel: Channel = "chat",
+) -> str:
+    """'jue 5/11 10:00' (chat) or 'jueves 5 a las 10:00' (voice), in the location's timezone."""
     location = config.location(location_id)
     local = slot.astimezone(ZoneInfo(location.timezone)) if location else slot
-    weekday = config.template(language, "weekdays").split(",")[local.weekday()]
-    return f"{weekday} {local.day}/{local.month} {local:%H:%M}"
+    weekday = config.template(language, "weekdays", channel).split(",")[local.weekday()]
+    return config.template(language, "slot_format", channel).format(
+        weekday=weekday, day=local.day, month=local.month, time=f"{local:%H:%M}"
+    )
 
 
 def _fallback_key(action: AskField | ReAsk | AnswerQuestion) -> str:

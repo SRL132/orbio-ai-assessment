@@ -162,3 +162,35 @@
     status: in_progress
     awaiting: license
     reply_contains: [asistente virtual automatizada]
+
+# --- Voice channel: messages look like speech-to-text output (lowercase, no punctuation, numbers
+# spoken), and every reply must be speakable (no emoji, no "·" lists).
+
+- id: voice_cooperative_es
+  description: Voice call, cooperative caller who reads out a postal code.
+  channel: voice
+  persona: Ana López on a voice call. Lives in Madrid, postal code 28010. Moto license. Full time, evenings. Two years on Glovo. Starts tomorrow. Speaks Spanish casually.
+  steps: [sí, ana lópez, de moto, vivo en madrid código postal veintiocho cero uno cero, jornada completa, por las noches, dos años en glovo, mañana, sí]
+  expect:
+    status: qualified
+    fields: {full_name: Ana López, vehicle: moto, location_id: es-madrid, postal_code: "28010", experience_years: 2, platforms: [Glovo]}
+
+- id: voice_no_license
+  description: Voice call, no license; spoken knockout and keep-on-file question.
+  channel: voice
+  persona: Luis Pérez on a voice call. Has no driving license. Doesn't want his details kept.
+  steps: [sí, luis pérez, no tengo carnet, "no"]
+  expect:
+    status: disqualified
+    disqualify_reason: no_license
+    keep_on_file: false
+
+- id: voice_books_interview
+  description: Voice call that ends by booking an interview slot by saying "la segunda".
+  channel: voice
+  persona: Diego Navarro on a voice call. Has moto and car licenses. Lives in Condesa (Mexico City). Weekends, flexible hours, one year on Rappi, starts the day after tomorrow. Picks the second interview time.
+  steps: [vale, diego navarro, las dos, cdmx en la condesa, fines de semana, flexible, un año en rappi, pasado mañana, correcto, la segunda]
+  expect:
+    status: qualified
+    interview_booked: true
+    fields: {vehicle: both, location_id: mx-cdmx, experience_years: 1, start_date: "2026-11-04"}

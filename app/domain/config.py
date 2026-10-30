@@ -6,7 +6,7 @@ from YAML is an adapter concern; the domain only defines and reads this schema.
 
 from pydantic import BaseModel, Field
 
-from app.domain.models import FieldName, Language, Vehicle
+from app.domain.models import Channel, FieldName, Language, Vehicle
 
 
 class ServiceLocation(BaseModel):
@@ -73,9 +73,14 @@ class ClientConfig(BaseModel):
     max_reply_chars: int = 250
     interview: InterviewConfig = Field(default_factory=InterviewConfig)
     templates: dict[Language, dict[str, str]]
+    voice_templates: dict[Language, dict[str, str]] = Field(
+        default_factory=dict, description="Spoken overrides; missing keys fall back to chat."
+    )
     faq: list[FaqEntry] = Field(default_factory=list)
 
-    def template(self, language: Language, key: str) -> str:
+    def template(self, language: Language, key: str, channel: Channel = "chat") -> str:
+        if channel == "voice" and key in self.voice_templates.get(language, {}):
+            return self.voice_templates[language][key]
         return self.templates[language][key]
 
     def location(self, location_id: str) -> ServiceLocation | None:

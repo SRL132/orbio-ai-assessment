@@ -100,3 +100,7 @@ Examples:
 - Opening: *¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: \[aviso de privacidad\]. ¿Empezamos?*
 - Re-ask: *No me quedó claro — ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.*
 - Disqualified: *Gracias, Marta. Para este puesto necesitamos carnet de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?*
+
+## Voice
+
+The same flow runs on a voice call (`/voice`). The questions, rules and outcomes are identical. Only the wording changes: options are said as a sentence instead of buttons, there's no emoji, dates are said as words, and the greeting adds that the audio is transcribed and not kept.

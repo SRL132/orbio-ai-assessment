@@ -62,6 +62,7 @@ def extractor_user(state: ConversationState, text: str, today: date) -> str:
     return (
         f"Today: {today.isoformat()} ({today.strftime('%A')})\n"
         f"Current language: {state.language}\n"
+        f"Channel: {_extract_channel_note(state)}\n"
         f"Stage: {state.stage.value}\n"
         f"The assistant just asked about: {asked}\n"
         f"Already answered: {', '.join(known) or 'nothing yet'}\n"
@@ -80,23 +81,43 @@ def responder_user(
             task = f"Ask for: {name.value}." + (
                 " The candidate seems confused: offer the options." if options else ""
             )
-            reference = config.template(lang, f"ask_{name.value}")
+            reference = config.template(lang, f"ask_{name.value}", state.channel)
         case ReAsk(field=name, reason=reason, offer_options=options):
             task = (
                 f"Ask again for: {name.value}. The previous answer could not be used "
                 f"(reason: {reason}). Acknowledge kindly and give an example of a good answer."
                 + (" Offer the options." if options else "")
             )
-            reference = config.template(lang, f"reask_{name.value}")
+            reference = config.template(lang, f"reask_{name.value}", state.channel)
         case AnswerQuestion(question=question):
             task = (
                 f'Answer the candidate\'s question: "{question}". Use only the FAQ. '
                 "Don't ask anything back: the next question follows in its own message."
             )
-            reference = config.template(lang, "answer_unknown")
+            reference = config.template(lang, "answer_unknown", state.channel)
     return (
         f"Language: {lang}\n"
+        f"Channel: {_respond_channel_note(state)}\n"
         f"Candidate first name: {first_name}\n"
         f"Task: {task}\n"
         f"Reference wording (keep the meaning, you may rephrase): {reference}"
     )
+
+
+def _extract_channel_note(state: ConversationState) -> str:
+    if state.channel == "voice":
+        return (
+            "voice. The message is speech-to-text output: no punctuation, numbers may be spelled "
+            "out ('veintiocho cero uno cero' = 28010, 'dos años y medio' = 2.5), and names or "
+            "places may be misheard; read them generously."
+        )
+    return "chat"
+
+
+def _respond_channel_note(state: ConversationState) -> str:
+    if state.channel == "voice":
+        return (
+            "voice. Your message will be read aloud: no emoji, symbols or lists; say any options "
+            "as a natural sentence; keep it short."
+        )
+    return "chat"

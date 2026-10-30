@@ -50,6 +50,7 @@ interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la direcci�
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
 no_slot_fits: Sin problema, un reclutador te escribirá para buscar otro horario.
 weekdays: lun,mar,mié,jue,vie,sáb,dom
+slot_format: "{weekday} {day}/{month} {time}"
 needs_review: ¡Gracias, {name}! Un reclutador revisará tu candidatura y te escribirá en 2 días laborables.
 handoff_human: Claro, aviso a una persona del equipo. Te escribirá en 1 día laborable.
 
@@ -81,3 +82,4 @@ value_afternoon: tarde
 value_evening: noche
 value_flexible: flexible
 experience_value: "{years} años · {platforms}"
+experience_value_one: "{years} año · {platforms}"

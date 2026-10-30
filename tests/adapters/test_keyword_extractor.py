@@ -140,3 +140,32 @@ def test_slot_choice(
 def test_none_of_the_slots(state: ConversationState, config: ClientConfig) -> None:
     state.stage = Stage.SCHEDULING
     assert KeywordExtractor().extract(state, "ninguno", config, TODAY).yes_no is False
+
+
+@pytest.mark.parametrize(
+    ("spoken", "digits"),
+    [
+        ("veintiocho cero uno cero", "28010"),
+        ("cero seis siete cero cero", "06700"),
+        ("treinta y dos", "32"),
+        ("dos anos y medio", "2 anos y medio"),
+        ("un ano", "un ano"),
+        ("two years", "2 years"),
+    ],
+)
+def test_spoken_numbers(spoken: str, digits: str) -> None:
+    from app.adapters.llm.keyword import spoken_numbers
+
+    assert spoken_numbers(spoken) == digits
+
+
+def test_spoken_postal_code_and_slot(state: ConversationState, config: ClientConfig) -> None:
+    state.stage = Stage.COLLECTING
+    state.channel = "voice"
+    fields = extract(
+        state, config, "vivo en madrid código postal veintiocho cero uno cero", FieldName.LOCATION
+    ).fields
+    assert fields.postal_code is not None
+    assert fields.postal_code.value == "28010"
+    state.stage = Stage.SCHEDULING
+    assert KeywordExtractor().extract(state, "la dos", config, TODAY).slot_choice == 2

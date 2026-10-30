@@ -15,7 +15,10 @@ uv run uvicorn --factory app.api.main:create_app --reload
 ```
 
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
+- Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
 - Recruiter dashboard: http://127.0.0.1:8000/dashboard. Create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
+
+Upgrading from an earlier version? Delete `data/sazon.db` first: the demo creates its tables at startup and has no migrations.
 
 ### Configuration
 
@@ -24,17 +27,18 @@ uv run uvicorn --factory app.api.main:create_app --reload
 | `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openrouter`, or `anthropic` |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | — | Development and model comparison (synthetic data only) |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-opus-5-5` | The intended production path |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
 | `RECRUITER_USERS`, `SESSION_SECRET` | — | Dashboard login (no default accounts) |
 
 ## What it does
 
-**Conversation** ([process design](docs/process-design.md)): consent and an automated-assistant disclosure first, then the seven screening questions, one per message, with the two knockouts (license, service area) right after the name. Answers can come in any order and several at once. The agent re-asks invalid or unclear answers with examples, and after two failed tries it moves on and flags the field. It follows Spanish ↔ English switches, answers job questions from an approved FAQ, offers a human when the candidate seems frustrated, and hands off right away when asked. Sensitive data such as an ID number is redacted. Reminders go out at 2 h and 24 h, then the candidate is marked abandoned. Qualified candidates book an interview slot in the chat.
+**Conversation** ([process design](docs/process-design.md)): consent and an automated-assistant disclosure first, then the seven screening questions, one per message, with the two knockouts (license, service area) right after the name. Answers can come in any order and several at once. The agent re-asks invalid or unclear answers with examples, and after two failed tries it moves on and flags the field. It follows Spanish ↔ English switches, answers job questions from an approved FAQ, offers a human when the candidate seems frustrated, and hands off right away when asked. Sensitive data such as an ID number is redacted. Reminders go out at 2 h and 24 h, then the candidate is marked abandoned. Qualified candidates book an interview slot in the chat. The same flow runs as a **voice call** (`/voice`): push-to-talk speech recognition in the browser, spoken replies (browser voice or ElevenLabs), wording adapted for speech.
 
 **Outcomes:** qualified (plus a booked interview), disqualified (kindly, with an offer to keep their details), needs review (with the reason), or abandoned (with the drop-off point). Each comes with a short summary for the recruiter.
 
-**Dashboard** ([spec](docs/recruiter-dashboard.md)): a filterable candidate list with counters, a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
+**Dashboard** ([spec](docs/recruiter-dashboard.md)): a filterable candidate list (including by channel, chat or voice) with counters, a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
 
 ## Architecture
 
@@ -65,13 +69,13 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on the domain, import-linter for the architecture boundary, 180+ tests with a coverage ratchet (≥ 94%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on the domain, import-linter for the architecture boundary, 200+ tests with a coverage ratchet (≥ 94%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
-`uv run python -m evals` runs 18 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, language switch, code-switching, both knockouts, borderline zone, human request, abuse, ID number, silence, invalid date, prompt injection, job question, bot question, and interview booking. Each run is scored on outcome, field accuracy, turns and the output check, and compared against `evals/baseline.json`.
+`uv run python -m evals` runs 21 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, language switch, code-switching, both knockouts, borderline zone, human request, abuse, ID number, silence, invalid date, prompt injection, job question, bot question, interview booking, and three voice calls with speech-to-text-style input. Each run is scored on outcome, field accuracy, turns and the output check, and compared against `evals/baseline.json`.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
-| Offline (`fake/keyword/scripted`, in CI) | 18/18 | 100% |
+| Offline (`fake/keyword/scripted`, in CI) | 21/21 | 100% |
 | Live models | not run yet: needs an API key (`--provider openrouter --model …` or `--provider anthropic`, optionally `--simulate`) |
 
 The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure.
@@ -82,7 +86,7 @@ The offline result shows the engine and policy behave as designed. It says littl
 
 - **Run the live evals** on the shortlisted models, pick the provider on accuracy, then latency, then cost, and record the baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set.
 - **WhatsApp channel adapter**, with pre-approved templates for messages after the 24-hour window.
-- **Voice channel** (the brief's "Great" tier): browser push-to-talk → speech-to-text → the same engine → text-to-speech. Not built; the engine is channel-agnostic, so it's an adapter plus voice templates.
+- **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** Postgres with Alembic migrations, a real queue and database-level locking, SSO for recruiters, rate limiting on login and chat, a CSRF token on dashboard forms (today: SameSite cookies), and retention jobs.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
 - **Smarter re-engagement:** reminder timing by time of day and channel, and A/B tests on reminder wording, measured with the drop-off analytics.

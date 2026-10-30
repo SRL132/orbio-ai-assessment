@@ -186,3 +186,17 @@ def test_interview_booked_end_to_end(logged_in: TestClient, container: Container
     assert state is not None
     assert state.interview_at is not None
     assert "Interview" in logged_in.get(f"/dashboard/candidates/{cid}").text
+
+
+def test_channel_filter_and_analytics(logged_in: TestClient, container: Container) -> None:
+    voice = container.service.start_conversation("voice")
+    container.service.receive(voice, "sí")
+    container.service.process_pending(voice)
+    container.service.receive(voice, "carla soto")
+    container.service.process_pending(voice)
+    chat(container, "sí", "Pablo Gil")
+    page = logged_in.get("/dashboard?channel=voice").text
+    assert "Carla Soto" in page
+    assert "Pablo Gil" not in page
+    assert "voice" in logged_in.get(f"/dashboard/candidates/{voice}").text
+    assert "By channel" in logged_in.get("/dashboard/analytics").text

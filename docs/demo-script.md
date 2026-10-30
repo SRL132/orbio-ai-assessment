@@ -19,7 +19,8 @@
    - Switch to English mid-conversation: it follows.
    - "Quiero hablar con una persona": immediate hand-off.
    - Go silent: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
-4. **Recruiter side (4 min).** Counters → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
+4. **Voice call (2 min).** Open `/voice` in Chrome, press "Start call", and answer by voice: say the postal code out loud, then book the interview by saying "la segunda". Point out that it's the same engine and the same dashboard (filter by channel).
+5. **Recruiter side (4 min).** Counters → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
 
 Why this beats the status quo: no missed calls, recruiters only see qualified candidates and real edge cases, structured data ready for the ATS, and the interview is booked without a callback.
 
@@ -41,7 +42,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 
 1. 0:00 Problem and product in one sentence each.
 2. 0:45 Happy path in the chat, ending with the interview booking.
-3. 3:00 Two edge cases: no license, and language switch or hand-off.
+3. 3:00 Two edge cases: no license, and language switch or hand-off. Then 30 seconds of the voice call.
 4. 4:30 Dashboard: review queue → detail → override → analytics.
 5. 6:30 Architecture in one diagram, plus the evals run in the terminal.
 6. 8:00 What's next.

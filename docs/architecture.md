@@ -196,7 +196,18 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `BookSlot` actions; a database constraint prevents double-booking | Med |
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
 | Deployment design | Done: "Deployment and monitoring" above | Low |
-| Voice | A new channel adapter. Preferred: browser push-to-talk → speech-to-text → `engine.turn()` → TTS (e.g. ElevenLabs). Needs voice templates, spoken-input parsing (postal codes, dates), and a single LLM call per turn for latency. Alternative: a hosted voice-agent platform calling the engine as a custom LLM or tools (more moving parts; check the platform's current docs) | Med–High |
+| Voice | Done: a `/voice` page on the same engine. Push-to-talk in the browser (Web Speech API, Chrome/Edge) → text → `engine.turn()` → reply spoken by ElevenLabs when `ELEVENLABS_API_KEY` is set, else by the browser. Voice templates (no emoji or "·" lists, options as sentences, spoken dates), a speech-aware prompt note, spoken-number parsing, no debounce. See "Voice channel" below | Done |
+
+## Voice channel
+
+Voice is a channel, not a second agent: the conversation has `channel: voice`, and everything else (engine, validators, policy, storage, dashboard, evals) is shared.
+
+- **Listening:** the browser's speech recognition turns one push-to-talk utterance into text, which goes through the normal message API. Voice messages skip the debounce, since each one is already a complete utterance.
+- **Speaking:** replies are read by ElevenLabs (`POST /api/tts`, server-side, only the agent's text) when configured, otherwise by the browser's `speechSynthesis`.
+- **Wording:** `app/config/templates/<lang>/voice.yaml` overrides only what doesn't work aloud. The responder is told its message will be read aloud, and the output check rejects emoji and "·" lists for voice.
+- **Understanding:** the extractor is told the text is speech-to-text output (no punctuation, spelled-out numbers, misheard names). The offline extractor converts spoken numbers ("veintiocho cero uno cero" → 28010).
+
+Limits and the production path: browser speech recognition only works in Chrome and Edge, and Chrome sends the audio to Google for recognition. That's acceptable for a demo but not for candidates' data under GDPR, so production would use server-side speech-to-text (e.g. ElevenLabs or another provider under the client's data-processing agreement) and the WhatsApp or phone channel instead of a web page. The engine wouldn't change.
 
 ## LLM provider
 

@@ -25,12 +25,15 @@
   <label>Language <select name="language"><option value="">Any</option>
     {% for l in ['es', 'en'] %}<option value="{{ l }}" {{ 'selected' if filters.get('language') == l }}>{{ l }}</option>{% endfor %}
   </select></label>
+  <label>Channel <select name="channel"><option value="">Any</option>
+    {% for ch in ['chat', 'voice'] %}<option value="{{ ch }}" {{ 'selected' if filters.get('channel') == ch }}>{{ ch }}</option>{% endfor %}
+  </select></label>
   <label>Starts by <input type="date" name="start_before" value="{{ filters.get('start_before', '') }}"></label>
   <button type="submit">Filter</button>
   <a href="/dashboard" class="muted">Clear</a>
 </form>
 <table>
-  <thead><tr><th>Name</th><th>Status</th><th>Location</th><th>Availability</th><th>Hours</th><th>Start</th><th>Lang</th><th>Last activity</th></tr></thead>
+  <thead><tr><th>Name</th><th>Status</th><th>Location</th><th>Availability</th><th>Hours</th><th>Start</th><th>Lang</th><th>Channel</th><th>Last activity</th></tr></thead>
   <tbody>
   {% for i in items %}
     <tr onclick="location.href='/dashboard/candidates/{{ i.id }}'" style="cursor:pointer">
@@ -41,10 +44,11 @@
       <td>{{ ', '.join(i.schedule) or '—' }}</td>
       <td>{{ i.start_date.strftime('%d/%m/%Y') if i.start_date else '—' }}</td>
       <td>{{ i.language }}</td>
+      <td>{{ '🎙 voice' if i.channel == 'voice' else 'chat' }}</td>
       <td class="muted">{{ i.updated_at.strftime('%d/%m %H:%M') }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="empty">No candidates match these filters.</td></tr>
+    <tr><td colspan="9" class="empty">No candidates match these filters.</td></tr>
   {% endfor %}
   </tbody>
 </table>

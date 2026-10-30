@@ -51,6 +51,7 @@ def normalize(text: str) -> str:
     return " ".join(stripped.lower().split())
 
 
+_NAME_PARTICLES = frozenset({"de", "del", "la", "las", "los", "y", "da", "van", "von"})
 _NAME_TOKEN = re.compile(r"[^\W\d_]+(?:[-'][^\W\d_]+)*", re.UNICODE)
 
 
@@ -60,6 +61,8 @@ def validate_full_name(full_name: str | None) -> Outcome:
     tokens = _NAME_TOKEN.findall(full_name)
     if not tokens:
         return Outcome.invalid("not_a_name")
+    if all(t == t.lower() for t in tokens):  # speech-to-text and quick typing drop capitals
+        tokens = [t if t in _NAME_PARTICLES else t.capitalize() for t in tokens]
     cleaned = " ".join(tokens)
     if len(tokens) < 2:
         return Outcome.invalid("surname_missing", full_name=cleaned)

@@ -39,6 +39,11 @@
   </div>
 </div>
 
+<h2>By channel</h2>
+<table><thead><tr><th>Channel</th><th>Started</th><th>Completed</th></tr></thead><tbody>
+  {% for ch, (total, done) in a.by_channel.items() %}<tr><td>{{ ch }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
+</tbody></table>
+
 <div class="grid">
   <div>
     <h2>By language</h2>

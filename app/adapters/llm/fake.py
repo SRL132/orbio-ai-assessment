@@ -37,11 +37,13 @@ class TemplateResponder:
         state: ConversationState,
         config: ClientConfig,
     ) -> str:
-        lang = state.language
+        lang, channel = state.language, state.channel
         match action:
             case AskField(field=name):
-                return config.template(lang, f"ask_{name.value}")
+                return config.template(lang, f"ask_{name.value}", channel)
             case ReAsk(field=name):
-                return config.template(lang, f"reask_{name.value}")
+                return config.template(lang, f"reask_{name.value}", channel)
             case AnswerQuestion(question=question):
-                return match_faq(question, config, lang) or config.template(lang, "answer_unknown")
+                return match_faq(question, config, lang) or config.template(
+                    lang, "answer_unknown", channel
+                )
