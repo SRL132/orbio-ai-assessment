@@ -1,5 +1,6 @@
 """End-to-end through HTTP with the offline keyword extractor (LLM_PROVIDER=fake)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -96,3 +97,30 @@ def test_chat_page_renders(client: TestClient) -> None:
     response = client.get("/chat")
     assert response.status_code == 200
     assert "Grupo Sazón" in response.text
+
+
+def test_replies_are_pushed_over_server_sent_events(tmp_path: Path) -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="fake",
+        database_url=f"sqlite:///{tmp_path / 'sse.db'}",
+        debounce_seconds=0,
+        demo_mode=True,
+        chat_stream_seconds=0.3,  # a short stream: it ends and the browser would reconnect
+    )
+    with TestClient(create_app(build(settings))) as client:
+        cid = client.post("/api/conversations").json()["id"]
+        client.post(f"/api/conversations/{cid}/messages", json={"text": "sí"})
+        with client.stream("GET", f"/api/conversations/{cid}/stream") as response:
+            assert response.headers["content-type"].startswith("text/event-stream")
+            body = "".join(response.iter_text())
+        events = [b for b in body.split("\n\n") if b.startswith("id:")]
+        first = json.loads(events[0].split("data: ", 1)[1])
+        assert [m["direction"] for m in first["messages"]] == ["out", "in", "out"]
+        assert events[0].startswith(f"id: {first['messages'][-1]['seq']}")
+        resumed = client.get(
+            f"/api/conversations/{cid}/stream", headers={"Last-Event-ID": "3"}
+        ).text
+        assert '"messages": []' in resumed  # nothing after the last one seen
+        stranger = TestClient(client.app)
+        assert stranger.get(f"/api/conversations/{cid}/stream").status_code == 404

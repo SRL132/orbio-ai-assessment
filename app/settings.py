@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     whatsapp_reminder_template: str = ""  # approved template for messages after 24 h (paid)
     whatsapp_dispatch_seconds: float = 1.0
 
+    # What this process runs: "all" (one process, the demo), "web" (HTTP only) or "worker"
+    # (turns, reminders, outbox and cleanup, no HTTP: `python -m app.worker`). Run any number
+    # of each; leases keep one conversation to one worker at a time.
+    role: Literal["all", "web", "worker"] = "all"
+    worker_poll_seconds: float = 1.0
+    chat_stream_seconds: float = 300.0  # an SSE stream ends after this; the browser reconnects
+
     database_url: str = "sqlite:///./data/sazon.db"
     client_id: str = "grupo_sazon"
 

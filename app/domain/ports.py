@@ -118,6 +118,10 @@ class Repository(Protocol):
 
     def due_reminders(self, now: datetime) -> list[UUID]: ...
 
+    def waiting_conversations(self, quiet_since: datetime) -> list[UUID]:
+        """Conversations with unprocessed messages, the newest no later than `quiet_since`."""
+        ...
+
     # --- External channels (outbox + contacts) ---
 
     def undelivered(self, channel: str, limit: int = 50) -> list[Outbound]: ...

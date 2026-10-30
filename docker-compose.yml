@@ -1,5 +1,6 @@
-# Local production-like stack: the app plus Postgres.
+# Local production-like stack: a web process, a worker process and Postgres.
 #   docker compose up --build      → http://localhost:8000/chat, /voice, /dashboard
+#   docker compose up --scale worker=3   (any number of workers: leases keep them apart)
 # Settings (LLM provider, keys, recruiter accounts) come from .env if present.
 
 services:
@@ -27,8 +28,24 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sazon:${POSTGRES_PASSWORD:-sazon-local-dev}@db:5432/sazon
       DEMO_MODE: ${DEMO_MODE:-true}
+      ROLE: web
     depends_on:
       db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]  # the app container has run the migrations
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://sazon:${POSTGRES_PASSWORD:-sazon-local-dev}@db:5432/sazon
+      DEMO_MODE: ${DEMO_MODE:-true}
+    healthcheck:
+      disable: true  # no HTTP server to probe
+    depends_on:
+      app:
         condition: service_healthy
 
 volumes:

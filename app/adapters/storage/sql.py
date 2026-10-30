@@ -30,10 +30,12 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     create_engine,
+    func,
     select,
     true,
     update,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Dialect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -70,8 +72,15 @@ class Base(DeclarativeBase):
     pass
 
 
+ListColumn = JSON().with_variant(JSONB(), "postgresql")
+
+
 class ConversationRow(Base):
     __tablename__ = "conversations"
+    __table_args__ = (
+        Index("ix_conversations_availability", "availability", postgresql_using="gin"),
+        Index("ix_conversations_schedule", "schedule", postgresql_using="gin"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     client_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -83,8 +92,9 @@ class ConversationRow(Base):
     city: Mapped[str | None] = mapped_column(String(120))
     zone: Mapped[str | None] = mapped_column(String(120))
     location_id: Mapped[str | None] = mapped_column(String(64), index=True)
-    availability: Mapped[list[str]] = mapped_column(JSON, default=list)
-    schedule: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # JSONB with a GIN index on Postgres, so the dashboard's list filters use an index.
+    availability: Mapped[list[str]] = mapped_column(ListColumn, default=list)
+    schedule: Mapped[list[str]] = mapped_column(ListColumn, default=list)
     start_date: Mapped[date | None] = mapped_column(Date)
     review_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
     # Analytics inputs, so the dashboard aggregates in SQL instead of loading every state.
@@ -450,6 +460,20 @@ class SqlRepository:
                 .order_by(MessageRow.seq)
             ).all()
             return [_message(r) for r in rows]
+
+    def waiting_conversations(self, quiet_since: datetime) -> list[UUID]:
+        """Conversations with unprocessed candidate messages, none newer than `quiet_since`
+        (so a burst still being typed waits for its debounce)."""
+        msg = MessageRow
+        with self._sessions() as session:
+            ids = session.scalars(
+                select(msg.conversation_id)
+                .where(msg.client_id == self._client_id, msg.direction == "in")
+                .where(msg.processed.is_(False))
+                .group_by(msg.conversation_id)
+                .having(func.max(msg.created_at) <= quiet_since)
+            ).all()
+            return [UUID(i) for i in ids]
 
     def due_reminders(self, now: datetime) -> list[UUID]:
         with self._sessions() as session:

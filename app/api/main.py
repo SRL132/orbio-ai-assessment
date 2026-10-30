@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
@@ -28,7 +30,7 @@ from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
 from app.domain.models import Channel
-from app.worker.service import MAX_MESSAGE_CHARS
+from app.worker.service import MAX_MESSAGE_CHARS, ScreeningService
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 logger = logging.getLogger("app.api")
@@ -62,9 +64,12 @@ def create_app(container: Container | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        c.runner.start()
+        background = c.settings.role == "all"  # "web": a separate worker does the rest
+        if background:
+            c.runner.start()
         yield
-        await c.runner.stop()
+        if background:
+            await c.runner.stop()
         c.close()
 
     app = FastAPI(title="Sazón Screening Agent", lifespan=lifespan)
@@ -155,26 +160,41 @@ def create_app(container: Container | None = None) -> FastAPI:
         request: Request, conversation_id: UUID, after: Annotated[int, Query(ge=0)] = 0
     ) -> dict[str, object]:
         require_owner(request, conversation_id)
-        service = get(request).service
-        state = service.get(conversation_id)
-        if state is None:
+        payload = _snapshot(get(request).service, conversation_id, after)
+        if payload is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "conversation not found")
-        messages = service.messages(conversation_id, after)
-        return {
-            "status": state.status.value,
-            "stage": state.stage.value,
-            "channel": state.channel,
-            "language": state.language,
-            "messages": [
-                {
-                    "seq": m.seq,
-                    "direction": m.direction,
-                    "text": m.text,
-                    "created_at": m.created_at.isoformat(),
-                }
-                for m in messages
-            ],
-        }
+        return payload
+
+    @app.get("/api/conversations/{conversation_id}/stream")
+    async def stream(
+        request: Request, conversation_id: UUID, after: Annotated[int, Query(ge=0)] = 0
+    ) -> StreamingResponse:
+        """Server-sent events: new messages are pushed as they're stored, in the same shape as
+        GET .../messages. The browser reconnects by itself, resuming from Last-Event-ID.
+        Without a pub/sub the server still checks the database (every 0.5 s per open stream),
+        but the browser no longer polls and replies arrive as soon as they're saved."""
+        require_owner(request, conversation_id)
+        service = get(request).service
+        resume = request.headers.get("last-event-id", "")
+        start = int(resume) if resume.isdigit() else after
+        seconds = get(request).settings.chat_stream_seconds
+
+        async def events() -> AsyncIterator[str]:
+            last, shown, deadline = start, None, time.monotonic() + seconds
+            yield "retry: 1000\n\n"
+            while time.monotonic() < deadline and not await request.is_disconnected():
+                payload = await asyncio.to_thread(_snapshot, service, conversation_id, last)
+                if payload is None:
+                    return
+                current = (payload["status"], payload["stage"])
+                if payload["messages"] or current != shown:
+                    last = payload["messages"][-1]["seq"] if payload["messages"] else last
+                    shown = current
+                    yield f"id: {last}\ndata: {json.dumps(payload)}\n\n"
+                await asyncio.sleep(STREAM_POLL_SECONDS)
+
+        headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        return StreamingResponse(events(), media_type="text/event-stream", headers=headers)
 
     @app.post("/api/conversations/{conversation_id}/messages", status_code=status.HTTP_202_ACCEPTED)
     async def post_message(
@@ -193,8 +213,9 @@ def create_app(container: Container | None = None) -> FastAPI:
         # Push-to-talk sends one complete utterance: voice skips the debounce to cut latency.
         if c.settings.debounce_seconds <= 0 or (state is not None and state.channel == "voice"):
             await asyncio.to_thread(c.service.process_pending, conversation_id)
-        else:
+        elif c.settings.role == "all":
             c.runner.notify(conversation_id)
+        # role "web": a worker process picks it up once the debounce has passed
         return {"accepted": True}
 
     @app.get("/voice", response_class=HTMLResponse)
@@ -233,3 +254,30 @@ def create_app(container: Container | None = None) -> FastAPI:
         return {"now": c.clock.now().isoformat(), "conversations_changed": changed}
 
     return app
+
+
+STREAM_POLL_SECONDS = 0.5
+
+
+def _snapshot(
+    service: ScreeningService, conversation_id: UUID, after: int
+) -> dict[str, Any] | None:
+    """The conversation's status and its messages after `after` (None if it doesn't exist)."""
+    state = service.get(conversation_id)
+    if state is None:
+        return None
+    return {
+        "status": state.status.value,
+        "stage": state.stage.value,
+        "channel": state.channel,
+        "language": state.language,
+        "messages": [
+            {
+                "seq": m.seq,
+                "direction": m.direction,
+                "text": m.text,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in service.messages(conversation_id, after)
+        ],
+    }

@@ -10,7 +10,8 @@ from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select
+from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.adapters.storage.sql import ConversationRow, MessageRow
@@ -67,10 +68,13 @@ class Page(BaseModel):
 
 
 def _json_list_has(
-    column: InstrumentedAttribute[list[str]], value: Availability | Schedule
+    column: InstrumentedAttribute[list[str]], value: Availability | Schedule, postgres: bool
 ) -> ColumnElement[bool]:
-    """A JSON list column contains `value`, portably: match '"value"' in its text. Enum values
-    hold no quotes or LIKE wildcards. (At scale: a GIN index on JSONB in Postgres.)"""
+    """A list column contains `value`. Postgres: JSONB containment (`@>`), which uses the GIN
+    index. Elsewhere (SQLite): match '"value"' in the JSON text; enum values hold no quotes
+    or LIKE wildcards."""
+    if postgres:
+        return type_coerce(column, JSONB).contains([value.value])
     return cast(column, String).like(f'%"{value.value}"%')
 
 
@@ -87,6 +91,7 @@ class DashboardQueries:
     def __init__(self, engine: Engine, client_id: str) -> None:
         self._engine = engine
         self._client_id = client_id
+        self._postgres = engine.dialect.name == "postgresql"
 
     def candidates(self, filters: Filters, page: int = 1, per_page: int = PER_PAGE) -> Page:
         """One page of the filtered list, recruiters' priorities first; every filter is SQL, so
@@ -105,9 +110,13 @@ class DashboardQueries:
         if filters.start_before:
             query = query.where(ConversationRow.start_date <= filters.start_before)
         if filters.availability:
-            query = query.where(_json_list_has(ConversationRow.availability, filters.availability))
+            query = query.where(
+                _json_list_has(ConversationRow.availability, filters.availability, self._postgres)
+            )
         if filters.schedule:
-            query = query.where(_json_list_has(ConversationRow.schedule, filters.schedule))
+            query = query.where(
+                _json_list_has(ConversationRow.schedule, filters.schedule, self._postgres)
+            )
         page = max(page, 1)
         listed = (
             query.order_by(_STATUS_ORDER, ConversationRow.updated_at.desc(), ConversationRow.id)

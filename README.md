@@ -33,7 +33,7 @@ Replies and reminders go out through an outbox (`messages.delivered`), so a remi
 ### Docker
 
 ```bash
-docker compose up --build          # app + Postgres at http://localhost:8000
+docker compose up --build          # web + worker + Postgres at http://localhost:8000
 ```
 
 The image is multi-stage, runs as a non-root user with a health check, and applies migrations before starting. Settings come from `.env` if present.

@@ -137,6 +137,15 @@ class ScreeningService:
         )
         return result
 
+    def process_waiting(self, debounce: timedelta) -> int:
+        """Pick up every conversation whose messages have waited out the debounce: how a
+        worker process finds work (and how any process recovers turns that failed)."""
+        quiet_since = self.ports.clock.now() - debounce
+        return sum(
+            self.process_pending(cid) is not None
+            for cid in self.repo.waiting_conversations(quiet_since)
+        )
+
     def send_due_reminders(self) -> int:
         """Send due reminders (or mark candidates abandoned). Returns how many changed.
         A conversation that is busy right now is skipped: its turn reschedules the reminder."""

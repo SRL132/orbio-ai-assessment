@@ -75,6 +75,7 @@ async function newConversation() {
   lastSeq = 0;
   log.innerHTML = "";
   quick.innerHTML = "";
+  if (source) listen();  // follow the new conversation
 }
 
 function bubble(direction, text) {
@@ -110,22 +111,40 @@ function quickReplies(text) {
   }
 }
 
+function show(data) {
+  statusEl.textContent = data.status.replace("_", " ");
+  for (const m of data.messages) {
+    if (m.seq <= lastSeq) continue;
+    setTyping(false);
+    bubble(m.direction, m.text);
+    lastSeq = m.seq;
+    if (m.direction === "out") { waiting = false; quickReplies(m.text); }
+  }
+  setTyping(waiting);
+  if (data.messages.length) log.scrollTop = log.scrollHeight;
+}
+
 async function poll() {
   if (!conversationId) return;
   try {
-    const data = await api(`/api/conversations/${conversationId}/messages?after=${lastSeq}`);
-    statusEl.textContent = data.status.replace("_", " ");
-    for (const m of data.messages) {
-      setTyping(false);
-      bubble(m.direction, m.text);
-      lastSeq = m.seq;
-      if (m.direction === "out") { waiting = false; quickReplies(m.text); }
-    }
-    setTyping(waiting);
-    if (data.messages.length) log.scrollTop = log.scrollHeight;
+    show(await api(`/api/conversations/${conversationId}/messages?after=${lastSeq}`));
   } catch (e) {
     if (String(e.message) === "404") { localStorage.removeItem("conversationId"); await newConversation(); }
   }
+}
+
+// Replies are pushed (server-sent events); the browser reconnects by itself. Polling is the
+// fallback for browsers without EventSource.
+let source = null;
+function listen() {
+  source?.close();
+  if (!window.EventSource) { setInterval(poll, 1000); return; }
+  source = new EventSource(`/api/conversations/${conversationId}/stream?after=${lastSeq}`);
+  source.onmessage = (event) => show(JSON.parse(event.data));
+  source.onerror = () => {
+    if (source.readyState !== EventSource.CLOSED) return;  // the browser is reconnecting
+    setTimeout(async () => { await poll(); listen(); }, 2000);  // refused (e.g. gone): back off
+  };
 }
 
 async function send(text) {
@@ -133,8 +152,8 @@ async function send(text) {
   if (!text || !conversationId) return;
   quick.innerHTML = "";
   waiting = true;
+  setTyping(true);
   await api(`/api/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ text }) });
-  await poll();
 }
 
 document.getElementById("form").addEventListener("submit", async (event) => {
@@ -154,7 +173,7 @@ document.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click
 (async () => {
   if (!conversationId) await newConversation();
   await poll();
-  setInterval(poll, 1000);
+  listen();
 })();
 </script>
 </body>

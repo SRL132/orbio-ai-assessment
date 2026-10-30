@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 
 from sqlalchemy import Engine
 
@@ -100,6 +101,10 @@ def build(settings: Settings | None = None) -> Container:
             settings.elevenlabs_voice_id,
             settings.elevenlabs_model,
         )
+    debounce = timedelta(seconds=settings.debounce_seconds)
+    runner.add_periodic(
+        "process_waiting", lambda: service.process_waiting(debounce), settings.worker_poll_seconds
+    )
     runner.add_periodic("release_orphan_bookings", calendar.release_orphans, 300)
     runner.add_periodic("retention", SqlRetention(db, config, clock).erase_expired, 3600)
     whatsapp = make_whatsapp(settings, service)

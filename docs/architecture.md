@@ -156,7 +156,7 @@ Same code, different implementations behind the ports.
 
 | Part | Demo (one process) | 10K/week and beyond |
 | --- | --- | --- |
-| Queue | asyncio queue in the FastAPI process | Redis/SQS, N worker containers |
+| Queue | `ROLE=all`: debounce timers in the FastAPI process | `ROLE=web` + N `python -m app.worker` processes that find waiting messages in the database (leases keep them apart); Redis/SQS only if polling the database stops being enough |
 | Database | SQLite via SQLAlchemy | Postgres (same code) |
 | Scheduler | background task | cron / worker job |
 | Channels | web chat (+ voice) | + WhatsApp adapter |
@@ -172,7 +172,8 @@ Design only; the demo runs as one process.
 **Deploy**
 
 - **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
-- **Services:** one image (`Dockerfile`; `docker-compose.yml` runs it locally with Postgres) deployed as three container services: `api` (webhooks, chat, dashboard), `worker` (turn processing, N replicas), `scheduler` (reminders, outbox dispatch). Stateless; scale `worker` on queue depth.
+- **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
+- **Chat delivery:** replies are pushed to the browser over server-sent events (`/api/conversations/{id}/stream`), with polling as the fallback. Each open stream checks the database every 0.5 s; past a few thousand concurrent chats, Postgres `LISTEN/NOTIFY` (or Redis pub/sub) would replace that check.
 - **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
 - **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
 - **Release:** CI gates (lint, types, boundaries, tests, offline evals) → image → staging with live evals → production. Prompt and config changes ship per client behind a version number, so one client can be rolled back without the others.
