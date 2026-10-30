@@ -139,3 +139,19 @@ def test_fast_forwarding_the_demo_clock_does_not_expire_a_lease(
     assert not repo.try_lease(state.conversation_id, "other", LEASE)
     lease_clock.advance(seconds=LEASE.total_seconds() + 1)  # real time passes
     assert repo.try_lease(state.conversation_id, "other", LEASE)
+
+
+def test_an_override_waits_for_a_short_turn(
+    db, config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service = worker(db, config, clock, extractor)
+    service.recruiter_wait_seconds = 5
+    cid = service.start_conversation()
+    assert service.repo.try_lease(cid, "turn", LEASE)
+    finishing = threading.Timer(0.2, service.repo.release_lease, args=(cid, "turn"))
+    finishing.start()
+    service.override(cid, Status.QUALIFIED, "checked by phone", "r@sazon.es")  # waits ~0.2 s
+    finishing.join()
+    state = service.get(cid)
+    assert state is not None
+    assert state.status == Status.QUALIFIED

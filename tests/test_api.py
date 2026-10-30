@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
+from app.adapters.storage.sql import ConversationRow, MessageRow
 from app.api.main import create_app
 from app.bootstrap import build
 from app.settings import Settings
@@ -124,3 +126,21 @@ def test_replies_are_pushed_over_server_sent_events(tmp_path: Path) -> None:
         assert '"messages": []' in resumed  # nothing after the last one seen
         stranger = TestClient(client.app)
         assert stranger.get(f"/api/conversations/{cid}/stream").status_code == 404
+
+
+def test_a_stream_ends_when_its_conversation_is_erased(tmp_path: Path) -> None:
+    container = build(
+        Settings(_env_file=None, database_url=f"sqlite:///{tmp_path / 'e.db'}", demo_mode=True)
+    )
+    with TestClient(create_app(container)) as client:
+        cid = client.post("/api/conversations").json()["id"]
+        with container.db.begin() as connection:  # the retention job erased it meanwhile
+            connection.execute(delete(MessageRow).where(MessageRow.conversation_id == cid))
+            connection.execute(delete(ConversationRow).where(ConversationRow.id == cid))
+        body = client.get(f"/api/conversations/{cid}/stream").text
+    assert body.strip() == "retry: 1000"
+
+
+def test_root_goes_to_the_chat(client: TestClient) -> None:
+    response = client.get("/", follow_redirects=False)
+    assert (response.status_code, response.headers["location"]) == (307, "/chat")

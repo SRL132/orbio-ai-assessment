@@ -285,3 +285,12 @@ def test_a_first_name_alone_is_accepted_when_the_name_gives_up(config: ClientCon
     meta = state.candidate.meta[FieldName.FULL_NAME]
     assert (meta.status, meta.note) == (FieldStatus.VALID, "surname_missing")
     assert state.review_reasons == []
+
+
+def test_reasons_are_only_read_from_the_right_outcomes() -> None:
+    with pytest.raises(ValueError, match="no knockout or review reason"):
+        _ = Outcome.invalid("missing").verdict
+    with pytest.raises(ValueError, match="no invalid-answer reason"):
+        _ = Outcome.knockout(Reason.NO_LICENSE).problem
+    assert Outcome.review(Reason.ZONE_NOT_LISTED).verdict == Reason.ZONE_NOT_LISTED
+    assert Outcome.invalid("in_past").problem == "in_past"
