@@ -17,6 +17,10 @@ class Settings(BaseSettings):
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
+    # USD per million tokens, from Anthropic's pricing page. The API reports tokens, not cost;
+    # without these the usage meter can't price Anthropic calls (e.g. for an eval budget).
+    anthropic_input_usd_per_mtok: float | None = None
+    anthropic_output_usd_per_mtok: float | None = None
 
     # Optional: speak voice-channel replies with ElevenLabs instead of the browser's voice.
     elevenlabs_api_key: SecretStr | None = None

@@ -13,6 +13,7 @@ from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.dashboard import DashboardQueries
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.adapters.voice.elevenlabs import ElevenLabsTTS
@@ -40,7 +41,7 @@ class Container:
         self.db.dispose()
 
 
-def make_llm(settings: Settings) -> tuple[Extractor, Responder]:
+def make_llm(settings: Settings, meter: UsageMeter | None = None) -> tuple[Extractor, Responder]:
     match settings.llm_provider:
         case "fake":
             return KeywordExtractor(), TemplateResponder()
@@ -53,6 +54,7 @@ def make_llm(settings: Settings) -> tuple[Extractor, Responder]:
                 settings.openrouter_api_key.get_secret_value(),
                 settings.openrouter_model,
                 timeout=settings.llm_timeout_seconds,
+                meter=meter,
             )
             return llm, llm
         case "anthropic":
@@ -65,7 +67,12 @@ def make_llm(settings: Settings) -> tuple[Extractor, Responder]:
                 api_key=key.get_secret_value() if key else None,
                 timeout=settings.llm_timeout_seconds,
             )
-            claude = AnthropicLLM(client, settings.anthropic_model)
+            usd_in = settings.anthropic_input_usd_per_mtok
+            usd_out = settings.anthropic_output_usd_per_mtok
+            prices = (usd_in, usd_out) if usd_in is not None and usd_out is not None else None
+            claude = AnthropicLLM(
+                client, settings.anthropic_model, meter=meter, usd_per_mtok=prices
+            )
             return claude, claude
 
 

@@ -11,7 +11,8 @@ class UsageMeter:
     calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float = 0.0  # OpenRouter reports cost in credits, bought 1:1 with USD
+    # OpenRouter reports cost (credits, bought 1:1 with USD); Anthropic is priced from settings.
+    cost_usd: float = 0.0
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()

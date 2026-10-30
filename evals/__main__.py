@@ -76,7 +76,16 @@ def main(argv: list[str] | None = None) -> int:
         for llm in (extractor, responder, simulator):
             llm.reasoning_effort = None if args.reasoning == "default" else args.reasoning
     else:
-        extractor, responder = make_llm(settings)
+        if (
+            args.provider == "anthropic"
+            and args.budget_usd is not None
+            and (
+                settings.anthropic_input_usd_per_mtok is None
+                or settings.anthropic_output_usd_per_mtok is None
+            )
+        ):
+            parser.error("--budget-usd needs ANTHROPIC_INPUT/OUTPUT_USD_PER_MTOK to price calls")
+        extractor, responder = make_llm(settings, meter)
         simulator = extractor if isinstance(extractor, Completer) else None
     harness = Harness(config, extractor, responder, meter)
     key = _key(args, settings)

@@ -20,6 +20,7 @@ from app.adapters.llm.prompting import (
     responder_system,
     responder_user,
 )
+from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
     AnswerQuestion,
@@ -44,10 +45,16 @@ class AnthropicLLM:
         client: anthropic.Anthropic,
         model: str = "claude-opus-5-5",
         effort: Literal["low", "medium", "high", "xhigh", "max"] = "low",
+        meter: UsageMeter | None = None,
+        usd_per_mtok: tuple[float, float] | None = None,
     ) -> None:
+        """`usd_per_mtok` is (input, output). Cache reads and writes are priced as input, which
+        overestimates: the safe side for a budget cap."""
         self._client = client
         self._model = model
         self._output_config: BetaOutputConfigParam = {"effort": effort}
+        self.meter = meter
+        self._prices = usd_per_mtok
 
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
@@ -107,6 +114,16 @@ class AnthropicLLM:
 
     def _log(self, kind: str, response: BetaMessage, started: float) -> None:
         usage = response.usage
+        if self.meter is not None:
+            prompt = (
+                usage.input_tokens
+                + (usage.cache_read_input_tokens or 0)
+                + (usage.cache_creation_input_tokens or 0)
+            )
+            cost = 0.0
+            if self._prices is not None:
+                cost = (prompt * self._prices[0] + usage.output_tokens * self._prices[1]) / 1e6
+            self.meter.record(prompt, usage.output_tokens, cost)
         logger.info(
             "llm_call provider=anthropic kind=%s model=%s input_tokens=%s output_tokens=%s "
             "cache_read_tokens=%s stop_reason=%s latency_ms=%d request_id=%s",

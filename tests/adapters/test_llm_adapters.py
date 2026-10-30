@@ -16,6 +16,7 @@ from app.adapters.llm.prompting import (
     responder_system,
     responder_user,
 )
+from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
     AnswerQuestion,
@@ -146,7 +147,12 @@ def _response(stop_reason: str = "end_turn", parsed: Any = None, text: str = "")
         parsed_output=parsed,
         content=[SimpleNamespace(type="text", text=text)],
         model="claude-opus-5-5",
-        usage=SimpleNamespace(input_tokens=900, output_tokens=80, cache_read_input_tokens=850),
+        usage=SimpleNamespace(
+            input_tokens=50,
+            output_tokens=80,
+            cache_read_input_tokens=850,
+            cache_creation_input_tokens=100,
+        ),
         _request_id="req_test",
     )
 
@@ -180,6 +186,23 @@ class TestAnthropic:
         llm, _ = self.make(_response(text=" ¿Qué día podrías empezar? "))
         reply = llm.compose(AskField(field=FieldName.START_DATE), state, config)
         assert reply == "¿Qué día podrías empezar?"
+
+    def test_calls_are_metered_and_priced(self) -> None:
+        meter = UsageMeter()
+        messages = _StubMessages(_response(text="hola"))
+        client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
+        llm = AnthropicLLM(client, meter=meter, usd_per_mtok=(1.0, 5.0))  # type: ignore[arg-type]
+        assert llm.complete("system", "user") == "hola"
+        # 1,000 prompt tokens (cache included) at $1/M plus 80 output tokens at $5/M.
+        assert (meter.calls, meter.prompt_tokens, meter.completion_tokens) == (1, 1000, 80)
+        assert meter.cost_usd == pytest.approx(0.0014)
+
+    def test_unpriced_calls_count_tokens_only(self) -> None:
+        meter = UsageMeter()
+        messages = _StubMessages(_response(text="hola"))
+        client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
+        AnthropicLLM(client, meter=meter).complete("system", "user")  # type: ignore[arg-type]
+        assert (meter.prompt_tokens, meter.cost_usd) == (1000, 0.0)
 
 
 class TestResponderPrompt:
