@@ -29,198 +29,67 @@ from app.domain.validators import normalize
 
 Put = Callable[[str, object], None]
 
-_YES = {
-    "si",
-    "sí",
-    "vale",
-    "ok",
-    "okay",
-    "claro",
-    "correcto",
-    "perfecto",
-    "yes",
-    "yeah",
-    "yep",
-    "sure",
-    "dale",
-    "de acuerdo",
-    "empezamos",
-    "adelante",
-    "go",
-    "correct",
-}
-_NO = {"no", "nope", "no gracias", "no thanks", "nah"}
-_HUMAN = ("persona", "humano", "human", "agente", "agent", "reclutador", "recruiter", "real person")
-_ABUSE = (
-    "idiota",
-    "imbecil",
-    "estupido",
-    "gilipollas",
-    "puta",
-    "mierda",
-    "idiot",
-    "stupid",
-    "fuck",
-    "shit",
+
+def _vocab(entries: str) -> frozenset[str]:
+    """'si|vale|de acuerdo' -> a set of entries ('|' separates them, so phrases keep spaces)."""
+    return frozenset(entries.split("|"))
+
+
+_YES = _vocab(
+    "si|sí|vale|ok|okay|claro|correcto|perfecto|yes|yeah|yep|sure|dale|de acuerdo|empezamos|"
+    "adelante|go|correct"
 )
-_ENGLISH = {
-    "yes",
-    "hi",
-    "hello",
-    "my",
-    "name",
-    "is",
-    "i",
-    "im",
-    "have",
-    "the",
-    "and",
-    "car",
-    "both",
-    "none",
-    "weekends",
-    "full",
-    "part",
-    "time",
-    "morning",
-    "afternoon",
-    "evening",
-    "tomorrow",
-    "today",
-    "never",
-    "years",
-    "sure",
-    "live",
-    "in",
-    "want",
-    "next",
-    "week",
-}
-_SPANISH = {
-    "si",
-    "hola",
-    "me",
-    "llamo",
-    "soy",
-    "tengo",
-    "coche",
-    "ambos",
-    "vivo",
-    "en",
-    "de",
-    "jornada",
-    "completa",
-    "media",
-    "fines",
-    "semana",
-    "manana",
-    "tarde",
-    "noche",
-    "nunca",
-    "anos",
-    "hoy",
-    "lunes",
-    "el",
-    "la",
-    "y",
-    "con",
-    "quiero",
-    "vale",
-    "claro",
-}
+_NO = _vocab("no|nope|no gracias|no thanks|nah")
+_HUMAN = _vocab("persona|humano|human|agente|agent|reclutador|recruiter|real person")
+_ABUSE = _vocab("idiota|imbecil|estupido|gilipollas|puta|mierda|idiot|stupid|fuck|shit")
+# Words that tip the language guess (whole words, after normalize()).
+_ENGLISH = _vocab(
+    "yes|hi|hello|my|name|is|i|im|have|the|and|car|both|none|weekends|full|part|time|morning|"
+    "afternoon|evening|tomorrow|today|never|years|sure|live|in|want|next|week"
+)
+_SPANISH = _vocab(
+    "si|hola|me|llamo|soy|tengo|coche|ambos|vivo|en|de|jornada|completa|media|fines|semana|"
+    "manana|tarde|noche|nunca|anos|hoy|lunes|el|la|y|con|quiero|vale|claro"
+)
+
+
+def _numbered(words: str, start: int = 0, step: int = 1) -> dict[str, int]:
+    """'cero uno dos' -> {'cero': 0, 'uno': 1, 'dos': 2}."""
+    return {word: start + i * step for i, word in enumerate(words.split())}
+
+
 _WEEKDAYS = {
-    "lunes": 0,
-    "martes": 1,
-    "miercoles": 2,
-    "jueves": 3,
-    "viernes": 4,
-    "sabado": 5,
-    "domingo": 6,
-    "monday": 0,
-    "tuesday": 1,
-    "wednesday": 2,
-    "thursday": 3,
-    "friday": 4,
-    "saturday": 5,
-    "sunday": 6,
+    **_numbered("lunes martes miercoles jueves viernes sabado domingo"),
+    **_numbered("monday tuesday wednesday thursday friday saturday sunday"),
+}
+_ORDINALS = {
+    **dict.fromkeys(("primera", "primero", "first"), 1),
+    **dict.fromkeys(("segunda", "segundo", "second"), 2),
+    **dict.fromkeys(("tercera", "tercero", "third"), 3),
 }
 _SENSITIVE = re.compile(
     r"\b\d{8}[a-z]\b|\b[xyz]\d{7}[a-z]\b|\bdni\b|\bnie\b|\bpasaporte\b|"
     r"\bpassport\b|\bcurp\b|\biban\b"
 )
 
-
+# Spoken numbers, as speech-to-text leaves them: Spanish 0-29, English 0-20, and the tens.
 _UNITS = {
-    "cero": 0,
-    "uno": 1,
+    **_numbered(
+        "cero uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince "
+        "dieciseis diecisiete dieciocho diecinueve veinte veintiuno veintidos veintitres "
+        "veinticuatro veinticinco veintiseis veintisiete veintiocho veintinueve"
+    ),
+    **_numbered(
+        "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+        "fifteen sixteen seventeen eighteen nineteen twenty"
+    ),
     "un": 1,
     "una": 1,
-    "dos": 2,
-    "tres": 3,
-    "cuatro": 4,
-    "cinco": 5,
-    "seis": 6,
-    "siete": 7,
-    "ocho": 8,
-    "nueve": 9,
-    "diez": 10,
-    "once": 11,
-    "doce": 12,
-    "trece": 13,
-    "catorce": 14,
-    "quince": 15,
-    "dieciseis": 16,
-    "diecisiete": 17,
-    "dieciocho": 18,
-    "diecinueve": 19,
-    "veinte": 20,
-    "veintiuno": 21,
     "veintiun": 21,
-    "veintidos": 22,
-    "veintitres": 23,
-    "veinticuatro": 24,
-    "veinticinco": 25,
-    "veintiseis": 26,
-    "veintisiete": 27,
-    "veintiocho": 28,
-    "veintinueve": 29,
-    "zero": 0,
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-    "seventeen": 17,
-    "eighteen": 18,
-    "nineteen": 19,
-    "twenty": 20,
 }
 _TENS = {
-    "treinta": 30,
-    "cuarenta": 40,
-    "cincuenta": 50,
-    "sesenta": 60,
-    "setenta": 70,
-    "ochenta": 80,
-    "noventa": 90,
-    "thirty": 30,
-    "forty": 40,
-    "fifty": 50,
-    "sixty": 60,
-    "seventy": 70,
-    "eighty": 80,
-    "ninety": 90,
+    **_numbered("treinta cuarenta cincuenta sesenta setenta ochenta noventa", 30, 10),
+    **_numbered("thirty forty fifty sixty seventy eighty ninety", 30, 10),
 }
 _POSTAL_RUN = 3  # three or more spoken numbers in a row are a code read in pieces
 
@@ -348,18 +217,7 @@ class KeywordExtractor:
 
     @staticmethod
     def _slot_choice(t: str) -> int | None:
-        ordinals = {
-            "primera": 1,
-            "primero": 1,
-            "first": 1,
-            "segunda": 2,
-            "segundo": 2,
-            "second": 2,
-            "tercera": 3,
-            "tercero": 3,
-            "third": 3,
-        }
-        for word, number in ordinals.items():
+        for word, number in _ORDINALS.items():
             if _has(t, word):
                 return number
         digit = re.fullmatch(r"\D{0,8}(\d)\D{0,8}", t)
