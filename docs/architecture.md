@@ -79,7 +79,7 @@ The API normalizes input to `InboundMessage`, drops duplicates by channel messag
 A lease on the conversation row, plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
 
 - **Taking it:** one atomic `UPDATE conversations SET lease_owner, lease_until WHERE id = … AND lease is free or expired`. Of any number of workers, in any number of processes, exactly one matches. It works the same on SQLite and Postgres, and holds no database connection while the LLM is thinking.
-- **Expiry:** a lease lasts 2 minutes, longer than any turn. A worker that dies holding one blocks its conversation for at most that long.
+- **Expiry:** a lease lasts 2 minutes, longer than any turn. A worker that dies holding one blocks its conversation for at most that long. Leases are timed by the system clock, not the demo's fast-forwardable one.
 - **Fencing:** `save_turn` checks the caller still owns the lease, so a worker whose lease expired mid-turn gets `LeaseLost` instead of overwriting the new holder's state.
 - **No lost messages:** a worker that finds the lease taken returns at once; the holder checks for messages that arrived meanwhile after releasing it (messages are stored before anyone asks for the lease).
 - **Who waits:** reminders skip a busy conversation until the next tick; a recruiter override waits up to 10 s, then gets "try again" (409).

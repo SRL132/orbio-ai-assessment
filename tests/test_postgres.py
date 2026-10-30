@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.dashboard import DashboardQueries, Filters
+from app.adapters.storage.rate_limit import SqlRateLimiter
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import Availability, ConversationState, DomainEvent, Stage, Status
@@ -87,7 +88,7 @@ def test_exactly_one_worker_wins_a_lease_race(engine, config: ClientConfig) -> N
 
     def race(owner: str) -> None:
         barrier.wait()
-        if repo.try_lease(state.conversation_id, owner, clock.now() + timedelta(minutes=2)):
+        if repo.try_lease(state.conversation_id, owner, timedelta(minutes=2)):
             winners.append(owner)
 
     threads = [threading.Thread(target=race, args=(f"w{n}",)) for n in range(16)]
@@ -124,3 +125,21 @@ def test_backlog_ages_are_timezone_aware(engine, config: ClientConfig) -> None:
     assert count == 1
     assert oldest is not None
     assert clock.now() - oldest == timedelta(0)  # would raise if the timestamp were naive
+
+
+def test_rate_limit_is_exact_under_concurrency(engine) -> None:
+    limiter = SqlRateLimiter(engine, FakeClock(datetime(2026, 11, 2, tzinfo=UTC)), "c")
+    barrier = threading.Barrier(16)
+    allowed: list[str] = []
+
+    def request() -> None:
+        barrier.wait()
+        if hit := limiter.allow("burst", 5, timedelta(minutes=1)):
+            allowed.append(hit)
+
+    threads = [threading.Thread(target=request) for _ in range(16)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(allowed) == 5

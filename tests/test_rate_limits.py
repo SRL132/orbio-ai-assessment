@@ -1,6 +1,7 @@
 """Rate limits on login and the web chat, counted in the database (shared by all workers)."""
 
 import secrets
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -24,12 +25,44 @@ def test_sliding_window() -> None:
     clock = FakeClock(datetime(2026, 11, 2, tzinfo=UTC))
     limiter = SqlRateLimiter(engine, clock, "c")
     window = timedelta(minutes=1)
-    assert [limiter.allow("k", 2, window) for _ in range(3)] == [True, True, False]
+    assert [limiter.allow("k", 2, window) is not None for _ in range(3)] == [True, True, False]
     assert limiter.allow("other", 2, window)  # keys are counted separately
-    assert not SqlRateLimiter(engine, clock, "c").allow("k", 2, window)  # another worker agrees
+    assert SqlRateLimiter(engine, clock, "c").allow("k", 2, window) is None  # other workers agree
     assert SqlRateLimiter(engine, clock, "another_client").allow("k", 2, window)
     clock.advance(seconds=61)
     assert limiter.allow("k", 2, window)  # the old hits left the window
+
+
+def test_a_forgotten_hit_frees_its_slot() -> None:
+    engine = make_engine("sqlite:///:memory:")
+    limiter = SqlRateLimiter(engine, FakeClock(datetime(2026, 11, 2, tzinfo=UTC)), "c")
+    window = timedelta(minutes=1)
+    first = limiter.allow("k", 1, window)
+    assert first is not None
+    assert limiter.allow("k", 1, window) is None
+    limiter.forget(first)
+    assert limiter.allow("k", 1, window) is not None
+    engine.dispose()
+
+
+def test_concurrent_requests_never_exceed_the_limit(tmp_path: Path) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'r.db'}")  # a file: threads share it for real
+    limiter = SqlRateLimiter(engine, FakeClock(datetime(2026, 11, 2, tzinfo=UTC)), "c")
+    barrier = threading.Barrier(12)
+    allowed: list[str] = []
+
+    def request() -> None:
+        barrier.wait()
+        if hit := limiter.allow("burst", 5, timedelta(minutes=1)):
+            allowed.append(hit)
+
+    threads = [threading.Thread(target=request) for _ in range(12)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(allowed) == 5
+    engine.dispose()
     engine.dispose()
 
 

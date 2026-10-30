@@ -1,8 +1,9 @@
 """Rate limiting counted in the database, so every worker process sees the same counts.
 
 A sliding window: a request is allowed while fewer than `limit` hits for its key happened in
-the last `window`. Two requests racing at the limit can both pass (one over): fine for abuse
-protection, and it needs no locks.
+the last `window`. Counting is exact under concurrency: each check first locks the key's row
+(an UPDATE, which Postgres holds as a row lock and SQLite as its write lock until commit), so
+two requests for one key are counted one after the other, never both under the limit.
 """
 
 from __future__ import annotations
@@ -10,10 +11,11 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import Engine, delete, func, select
+from sqlalchemy import Engine, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.storage.sql import RateLimitHitRow
+from app.adapters.storage.sql import RateLimitHitRow, RateLimitKeyRow
 from app.domain.ports import Clock
 
 
@@ -23,33 +25,33 @@ class SqlRateLimiter:
         self._clock = clock
         self._client_id = client_id
 
-    def exceeded(self, key: str, limit: int, window: timedelta) -> bool:
-        """True once `key` has `limit` hits in the window. Doesn't count as a hit itself."""
-        hit = RateLimitHitRow
-        since = self._clock.now() - window
-        with Session(self._engine) as session:
-            count = session.scalar(
-                select(func.count()).where(
-                    hit.client_id == self._client_id, hit.key == key, hit.at >= since
-                )
-            )
-        return (count or 0) >= limit
-
-    def hit(self, key: str, window: timedelta) -> None:
-        """Count one request for `key`, and forget its hits older than the window."""
-        hit = RateLimitHitRow
+    def allow(self, key: str, limit: int, window: timedelta) -> str | None:
+        """Count this request if it's within the limit. Returns the hit's id (to `forget` it,
+        e.g. after a successful login), or None when the limit is reached."""
+        hit, lock = RateLimitHitRow, RateLimitKeyRow
         now = self._clock.now()
+        mine = (lock.client_id == self._client_id) & (lock.key == key)
         with Session(self._engine) as session, session.begin():
-            session.execute(
-                delete(hit).where(
-                    hit.client_id == self._client_id, hit.key == key, hit.at < now - window
-                )
+            locked = session.scalar(
+                update(lock).where(mine).values(touched_at=now).returning(lock.key)
             )
-            session.add(hit(id=str(uuid4()), client_id=self._client_id, key=key, at=now))
+            if locked is None:
+                try:  # first request for this key: create its lock row
+                    with session.begin_nested():
+                        session.add(lock(client_id=self._client_id, key=key, touched_at=now))
+                except IntegrityError:  # another request created it first
+                    session.execute(update(lock).where(mine).values(touched_at=now))
+            ours = (hit.client_id == self._client_id) & (hit.key == key)
+            session.execute(delete(hit).where(ours, hit.at < now - window))  # housekeeping
+            count = session.scalar(select(func.count()).where(ours)) or 0
+            if count >= limit:
+                return None
+            hit_id = str(uuid4())
+            session.add(hit(id=hit_id, client_id=self._client_id, key=key, at=now))
+        return hit_id
 
-    def allow(self, key: str, limit: int, window: timedelta) -> bool:
-        """Count this request if it's within the limit. Returns whether it is."""
-        if self.exceeded(key, limit, window):
-            return False
-        self.hit(key, window)
-        return True
+    def forget(self, hit_id: str) -> None:
+        """Take back a hit that shouldn't count after all (a login that succeeded)."""
+        hit = RateLimitHitRow
+        with Session(self._engine) as session, session.begin():
+            session.execute(delete(hit).where(hit.client_id == self._client_id, hit.id == hit_id))

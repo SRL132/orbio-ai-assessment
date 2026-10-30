@@ -61,7 +61,7 @@ class ScreeningService:
         another worker kept it for `wait_seconds`."""
         owner = uuid4().hex
         deadline = time.monotonic() + wait_seconds
-        while not self.repo.try_lease(conversation_id, owner, self.ports.clock.now() + LEASE):
+        while not self.repo.try_lease(conversation_id, owner, LEASE):
             if time.monotonic() >= deadline:
                 yield None
                 return

@@ -5,7 +5,7 @@ depends on these interfaces only, never on an SDK.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -92,14 +92,14 @@ class Repository(Protocol):
         With `lease_owner`, raises `LeaseLost` unless that owner still holds the lease."""
         ...
 
-    def try_lease(self, conversation_id: UUID, owner: str, until: datetime) -> bool:
+    def try_lease(self, conversation_id: UUID, owner: str, duration: timedelta) -> bool:
         """Take the conversation's lease if nobody holds it (or theirs expired): one worker
         at a time, across processes. Expires on its own if the holder dies."""
         ...
 
     def release_lease(self, conversation_id: UUID, owner: str) -> None: ...
 
-    def try_job_lease(self, name: str, owner: str, until: datetime) -> bool:
+    def try_job_lease(self, name: str, owner: str, duration: timedelta) -> bool:
         """A lease for a background job that must run in one process at a time. The owner can
         renew it; anyone can take it once it expires."""
         ...

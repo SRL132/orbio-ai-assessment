@@ -88,7 +88,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 280+ tests (property tests included) with a coverage ratchet (≥ 96.3%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 300+ tests (property tests included) with a coverage ratchet (≥ 96.3%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
 `uv run python -m evals` runs 21 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, language switch, code-switching, both knockouts, borderline zone, human request, abuse, ID number, silence, invalid date, prompt injection, job question, bot question, interview booking, and three voice calls with speech-to-text-style input. Each run is scored on outcome, field accuracy, turns and the output check, and compared against `evals/baseline.json`.
 

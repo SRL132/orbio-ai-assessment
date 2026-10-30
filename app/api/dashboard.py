@@ -102,21 +102,25 @@ async def login(
 ) -> HTMLResponse | RedirectResponse:
     users = parse_users(_secret(c.settings.recruiter_users))
     email = email.strip().lower()
-    by_ip, by_email = f"login-ip:{client_ip(request)}", f"login-email:{email}"
     s, limiter = c.settings, c.limiter
-    if limiter.exceeded(by_ip, s.login_attempts_per_ip_per_15_min, QUARTER_HOUR) or (
-        limiter.exceeded(by_email, s.login_failures_per_email_per_15_min, QUARTER_HOUR)
-    ):
+    # Count the attempt before checking the password, so parallel guesses can't all slip in;
+    # a successful login gives its account slot back (only failures lock an account).
+    by_ip = f"login-ip:{client_ip(request)}"
+    email_hit = None
+    if limiter.allow(by_ip, s.login_attempts_per_ip_per_15_min, QUARTER_HOUR):
+        email_hit = limiter.allow(
+            f"login-email:{email}", s.login_failures_per_email_per_15_min, QUARTER_HOUR
+        )
+    if email_hit is None:
         metrics.RATE_LIMITED.labels("login").inc()
         return _login_page(request, bool(users), TOO_MANY_LOGINS, status.HTTP_429_TOO_MANY_REQUESTS)
-    limiter.hit(by_ip, QUARTER_HOUR)
     stored = users.get(email)
     ok = stored is not None and await asyncio.to_thread(verify_password, password, stored)
     if not ok:
-        limiter.hit(by_email, QUARTER_HOUR)  # only failures count against an account
         return _login_page(
             request, bool(users), "Wrong email or password.", status.HTTP_401_UNAUTHORIZED
         )
+    limiter.forget(email_hit)
     request.session.clear()
     request.session["user"] = email
     return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)

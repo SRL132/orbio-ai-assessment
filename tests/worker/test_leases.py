@@ -76,7 +76,7 @@ def test_a_crashed_workers_lease_expires(
 ) -> None:
     service = worker(db, config, clock, extractor)
     cid = service.start_conversation()
-    assert service.repo.try_lease(cid, "crashed", clock.now() + LEASE)
+    assert service.repo.try_lease(cid, "crashed", LEASE)
     service.receive(cid, "sí")
     extractor.push(ex(yes_no=True))
     assert service.process_pending(cid) is None
@@ -91,13 +91,13 @@ def test_a_worker_that_lost_its_lease_cannot_save(
     cid = service.start_conversation()
     state = service.get(cid)
     assert state is not None
-    assert service.repo.try_lease(cid, "slow", clock.now() + LEASE)
+    assert service.repo.try_lease(cid, "slow", LEASE)
     clock.advance(seconds=LEASE.total_seconds() + 1)  # the slow worker's lease ran out
-    assert service.repo.try_lease(cid, "new", clock.now() + LEASE)
+    assert service.repo.try_lease(cid, "new", LEASE)
     with pytest.raises(LeaseLost):
         service.repo.save_turn(state, [], ["stale reply"], [], lease_owner="slow")
     service.repo.release_lease(cid, "slow")  # releasing a lost lease changes nothing
-    assert not service.repo.try_lease(cid, "third", clock.now() + LEASE)  # "new" still holds it
+    assert not service.repo.try_lease(cid, "third", LEASE)  # "new" still holds it
 
 
 def test_recruiter_override_on_a_busy_conversation_is_refused(
@@ -105,7 +105,7 @@ def test_recruiter_override_on_a_busy_conversation_is_refused(
 ) -> None:
     service = worker(db, config, clock, extractor)
     cid = service.start_conversation()
-    assert service.repo.try_lease(cid, "turn", clock.now() + LEASE)
+    assert service.repo.try_lease(cid, "turn", LEASE)
     with pytest.raises(ConversationBusy):
         service.override(cid, Status.QUALIFIED, "checked by phone", "r@sazon.es")
     service.repo.release_lease(cid, "turn")
@@ -121,7 +121,21 @@ def test_reminders_skip_a_busy_conversation(
     service = worker(db, config, clock, extractor)
     cid = service.start_conversation()
     clock.advance(hours=2)
-    assert service.repo.try_lease(cid, "turn", clock.now() + LEASE)
+    assert service.repo.try_lease(cid, "turn", LEASE)
     assert service.send_due_reminders() == 0
     service.repo.release_lease(cid, "turn")
     assert service.send_due_reminders() == 1
+
+
+def test_fast_forwarding_the_demo_clock_does_not_expire_a_lease(
+    db, config: ClientConfig, clock: FakeClock
+) -> None:
+    lease_clock = FakeClock(clock.now())  # stands in for the system clock
+    repo = SqlRepository(db, clock, config.client_id, lease_clock=lease_clock)
+    state = ConversationState(client_id=config.client_id)
+    repo.create(state, [], [])
+    assert repo.try_lease(state.conversation_id, "turn", LEASE)
+    clock.advance(hours=24)  # the demo's "skip ahead" button
+    assert not repo.try_lease(state.conversation_id, "other", LEASE)
+    lease_clock.advance(seconds=LEASE.total_seconds() + 1)  # real time passes
+    assert repo.try_lease(state.conversation_id, "other", LEASE)

@@ -88,7 +88,9 @@ def build(settings: Settings | None = None) -> Container:
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
     ports = Ports(extractor=extractor, responder=responder, clock=clock, calendar=calendar)
-    service = ScreeningService(SqlRepository(db, clock, config.client_id), config, ports)
+    # Leases run on the system clock: fast-forwarding the demo clock mustn't expire them.
+    repo = SqlRepository(db, clock, config.client_id, lease_clock=SystemClock())
+    service = ScreeningService(repo, config, ports)
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
     tts = None

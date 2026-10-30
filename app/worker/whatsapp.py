@@ -81,7 +81,7 @@ class WhatsAppChannel:
         process is the dispatcher)."""
         repo = self.service.repo
         now = self.service.ports.clock.now()
-        if not repo.try_job_lease("whatsapp_outbox", self._dispatcher_id, now + DISPATCH_LEASE):
+        if not repo.try_job_lease("whatsapp_outbox", self._dispatcher_id, DISPATCH_LEASE):
             return 0
         sent = 0
         blocked: set[UUID] = set()  # keep per-conversation order: stop at the first failure

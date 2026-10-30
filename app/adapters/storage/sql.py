@@ -10,7 +10,7 @@ client's data.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -183,6 +183,16 @@ class ErasureRow(Base):
     erased_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
+class RateLimitKeyRow(Base):
+    """One row per rate-limited key, locked while a request is counted so counting is exact."""
+
+    __tablename__ = "rate_limit_keys"
+
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    touched_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
 class RateLimitHitRow(Base):
     """One counted request (a login attempt, a chat message) for rate limiting."""
 
@@ -225,10 +235,16 @@ def make_engine(url: str) -> Engine:
 
 
 class SqlRepository:
-    def __init__(self, engine: Engine, clock: Clock, client_id: str) -> None:
+    def __init__(
+        self, engine: Engine, clock: Clock, client_id: str, lease_clock: Clock | None = None
+    ) -> None:
+        """`lease_clock` times leases. Production passes the system clock even when `clock`
+        is the demo's fast-forwardable one, so skipping ahead never expires a running turn's
+        lease. It defaults to `clock` (tests drive both with one fake clock)."""
         self._sessions = sessionmaker(engine, expire_on_commit=False)
         self._clock = clock
         self._client_id = client_id
+        self._lease_clock = lease_clock or clock
 
     def _conversation(self, session: Session, conversation_id: UUID) -> ConversationRow | None:
         row = session.get(ConversationRow, str(conversation_id))
@@ -310,10 +326,12 @@ class SqlRepository:
                 session.execute(update(MessageRow).where(MessageRow.id.in_(ids)).values(**values))
             self._append(session, state, events, replies, now)
 
-    def try_lease(self, conversation_id: UUID, owner: str, until: datetime) -> bool:
+    def try_lease(self, conversation_id: UUID, owner: str, duration: timedelta) -> bool:
         """One atomic UPDATE: of two workers racing, exactly one matches the free lease."""
         row = ConversationRow
-        free = row.lease_until.is_(None) | (row.lease_until < self._clock.now())
+        now = self._lease_clock.now()
+        until = now + duration
+        free = row.lease_until.is_(None) | (row.lease_until < now)
         with self._sessions.begin() as session:
             taken = session.scalar(
                 update(row)
@@ -332,9 +350,11 @@ class SqlRepository:
                 .values(lease_owner=None, lease_until=None)
             )
 
-    def try_job_lease(self, name: str, owner: str, until: datetime) -> bool:
+    def try_job_lease(self, name: str, owner: str, duration: timedelta) -> bool:
         """Like `try_lease`, for a background job: the first caller creates the row (the
         primary key rejects a second), later ones take it over once it has expired."""
+        now = self._lease_clock.now()
+        until = now + duration
         job = JobLeaseRow
         mine = (job.client_id == self._client_id) & (job.name == name)
         try:
@@ -344,7 +364,7 @@ class SqlRepository:
                     return True
                 taken = session.scalar(
                     update(job)
-                    .where(mine, (job.owner == owner) | (job.until < self._clock.now()))
+                    .where(mine, (job.owner == owner) | (job.until < now))
                     .values(owner=owner, until=until)
                     .returning(job.name)
                 )
