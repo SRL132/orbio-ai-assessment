@@ -144,3 +144,21 @@
     status: in_progress
     awaiting: license
     fields: {full_name: Nuria Gil}
+
+- id: books_interview
+  description: Qualified candidate picks one of the offered interview slots in the chat.
+  persona: Diego Navarro, moto license, lives in Condesa (Mexico City). Full time, evenings, one year on Rappi, starts tomorrow. When offered interview times, picks the second one.
+  steps: [Sí, Diego Navarro, Moto, "CDMX, Condesa", Jornada completa, Noches, 1 año en Rappi, mañana, Sí, "2"]
+  expect:
+    status: qualified
+    interview_booked: true
+    fields: {location_id: mx-cdmx, platforms: [Rappi]}
+
+- id: asks_if_bot
+  description: Asks whether it's talking to a person; the assistant says it's automated and carries on.
+  persona: Paula Rey, suspicious of bots. Asks whether she is talking to a real person, then gives her name.
+  steps: [Sí, "¿Eres una persona o un bot?", Paula Rey]
+  expect:
+    status: in_progress
+    awaiting: license
+    reply_contains: [asistente virtual automatizada]

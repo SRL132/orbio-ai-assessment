@@ -19,7 +19,9 @@ from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, Field
+from sqlalchemy import Engine
 
+from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
@@ -46,6 +48,8 @@ class Expect(BaseModel):
     reminders_sent: int | None = None
     awaiting: str | None = None
     max_turns: int | None = None
+    interview_booked: bool | None = None
+    reply_contains: list[str] = Field(default_factory=list)
 
 
 class Scenario(BaseModel):
@@ -94,11 +98,22 @@ class Harness:
         self.config = config
         self.extractor = extractor
         self.responder = responder
+        self._engines: list[Engine] = []
+
+    def close(self) -> None:
+        for engine in self._engines:
+            engine.dispose()
+        self._engines.clear()
 
     def _service(self) -> tuple[ScreeningService, FakeClock, SqlRepository]:
         clock = FakeClock(EVAL_START)
-        repo = SqlRepository(make_engine("sqlite:///:memory:"), clock)
-        ports = Ports(extractor=self.extractor, responder=self.responder, clock=clock)
+        db = make_engine("sqlite:///:memory:")
+        self._engines.append(db)
+        repo = SqlRepository(db, clock)
+        calendar = SqlCalendar(db, self.config, clock)
+        ports = Ports(
+            extractor=self.extractor, responder=self.responder, clock=clock, calendar=calendar
+        )
         return ScreeningService(repo, self.config, ports), clock, repo
 
     def run_scripted(self, scenario: Scenario) -> ScenarioResult:
@@ -114,7 +129,9 @@ class Harness:
             turns += 1
             service.receive(cid, step)
             service.process_pending(cid)
-        return self._score(scenario, repo, cid, turns, time.monotonic() - started)
+        result = self._score(scenario, repo, cid, turns, time.monotonic() - started)
+        self.close()
+        return result
 
     def run_simulated(self, scenario: Scenario, candidate: Completer) -> ScenarioResult:
         service, _, repo = self._service()
@@ -142,7 +159,9 @@ class Harness:
             turns += 1
             service.receive(cid, message)
             service.process_pending(cid)
-        return self._score(scenario, repo, cid, turns, time.monotonic() - started)
+        result = self._score(scenario, repo, cid, turns, time.monotonic() - started)
+        self.close()
+        return result
 
     def _score(
         self, scenario: Scenario, repo: SqlRepository, cid: UUID, turns: int, seconds: float
@@ -183,6 +202,12 @@ class Harness:
         if expect.redacted is not None:
             redacted = any(m.text == REDACTED for m in messages)
             check(redacted == expect.redacted, f"redacted {redacted}")
+        if expect.interview_booked is not None:
+            booked = state.interview_at is not None
+            check(booked == expect.interview_booked, f"interview booked {booked}")
+        all_replies = " ".join(m.text for m in messages if m.direction == "out")
+        for needle in expect.reply_contains:
+            check(needle in all_replies, f"no reply contains {needle!r}")
         event_types = {e.type for e in repo.events(cid)}
         for event in expect.events_include:
             check(event in event_types, f"missing event {event}")

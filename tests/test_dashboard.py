@@ -159,3 +159,30 @@ def test_actions_on_unknown_candidate(logged_in: TestClient) -> None:
         f"/dashboard/candidates/{unknown}/override", data={"status": "qualified", "reason": "x"}
     )
     assert override.status_code == 404
+
+
+def test_analytics_page(logged_in: TestClient, container: Container) -> None:
+    chat(container, "sí", "Luis Pérez", "no tengo")
+    page = logged_in.get("/dashboard/analytics").text
+    assert "Completion rate" in page
+    assert "Funnel" in page
+
+
+def test_interview_booked_end_to_end(logged_in: TestClient, container: Container) -> None:
+    cid = chat(
+        container,
+        "sí",
+        "Ana López",
+        "moto",
+        "Madrid, Chamberí",
+        "jornada completa",
+        "noches",
+        "nunca",
+        "mañana",
+        "sí",
+        "2",
+    )
+    state = container.service.repo.get(cid)
+    assert state is not None
+    assert state.interview_at is not None
+    assert "Interview" in logged_in.get(f"/dashboard/candidates/{cid}").text

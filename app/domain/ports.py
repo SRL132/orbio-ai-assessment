@@ -40,6 +40,16 @@ class Responder(Protocol):
         ...
 
 
+class CalendarProvider(Protocol):
+    """Interview slots per location. Booking must be atomic: a slot is booked at most once."""
+
+    def available_slots(self, location_id: str, after: datetime, count: int) -> list[datetime]: ...
+
+    def book(self, location_id: str, starts_at: datetime, conversation_id: UUID) -> bool:
+        """Returns False if the slot was taken in the meantime."""
+        ...
+
+
 class Clock(Protocol):
     def now(self) -> datetime: ...
 
@@ -92,3 +102,4 @@ class Ports:
     extractor: Extractor
     responder: Responder
     clock: Clock
+    calendar: CalendarProvider | None = None

@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="exit 1 on regression")
     parser.add_argument("--write-baseline", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true", help="print failing transcripts")
+    parser.add_argument("--export-samples", type=Path, help="write each transcript as Markdown")
     args = parser.parse_args(argv)
 
     if args.simulate and args.provider == "fake":
@@ -64,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
             result = harness.run_scripted(scenario)
         results.append(result)
         _print_row(result)
+        if args.export_samples:
+            _export_sample(args.export_samples, scenario.description, key, result)
         if args.verbose and not result.passed:
             for direction, text in result.transcript:
                 who = "BOT" if direction == "out" else "YOU"
@@ -140,6 +143,24 @@ def _regressions(baseline: dict[str, Any] | None, run: dict[str, Any]) -> list[s
                 f"{sid}: field accuracy {now['field_accuracy']} < {before['field_accuracy']}"
             )
     return problems
+
+
+def _export_sample(directory: Path, description: str, key: str, result: ScenarioResult) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# {result.id.replace('_', ' ').capitalize()}",
+        "",
+        f"{description}",
+        "",
+        f"Run: `{key}` · {'passed' if result.passed else 'FAILED'} · "
+        f"{result.turns} candidate messages",
+        "",
+    ]
+    for direction, text in result.transcript:
+        who = "**Lucía**" if direction == "out" else "**Candidate**"
+        body = text.replace("\n", "  \n")
+        lines.append(f"{who}: {body}  \n")
+    (directory / f"{result.id}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _save(key: str, run: dict[str, Any]) -> None:

@@ -24,6 +24,12 @@ reminder_hours: [2, 24]
 abandon_after_hours: 24
 max_reply_chars: 250
 
+# Interview slots offered in the chat, in each location's local time (mocked calendar for the demo).
+interview:
+  slot_times: ["10:00", "12:00", "17:00"]
+  offer_count: 3
+  min_days_ahead: 1
+
 known_platforms:
   - Glovo
   - Uber Eats
@@ -64,16 +70,19 @@ locations:
     aliases: [CDMX, Mexico City, DF, Ciudad de Mexico]
     zones: [Roma, Roma Norte, Roma Sur, Condesa, Polanco, Coyoacán, Del Valle, Narvarte, Juárez]
     postal_prefixes: ["060", "061", "065", "066", "067", "030", "031", "040", "041", "115"]
+    timezone: America/Mexico_City
     nearby: [Naucalpan, Tlalnepantla, Ciudad Nezahualcóyotl]
   - id: mx-guadalajara
     country: MX
     city: Guadalajara
     postal_prefixes: ["44"]
+    timezone: America/Mexico_City
     nearby: [Zapopan, Tlaquepaque, Tonalá]
   - id: mx-monterrey
     country: MX
     city: Monterrey
     postal_prefixes: ["64"]
+    timezone: America/Monterrey
     nearby: [San Pedro Garza García, San Nicolás de los Garza, Guadalupe]
 
 # Detailed license rules (docs/process-design-appendix.md, A). They only ever send a candidate
@@ -89,15 +98,23 @@ license_rules:
   MX: {}
 
 faq:
+  - question: Am I talking to a person or a bot?
+    keywords: [bot, robot, persona, humano, person, human, ia, ai, automatico, automated, real]
+    answer:
+      es: Soy Lucía, una asistente virtual automatizada. Si prefieres hablar con una persona, dímelo.
+      en: I'm Lucía, an automated virtual assistant. If you'd rather talk to a person, just tell me.
   - question: What is Grupo Sazón?
+    keywords: [empresa, sazon, company, quienes, who]
     answer:
       es: Grupo Sazón es una cadena de restaurantes con locales en España y México.
       en: Grupo Sazón is a restaurant chain with locations in Spain and Mexico.
   - question: What does the delivery driver job involve?
+    keywords: [trabajo, puesto, consiste, tareas, job, role, involve, hacer]
     answer:
       es: Repartir pedidos de nuestros restaurantes a clientes de tu zona.
       en: Delivering orders from our restaurants to customers in your area.
   - question: What happens after the questions?
+    keywords: [despues, siguiente, entrevista, next, after, interview, proceso, process]
     answer:
       es: Si cumples los requisitos, reservas una entrevista aquí mismo en el chat.
       en: If you meet the requirements, you book an interview right here in the chat.

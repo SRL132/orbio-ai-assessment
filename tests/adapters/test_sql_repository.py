@@ -8,8 +8,10 @@ from app.domain.models import ConversationState, DomainEvent, Status
 
 
 @pytest.fixture
-def repo(clock: FakeClock) -> SqlRepository:
-    return SqlRepository(make_engine("sqlite:///:memory:"), clock)
+def repo(clock: FakeClock):
+    engine = make_engine("sqlite:///:memory:")
+    yield SqlRepository(engine, clock)
+    engine.dispose()
 
 
 def test_create_and_get_round_trip(repo: SqlRepository, state: ConversationState) -> None:

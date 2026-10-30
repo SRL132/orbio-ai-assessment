@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import ScriptedExtractor
 from app.adapters.storage.sql import SqlRepository, make_engine
@@ -9,9 +11,20 @@ from app.domain.ports import Ports
 from app.worker.service import ScreeningService
 from tests.conftest import ex
 
+_ENGINES = []
+
+
+@pytest.fixture(autouse=True)
+def _dispose_engines():
+    yield
+    while _ENGINES:
+        _ENGINES.pop().dispose()
+
 
 def make_service(config: ClientConfig, ports: Ports, clock: FakeClock) -> ScreeningService:
-    return ScreeningService(SqlRepository(make_engine("sqlite:///:memory:"), clock), config, ports)
+    engine = make_engine("sqlite:///:memory:")
+    _ENGINES.append(engine)
+    return ScreeningService(SqlRepository(engine, clock), config, ports)
 
 
 def test_burst_of_messages_is_one_turn(

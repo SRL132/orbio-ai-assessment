@@ -22,7 +22,7 @@ from app.api.auth import parse_users, verify_password
 from app.bootstrap import Container
 from app.domain.engine import OVERRIDABLE
 from app.domain.models import Candidate, DomainEvent, FieldName, Status
-from app.domain.summary import describe_reason
+from app.domain.summary import describe_reason, local_time
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 TEMPLATES.env.filters["reason"] = describe_reason
@@ -138,6 +138,16 @@ def review_queue(request: Request, c: App, user: Recruiter) -> HTMLResponse:
     )
 
 
+@router.get("/dashboard/analytics", response_class=HTMLResponse)
+def analytics(request: Request, c: App, user: Recruiter) -> HTMLResponse:
+    stats = c.queries.analytics(c.config.field_priority)
+    return TEMPLATES.TemplateResponse(
+        request,
+        "dashboard_analytics.html",
+        {"user": user, "a": stats, "locations": {loc.id: loc.city for loc in c.config.locations}},
+    )
+
+
 @router.get("/dashboard/candidates/{conversation_id}", response_class=HTMLResponse)
 async def candidate_detail(
     request: Request, conversation_id: UUID, c: App, user: Recruiter
@@ -157,6 +167,9 @@ async def candidate_detail(
             "messages": c.service.repo.messages(conversation_id),
             "timeline": list(reversed(c.service.repo.timeline(conversation_id))),
             "overridable": sorted(s.value for s in OVERRIDABLE),
+            "interview": local_time(state.interview_at, state, c.config)
+            if state.interview_at
+            else None,
         },
     )
 

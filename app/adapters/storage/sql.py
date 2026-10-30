@@ -111,6 +111,18 @@ class EventRow(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
 
 
+class InterviewRow(Base):
+    __tablename__ = "interviews"
+    __table_args__ = (UniqueConstraint("location_id", "starts_at"),)  # no double booking
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
+    location_id: Mapped[str] = mapped_column(String(64))
+    starts_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
 def make_engine(url: str) -> Engine:
     if url.startswith("sqlite:///") and not url.startswith("sqlite:///:memory:"):
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)

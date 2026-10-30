@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import ScriptedExtractor
 from app.adapters.storage.sql import SqlRepository, make_engine
@@ -10,15 +12,18 @@ from app.worker.service import ScreeningService
 from tests.conftest import ex
 
 
-def make_runner(config: ClientConfig, ports: Ports, clock: FakeClock, tmp_path) -> Runner:
-    repo = SqlRepository(make_engine(f"sqlite:///{tmp_path / 'r.db'}"), clock)
-    return Runner(ScreeningService(repo, config, ports), debounce_seconds=0.05)
+@pytest.fixture
+def runner(config: ClientConfig, ports: Ports, clock: FakeClock, tmp_path):
+    engine = make_engine(f"sqlite:///{tmp_path / 'r.db'}")
+    yield Runner(
+        ScreeningService(SqlRepository(engine, clock), config, ports), debounce_seconds=0.05
+    )
+    engine.dispose()
 
 
 async def test_debounce_merges_messages_into_one_turn(
-    config: ClientConfig, ports: Ports, clock: FakeClock, extractor: ScriptedExtractor, tmp_path
+    runner: Runner, extractor: ScriptedExtractor
 ) -> None:
-    runner = make_runner(config, ports, clock, tmp_path)
     service = runner._service
     cid = service.start_conversation()
     extractor.push(ex(yes_no=True))
@@ -30,10 +35,7 @@ async def test_debounce_merges_messages_into_one_turn(
     await runner.stop()
 
 
-async def test_reminder_loop_runs_and_stops(
-    config: ClientConfig, ports: Ports, clock: FakeClock, tmp_path
-) -> None:
-    runner = make_runner(config, ports, clock, tmp_path)
+async def test_reminder_loop_runs_and_stops(runner: Runner, clock: FakeClock) -> None:
     runner._service.start_conversation()
     clock.advance(hours=2)
     runner.start()
@@ -42,10 +44,7 @@ async def test_reminder_loop_runs_and_stops(
     assert await runner.tick() == 0  # the loop already sent the due reminder
 
 
-async def test_failed_turn_is_logged_not_raised(
-    config: ClientConfig, ports: Ports, clock: FakeClock, tmp_path, caplog
-) -> None:
-    runner = make_runner(config, ports, clock, tmp_path)
+async def test_failed_turn_is_logged_not_raised(runner: Runner, caplog) -> None:
 
     def boom(_cid: object) -> None:
         raise RuntimeError("db down")

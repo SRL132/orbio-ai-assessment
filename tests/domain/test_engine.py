@@ -94,7 +94,9 @@ def test_happy_path_ends_qualified(chat: Chat) -> None:
     assert chat.state.status == Status.QUALIFIED
     assert chat.state.stage == Stage.CLOSED
     assert chat.state.next_reminder_at is None
-    assert "Ana" in chat.result.replies[-1]
+    assert "Ana" in chat.result.replies[0]
+    # No calendar wired in: a recruiter will set up the interview.
+    assert chat.result.replies[-1] == chat.config.template("es", "qualified_no_slots")
 
 
 def test_questions_follow_priority_order(chat: Chat) -> None:

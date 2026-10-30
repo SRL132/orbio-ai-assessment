@@ -42,6 +42,7 @@ class Stage(StrEnum):
     COLLECTING = "collecting"
     RECAP = "recap"
     KEEP_ON_FILE = "keep_on_file"
+    SCHEDULING = "scheduling"
     CLOSED = "closed"
 
 
@@ -125,6 +126,12 @@ class ConversationState(BaseModel):
     last_inbound_at: datetime | None = None
     ended_at: datetime | None = None
     summary: str | None = None
+    offered_slots: list[datetime] = Field(default_factory=list)
+    interview_at: datetime | None = None
+    no_slot_fits: bool = False
+    dropped_at: str | None = Field(
+        default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
+    )
 
 
 class InboundMessage(BaseModel):
@@ -177,6 +184,9 @@ class ExtractionResult(BaseModel):
         default=False, description="The message contains an ID number, health data or similar."
     )
     question: str | None = Field(default=None, description="A question the candidate asked.")
+    slot_choice: int | None = Field(
+        default=None, description="Number of the interview slot the candidate picked (1-based)."
+    )
 
 
 # --- Engine output ------------------------------------------------------------------------------
@@ -225,6 +235,18 @@ class Say(BaseModel):
     template: str
 
 
+class OfferSlots(BaseModel):
+    kind: Literal["offer_slots"] = "offer_slots"
+    slots: list[datetime]
+    location_id: str
+
+
+class InterviewBooked(BaseModel):
+    kind: Literal["interview_booked"] = "interview_booked"
+    at: datetime
+    location_id: str
+
+
 class ScheduleReminder(BaseModel):
     kind: Literal["schedule_reminder"] = "schedule_reminder"
     at: datetime
@@ -239,6 +261,8 @@ Action = Annotated[
     | Recap
     | Qualified
     | Say
+    | OfferSlots
+    | InterviewBooked
     | ScheduleReminder,
     Field(discriminator="kind"),
 ]

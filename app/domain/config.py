@@ -18,6 +18,7 @@ class ServiceLocation(BaseModel):
         default_factory=list, description="Served zones. Empty means the whole city is served."
     )
     postal_prefixes: list[str] = Field(default_factory=list)
+    timezone: str = "Europe/Madrid"
     nearby: list[str] = Field(
         default_factory=list,
         description="Places just outside the area: they go to human review, not a knockout.",
@@ -38,6 +39,12 @@ class CountryLicenseRules(BaseModel):
     conditional: list[LicenseRule] = Field(default_factory=list)
 
 
+class InterviewConfig(BaseModel):
+    slot_times: list[str] = Field(default_factory=lambda: ["10:00", "12:00", "17:00"])
+    offer_count: int = 3
+    min_days_ahead: int = 1
+
+
 class Persona(BaseModel):
     name: str
     company: str
@@ -46,6 +53,9 @@ class Persona(BaseModel):
 class FaqEntry(BaseModel):
     question: str
     answer: dict[Language, str]
+    keywords: list[str] = Field(
+        default_factory=list, description="Offline matching only; the LLM reads the whole FAQ."
+    )
 
 
 class ClientConfig(BaseModel):
@@ -61,6 +71,7 @@ class ClientConfig(BaseModel):
     reminder_hours: list[float] = Field(default_factory=lambda: [2.0, 24.0])
     abandon_after_hours: float = 24.0
     max_reply_chars: int = 250
+    interview: InterviewConfig = Field(default_factory=InterviewConfig)
     templates: dict[Language, dict[str, str]]
     faq: list[FaqEntry] = Field(default_factory=list)
 

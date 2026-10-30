@@ -38,7 +38,16 @@ recap: |-
   {summary}
   Is everything correct?
 ask_change: Sure, what would you like to change?
-qualified: Great, {name}! You meet the requirements 🎉 I'll send you interview times right here shortly.
+qualified: Great, {name}! You meet the requirements 🎉
+qualified_no_slots: A recruiter will write to you within 2 working days to set up the interview.
+offer_slots: |-
+  Pick a time for your interview:
+  {slots}
+  Reply with the number. If none works, say "none".
+interview_booked: Done! Your interview is on {when}. We'll send you the restaurant's address. See you soon!
+slot_taken: Oops, that time was just taken. Here are some others.
+no_slot_fits: No problem, a recruiter will write to you to find another time.
+weekdays: Mon,Tue,Wed,Thu,Fri,Sat,Sun
 needs_review: Thanks, {name}! A recruiter will review your application and write to you within 2 working days.
 handoff_human: Sure, I'll let someone from the team know. They'll write to you within 1 working day.
 

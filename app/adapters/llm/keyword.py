@@ -173,6 +173,8 @@ class KeywordExtractor:
         intent: Intent = "answer"
         if _has(t, *_ABUSE):
             intent = "abuse"
+        elif "?" in text and _has(t, "eres", "are you", "es un bot", "is this"):
+            intent = "question"  # "¿Eres una persona?" asks what Lucía is; it isn't a hand-off
         elif _has(t, *_HUMAN):
             intent = "human_request"
         elif "?" in text:
@@ -208,7 +210,11 @@ class KeywordExtractor:
         if awaiting == FieldName.START_DATE:
             self._start_date(t, today, put)
 
+        slot_choice = self._slot_choice(t) if state.stage == Stage.SCHEDULING else None
+        if state.stage == Stage.SCHEDULING and _has(t, "ninguno", "ninguna", "none", "neither"):
+            yes_no = False
         return ExtractionResult(
+            slot_choice=slot_choice,
             fields=ExtractedFields.model_validate(fields),
             language=self._language(words, state.language),
             intent=intent,
@@ -219,6 +225,25 @@ class KeywordExtractor:
             if _has(t, "harto", "pesado", "annoying", "already told")
             else "neutral",
         )
+
+    @staticmethod
+    def _slot_choice(t: str) -> int | None:
+        ordinals = {
+            "primera": 1,
+            "primero": 1,
+            "first": 1,
+            "segunda": 2,
+            "segundo": 2,
+            "second": 2,
+            "tercera": 3,
+            "tercero": 3,
+            "third": 3,
+        }
+        for word, number in ordinals.items():
+            if _has(t, word):
+                return number
+        digit = re.fullmatch(r"\D{0,8}(\d)\D{0,8}", t)
+        return int(digit.group(1)) if digit else None
 
     @staticmethod
     def _language(words: list[str], current: Language) -> Language:

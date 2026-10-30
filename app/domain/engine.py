@@ -7,7 +7,8 @@ state and events.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -23,7 +24,9 @@ from app.domain.models import (
     FieldStatus,
     HandOff,
     InboundMessage,
+    InterviewBooked,
     Language,
+    OfferSlots,
     Qualified,
     ReAsk,
     Recap,
@@ -104,6 +107,12 @@ def turn(
         actions.append(HandOff(reason="human_requested"))
         return _finish(state, actions, events, config, ports, redact)
 
+    if state.stage == Stage.SCHEDULING:
+        _schedule_interview(
+            state, extraction.slot_choice, extraction.yes_no, events, actions, config, ports
+        )
+        return _finish(state, actions, events, config, ports, redact)
+
     if state.stage == Stage.KEEP_ON_FILE:
         if extraction.yes_no is None:
             actions.append(Say(template="keep_on_file_reask"))
@@ -121,6 +130,7 @@ def turn(
             events.append(DomainEvent(type="consent_given"))
         elif extraction.yes_no is False:
             events.append(DomainEvent(type="consent_declined"))
+            state.dropped_at = "consent"
             _close(state, Status.ABANDONED, events, ports)
             actions.append(Say(template="consent_declined"))
             return _finish(state, actions, events, config, ports, redact)
@@ -212,6 +222,7 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
             state.next_reminder_at = base + timedelta(hours=hours[-1] + config.abandon_after_hours)
     else:
         drop = state.awaiting.value if state.awaiting else state.stage.value
+        state.dropped_at = drop
         events.append(DomainEvent(type="abandoned", data={"drop_off": drop}))
         _close(state, Status.ABANDONED, events, ports)
     return _finish(state, actions, events, config, ports)
@@ -274,6 +285,63 @@ def _finalize(
     else:
         _close(state, Status.QUALIFIED, events, ports)
         actions.append(Qualified())
+        _offer_slots(state, events, actions, config, ports)
+
+
+def _offer_slots(
+    state: ConversationState,
+    events: list[DomainEvent],
+    actions: list[Action],
+    config: ClientConfig,
+    ports: Ports,
+) -> None:
+    """Qualified: book the interview right here in the chat (no callback, process design)."""
+    location_id = state.candidate.location_id
+    slots: list[datetime] = []
+    if ports.calendar is not None and location_id:
+        after = ports.clock.now() + timedelta(days=config.interview.min_days_ahead)
+        slots = ports.calendar.available_slots(location_id, after, config.interview.offer_count)
+    if not slots or location_id is None:
+        state.stage = Stage.CLOSED
+        actions.append(Say(template="qualified_no_slots"))
+        return
+    state.stage = Stage.SCHEDULING
+    state.offered_slots = slots
+    events.append(DomainEvent(type="slots_offered", data={"count": len(slots)}))
+    actions.append(OfferSlots(slots=slots, location_id=location_id))
+
+
+def _schedule_interview(
+    state: ConversationState,
+    choice: int | None,
+    yes_no: bool | None,
+    events: list[DomainEvent],
+    actions: list[Action],
+    config: ClientConfig,
+    ports: Ports,
+) -> None:
+    location_id = state.candidate.location_id or ""
+    if choice is not None and 1 <= choice <= len(state.offered_slots) and ports.calendar:
+        slot = state.offered_slots[choice - 1]
+        if ports.calendar.book(location_id, slot, state.conversation_id):
+            state.interview_at = slot
+            state.offered_slots = []
+            state.stage = Stage.CLOSED
+            events.append(DomainEvent(type="interview_booked", data={"at": slot.isoformat()}))
+            actions.append(InterviewBooked(at=slot, location_id=location_id))
+            return
+        events.append(DomainEvent(type="slot_taken", data={"at": slot.isoformat()}))
+        actions.append(Say(template="slot_taken"))
+        _offer_slots(state, events, actions, config, ports)
+        return
+    if yes_no is False:
+        state.no_slot_fits = True
+        state.offered_slots = []
+        state.stage = Stage.CLOSED
+        events.append(DomainEvent(type="no_slot_fits"))
+        actions.append(Say(template="no_slot_fits"))
+        return
+    actions.append(OfferSlots(slots=state.offered_slots, location_id=location_id))
 
 
 def _ask_current(state: ConversationState, config: ClientConfig) -> list[Action]:
@@ -405,9 +473,30 @@ def render(
                 )
             case Qualified():
                 replies.append(_fill(config.template(lang, "qualified"), state, config))
+            case OfferSlots(slots=slots, location_id=location_id):
+                listed = "\n".join(
+                    f"{i}) {_slot_text(slot, location_id, config, lang)}"
+                    for i, slot in enumerate(slots, start=1)
+                )
+                replies.append(
+                    _fill(config.template(lang, "offer_slots"), state, config, slots=listed)
+                )
+            case InterviewBooked(at=at, location_id=location_id):
+                when = _slot_text(at, location_id, config, lang)
+                replies.append(
+                    _fill(config.template(lang, "interview_booked"), state, config, when=when)
+                )
             case ScheduleReminder():
                 pass
     return replies, events
+
+
+def _slot_text(slot: datetime, location_id: str, config: ClientConfig, language: Language) -> str:
+    """'jue 5/11 10:00' in the location's own timezone."""
+    location = config.location(location_id)
+    local = slot.astimezone(ZoneInfo(location.timezone)) if location else slot
+    weekday = config.template(language, "weekdays").split(",")[local.weekday()]
+    return f"{weekday} {local.day}/{local.month} {local:%H:%M}"
 
 
 def _fallback_key(action: AskField | ReAsk | AnswerQuestion) -> str:

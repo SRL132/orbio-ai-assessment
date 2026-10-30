@@ -85,9 +85,9 @@ A **modular monolith with a lightweight hexagonal core**. Full detail: [`docs/ar
 
 ## Deliverables checklist
 
-- [ ] Git repository with source code
+- [x] Git repository with source code
 - [x] Process design document (Phase 1): [`docs/process-design.md`](docs/process-design.md)
-- [ ] README: setup, architecture, key design decisions, potential improvements
-- [ ] Sample conversations
-- [ ] Demo video (5–10 min)
+- [x] README: setup, architecture, key design decisions, potential improvements
+- [x] Sample conversations ([`samples/`](samples/README.md), offline mode; regenerate with a live provider)
+- [ ] Demo video (5–10 min): script in [`docs/demo-script.md`](docs/demo-script.md)
 - [ ] 1h live presentation (product → architecture → discussion)

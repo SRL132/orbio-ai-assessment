@@ -46,6 +46,8 @@
     .msg small { display:block; color:var(--muted); font-size:10px; }
     .timeline li { margin-bottom:6px; } .timeline code { font-size:12px; }
     .empty { padding:24px; text-align:center; color:var(--muted); }
+    .bar { background:#fed7aa; height:18px; border-radius:3px; }
+    .bar-cell { width:50%; }
   </style>
 </head>
 <body>
@@ -53,6 +55,7 @@
   <span class="brand">Grupo Sazón · Recruiting</span>
   <a href="/dashboard" class="{{ 'active' if active == 'list' }}">Candidates</a>
   <a href="/dashboard/review" class="{{ 'active' if active == 'review' }}">Review queue</a>
+  <a href="/dashboard/analytics" class="{{ 'active' if active == 'analytics' }}">Analytics</a>
   <span class="right">{{ user }}
     <form method="post" action="/logout"><button class="secondary" type="submit">Log out</button></form>
   </span>

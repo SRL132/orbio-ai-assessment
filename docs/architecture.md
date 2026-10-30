@@ -154,6 +154,34 @@ Same code, different implementations behind the ports.
 
 Explicitly **not** now: microservices, Kafka, Kubernetes, a separate vector database, multi-agent orchestration.
 
+## Deployment and monitoring
+
+Design only; the demo runs as one process.
+
+**Deploy**
+
+- **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
+- **Services:** three container services from one image: `api` (webhooks, chat, dashboard), `worker` (turn processing, N replicas), `scheduler` (reminders, outbox dispatch). Stateless; scale `worker` on queue depth.
+- **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes through Alembic migrations, run before each deploy (the demo uses `create_all`).
+- **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
+- **Release:** CI gates (lint, types, boundaries, tests, offline evals) → image → staging with live evals → production. Prompt and config changes ship per client behind a version number, so one client can be rolled back without the others.
+
+**Monitor**
+
+| Signal | Why | Alert when |
+| --- | --- | --- |
+| Turn latency p50 / p95 | Candidates wait on every message | p95 > 8 s for 10 min |
+| LLM errors, refusals, fallback-template rate | The template fallback hides failures from candidates, so it must be visible to us | fallback rate > 5 % |
+| Queue depth and age | Messages waiting to be processed | oldest message > 60 s |
+| Completion rate, drop-off by stage | The product's core bet (see VISION) | completion drops > 20 % week on week |
+| Review-queue size and age | Recruiters falling behind | oldest item > 2 working days |
+| Cost per conversation (tokens × price) | Budget at 10K/week | > 2× the baseline |
+| Outbox backlog | ATS sync stuck | undelivered > 1 h |
+
+Logs are structured and contain IDs, never message text or names (already true in the code). Traces follow one turn across API → queue → worker → LLM. A nightly job runs the live eval suite against production config and posts the scores.
+
+**10K candidates a week:** ~15K messages a day, a few per second at peak. Two to four worker replicas cover LLM latency comfortably; Postgres load is trivial. The real limits are LLM rate limits and cost, so the provider choice and prompt caching matter more than infrastructure.
+
 ## How the bonus features plug in
 
 | Bonus | Where it plugs in | Effort |
@@ -166,8 +194,8 @@ Explicitly **not** now: microservices, Kafka, Kubernetes, a separate vector data
 | Guardrails | Input: `intent` drives the policy. Output: a Python check on every reply, with a template fallback. Data: personal data redacted before logging | Low–Med |
 | RAG | `KnowledgeBase` port; a small FAQ goes in the cached prompt, embeddings only if it grows. Answers come only from the FAQ | Low–Med |
 | Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `BookSlot` actions; a database constraint prevents double-booking | Med |
-| ATS integration design | Document: event log → outbox → webhooks; candidate projection → ATS record; OpenAPI spec | Low |
-| Deployment design | Document: the "Demo vs production" table above, plus monitoring | Low |
+| ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
+| Deployment design | Done: "Deployment and monitoring" above | Low |
 | Voice | A new channel adapter. Preferred: browser push-to-talk → speech-to-text → `engine.turn()` → TTS (e.g. ElevenLabs). Needs voice templates, spoken-input parsing (postal codes, dates), and a single LLM call per turn for latency. Alternative: a hosted voice-agent platform calling the engine as a custom LLM or tools (more moving parts; check the platform's current docs) | Med–High |
 
 ## LLM provider

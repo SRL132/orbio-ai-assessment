@@ -11,6 +11,7 @@
   <div>
     <div class="card"><h2 style="margin-top:0">Summary</h2>
       <div class="summary">{{ state.summary or 'Conversation still in progress.' }}</div>
+      {% if interview %}<p><b>Interview:</b> {{ interview }}</p>{% endif %}
       {% if state.review_reasons %}<p><b>Review reasons:</b> {{ state.review_reasons|map('reason')|join('; ') }}</p>{% endif %}
     </div>
 
@@ -33,7 +34,8 @@
     <h2>Actions</h2>
     <div class="card">
       <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/override" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap">
-        <label>Change status to <select name="status">
+        <label>Change status to <select name="status" required>
+          <option value="" selected disabled>Choose…</option>
           {% for s in overridable %}<option value="{{ s }}">{{ s.replace('_', ' ') }}</option>{% endfor %}
         </select></label>
         <label style="flex:1">Reason (required) <input name="reason" required maxlength="500" placeholder="e.g. Confirmed by phone that the zone is served"></label>

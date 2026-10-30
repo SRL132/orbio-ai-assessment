@@ -97,6 +97,8 @@ function quickReplies(text) {
   const options = [];
   const listed = text.match(/:\s*([^:?]+·[^:?]+)$/);
   if (listed) options.push(...listed[1].split("·").map(s => s.trim()).filter(Boolean));
+  const numbered = [...text.matchAll(/^(\d)\) /gm)].map(m => m[1]);
+  if (numbered.length) options.push(...numbered, /Pick a time/.test(text) ? "None" : "Ninguno");
   if (/\((sí|si) \/ no\)|¿Empezamos\?|¿Es todo correcto\?|futuras ofertas\?|cerca de ti\?/i.test(text)) options.push("Sí", "No");
   if (/\(yes \/ no\)|Shall we start\?|Is everything correct\?|future openings\?|near you\?/i.test(text)) options.push("Yes", "No");
   quick.innerHTML = "";

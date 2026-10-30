@@ -6,6 +6,9 @@ so it can never contradict the data it summarises.
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from app.domain.config import ClientConfig
 from app.domain.models import ConversationState, FieldName, FieldStatus, Status
 
@@ -20,6 +23,14 @@ _REASONS = {
     "postal_code_not_listed": "postal code not in the service list",
     "field_failed_twice": "no usable answer after two tries",
 }
+
+
+def local_time(moment: datetime, state: ConversationState, config: ClientConfig) -> str:
+    """'02/11/2026 12:00 (Madrid time)': recruiters read times in the location's timezone."""
+    location = config.location(state.candidate.location_id or "")
+    if location is None:
+        return f"{moment:%d/%m/%Y %H:%M} UTC"
+    return f"{moment.astimezone(ZoneInfo(location.timezone)):%d/%m/%Y %H:%M} ({location.city} time)"
 
 
 def describe_reason(reason: str) -> str:
@@ -58,7 +69,12 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
         platforms = f" ({', '.join(c.platforms)})" if c.platforms else ""
         lines.append(f"Experience: {c.experience_years:g} years{platforms}")
 
+    if state.interview_at is not None:
+        lines.append(f"Interview booked: {local_time(state.interview_at, state, config)}")
+
     flags: list[str] = []
+    if state.no_slot_fits:
+        flags.append("no offered interview slot fits: contact to schedule")
     if c.meta[FieldName.FULL_NAME].note == "surname_missing":
         flags.append("first name only")
     if c.meta[FieldName.START_DATE].note == "start_date_far":

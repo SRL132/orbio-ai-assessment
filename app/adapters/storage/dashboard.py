@@ -5,6 +5,7 @@ Writes such as overrides go through the domain and the service, never through he
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -14,6 +15,7 @@ from sqlalchemy import Engine, case, func, select
 from sqlalchemy.orm import Session
 
 from app.adapters.storage.sql import ConversationRow
+from app.domain.models import ConversationState, FieldName, FieldStatus, Stage, Status
 
 
 class CandidateItem(BaseModel):
@@ -92,6 +94,12 @@ class DashboardQueries:
         with Session(self._engine) as session:
             return [_item(row) for row in session.scalars(query)]
 
+    def analytics(self, field_order: list[FieldName]) -> Analytics:
+        query = select(ConversationRow.state).where(ConversationRow.client_id == self._client_id)
+        with Session(self._engine) as session:
+            states = [ConversationState.model_validate(raw) for raw in session.scalars(query)]
+        return compute_analytics(states, field_order)
+
     def counters(self, since: datetime) -> dict[str, int]:
         query = select(
             func.count().filter(ConversationRow.created_at >= since),
@@ -114,3 +122,85 @@ def _item(row: ConversationRow) -> CandidateItem:
         name: getattr(row, name) for name in CandidateItem.model_fields if name != "id"
     }
     return CandidateItem(id=row.id, **data)
+
+
+class Analytics(BaseModel):
+    started: int
+    consented: int
+    completed: int
+    completion_rate: float
+    outcomes: dict[str, int]
+    funnel: list[tuple[str, int]]
+    drop_off: dict[str, int]
+    median_minutes: float | None
+    by_language: dict[str, tuple[int, int]]
+    by_location: dict[str, tuple[int, int]]
+    interviews_booked: int
+
+
+def compute_analytics(states: list[ConversationState], field_order: list[FieldName]) -> Analytics:
+    """Conversation metrics from the projected states (docs/recruiter-dashboard.md, Analytics).
+
+    Computed in Python over the whole set: fine for the demo; production would use SQL views.
+    """
+    started = len(states)
+    consented = [
+        s
+        for s in states
+        if not (s.status == Status.IN_PROGRESS and s.stage == Stage.CONSENT)
+        and s.dropped_at != "consent"
+    ]
+    finished = [s for s in states if s.status in COMPLETED]
+    outcomes = {status.value: sum(s.status == status for s in states) for status in Status}
+
+    funnel: list[tuple[str, int]] = [("started", started), ("consented", len(consented))]
+    for index, name in enumerate(field_order):
+        reached = sum(
+            1
+            for s in consented
+            if all(
+                s.candidate.meta[f].status != FieldStatus.MISSING for f in field_order[: index + 1]
+            )
+        )
+        funnel.append((name.value, reached))
+    # No "finished" row: knockouts and hand-offs finish early, so it isn't a funnel step.
+    # Completion is reported separately.
+
+    drop_off: dict[str, int] = {}
+    for s in states:
+        if s.status == Status.ABANDONED:
+            where = s.dropped_at or "unknown"
+            drop_off[where] = drop_off.get(where, 0) + 1
+
+    durations = sorted(
+        (s.ended_at - s.started_at).total_seconds() / 60
+        for s in finished
+        if s.started_at and s.ended_at
+    )
+    median = durations[len(durations) // 2] if durations else None
+
+    def breakdown(key: Callable[[ConversationState], str | None]) -> dict[str, tuple[int, int]]:
+        table: dict[str, tuple[int, int]] = {}
+        for s in states:
+            label = key(s) or "unknown"
+            total, done = table.get(label, (0, 0))
+            table[label] = (total + 1, done + (s.status in COMPLETED))
+        return dict(sorted(table.items()))
+
+    return Analytics(
+        started=started,
+        consented=len(consented),
+        completed=len(finished),
+        completion_rate=round(len(finished) / started, 3) if started else 0.0,
+        outcomes=outcomes,
+        funnel=funnel,
+        drop_off=dict(sorted(drop_off.items(), key=lambda kv: -kv[1])),
+        median_minutes=round(median, 1) if median is not None else None,
+        by_language=breakdown(lambda s: s.language),
+        by_location=breakdown(lambda s: s.candidate.location_id),
+        interviews_booked=sum(s.interview_at is not None for s in states),
+    )
+
+
+# Reached a final outcome through the conversation (not dropped off).
+COMPLETED = frozenset({Status.QUALIFIED, Status.DISQUALIFIED, Status.NEEDS_REVIEW})

@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Iterable
 from datetime import date
 
+from app.adapters.kb.faq import match_faq
 from app.domain.config import ClientConfig
 from app.domain.models import AnswerQuestion, AskField, ConversationState, ExtractionResult, ReAsk
 
@@ -42,5 +43,5 @@ class TemplateResponder:
                 return config.template(lang, f"ask_{name.value}")
             case ReAsk(field=name):
                 return config.template(lang, f"reask_{name.value}")
-            case AnswerQuestion():
-                return config.template(lang, "answer_unknown")
+            case AnswerQuestion(question=question):
+                return match_faq(question, config, lang) or config.template(lang, "answer_unknown")

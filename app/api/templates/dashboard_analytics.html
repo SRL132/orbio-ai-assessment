@@ -1,0 +1,56 @@
+{% extends "dashboard_base.html" %}
+{% set active = "analytics" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>Analytics</h1>
+<div class="counters">
+  <div class="counter"><b>{{ a.started }}</b><span>Conversations started</span></div>
+  <div class="counter"><b>{{ '%.0f%%'|format(a.completion_rate * 100) }}</b><span>Completion rate</span></div>
+  <div class="counter"><b>{{ a.median_minutes if a.median_minutes is not none else '—' }}{% if a.median_minutes is not none %} min{% endif %}</b><span>Median time to finish</span></div>
+  <div class="counter"><b>{{ a.interviews_booked }}</b><span>Interviews booked</span></div>
+</div>
+<p class="muted">Completion = reached qualified, disqualified or needs review through the conversation (not dropped off).</p>
+
+<div class="grid">
+  <div>
+    <h2>Funnel: how far candidates got</h2>
+    <table>
+      <thead><tr><th>Step</th><th>Candidates</th><th class="bar-cell"></th></tr></thead>
+      <tbody>
+      {% for step, count in a.funnel %}
+        <tr><td>{{ step.replace('_', ' ') }}</td><td>{{ count }}</td>
+          <td class="bar-cell"><div class="bar" style="width: {{ (100 * count / a.started) if a.started else 0 }}%"></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h2>Outcomes</h2>
+    <table><tbody>
+      {% for status, count in a.outcomes.items() %}
+        <tr><td><span class="chip s-{{ status }}">{{ status.replace('_', ' ') }}</span></td><td>{{ count }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    <h2>Drop-off: where abandoned candidates stopped</h2>
+    <table><tbody>
+      {% for where, count in a.drop_off.items() %}<tr><td>{{ where.replace('_', ' ') }}</td><td>{{ count }}</td></tr>
+      {% else %}<tr><td class="empty">No abandoned conversations.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+
+<div class="grid">
+  <div>
+    <h2>By language</h2>
+    <table><thead><tr><th>Language</th><th>Started</th><th>Completed</th></tr></thead><tbody>
+      {% for lang, (total, done) in a.by_language.items() %}<tr><td>{{ lang }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <div>
+    <h2>By location</h2>
+    <table><thead><tr><th>Location</th><th>Started</th><th>Completed</th></tr></thead><tbody>
+      {% for loc, (total, done) in a.by_location.items() %}<tr><td>{{ locations.get(loc, loc) }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+{% endblock %}

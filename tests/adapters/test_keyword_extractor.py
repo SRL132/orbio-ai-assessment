@@ -122,3 +122,21 @@ def test_name_stops_at_the_next_clause(collecting: ConversationState, config: Cl
     assert fields.vehicle is not None
     assert fields.city is not None
     assert fields.city.value == "Barcelona"
+
+
+def test_asking_if_its_a_bot_is_a_question(state: ConversationState, config: ClientConfig) -> None:
+    assert extract(state, config, "¿Eres una persona o un bot?", None).intent == "question"
+    assert extract(state, config, "quiero hablar con una persona", None).intent == "human_request"
+
+
+@pytest.mark.parametrize(("text", "choice"), [("2", 2), ("la primera", 1), ("third one", 3)])
+def test_slot_choice(
+    state: ConversationState, config: ClientConfig, text: str, choice: int
+) -> None:
+    state.stage = Stage.SCHEDULING
+    assert KeywordExtractor().extract(state, text, config, TODAY).slot_choice == choice
+
+
+def test_none_of_the_slots(state: ConversationState, config: ClientConfig) -> None:
+    state.stage = Stage.SCHEDULING
+    assert KeywordExtractor().extract(state, "ninguno", config, TODAY).yes_no is False

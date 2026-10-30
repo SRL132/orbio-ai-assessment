@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import Engine
 
+from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.fake import TemplateResponder
@@ -69,8 +70,9 @@ def build(settings: Settings | None = None) -> Container:
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
     config = load_client_config(settings.client_id)
     extractor, responder = make_llm(settings)
-    ports = Ports(extractor=extractor, responder=responder, clock=clock)
     db = make_engine(settings.database_url)
+    calendar = SqlCalendar(db, config, clock)
+    ports = Ports(extractor=extractor, responder=responder, clock=clock, calendar=calendar)
     service = ScreeningService(SqlRepository(db, clock), config, ports)
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
