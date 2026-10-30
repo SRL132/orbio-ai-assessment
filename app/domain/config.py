@@ -74,6 +74,11 @@ class ClientConfig(BaseModel):
         description="Per-channel override, e.g. WhatsApp keeps reminders inside its 24 h window.",
     )
     abandon_after_hours: float = 24.0
+    retention_days: int = Field(
+        default=183,
+        description="Disqualified and abandoned candidates are erased this long after their last "
+        "activity, unless they agreed to stay on file (docs/process-design-appendix.md).",
+    )
     max_reply_chars: int = 250
     interview: InterviewConfig = Field(default_factory=InterviewConfig)
     templates: dict[Language, dict[str, str]]

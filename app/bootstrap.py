@@ -16,6 +16,7 @@ from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.dashboard import DashboardQueries
 from app.adapters.storage.rate_limit import SqlRateLimiter
+from app.adapters.storage.retention import SqlRetention
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
@@ -98,6 +99,7 @@ def build(settings: Settings | None = None) -> Container:
             settings.elevenlabs_model,
         )
     runner.add_periodic("release_orphan_bookings", calendar.release_orphans, 300)
+    runner.add_periodic("retention", SqlRetention(db, config, clock).erase_expired, 3600)
     whatsapp = make_whatsapp(settings, service)
     if whatsapp is not None:
         runner.add_periodic(

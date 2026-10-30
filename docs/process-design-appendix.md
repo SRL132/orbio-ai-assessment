@@ -22,7 +22,7 @@ The agent collects only what screening needs, and every decision can be traced.
 
 - **Consent:** the privacy notice comes in the first message, before any data is collected (GDPR in Spain; LFPDPPP in Mexico). Keeping a candidate on file for future roles is a separate yes/no, because it is a different purpose.
 - **Minimal data:** only the 7 screening fields. No ID numbers, health details or nationality.
-- **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file.
+- **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file. Built: an hourly job erases them 183 days (`retention_days` in the client config) after their last activity: state, messages, events including recruiter notes, interview bookings and the WhatsApp contact, in one transaction. An `erasures` row with no personal data records each one as proof.
 - **Access:** the recruiter dashboard is behind a login with one account per recruiter. No default or shared passwords. Secrets live in environment variables.
 - **IDs:** random UUIDs, never sequential numbers, so one record can't be guessed from another.
 - **Web chat access:** a conversation id isn't a password (it appears in logs and URLs). The browser that starts a conversation gets a signed, HttpOnly cookie naming it, and the chat API serves only that conversation; anyone else gets a 404.

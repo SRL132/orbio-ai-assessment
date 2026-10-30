@@ -20,6 +20,8 @@ field_priority:
 max_attempts: 2
 max_abuse_strikes: 2
 far_start_days: 60
+# Disqualified and abandoned candidates are erased after ~6 months unless they opted to stay on file.
+retention_days: 183
 reminder_hours: [2, 24]
 # WhatsApp only allows free-form messages within 24 h of the candidate's last message; after
 # that only paid, pre-approved templates. Both reminders stay inside the window.

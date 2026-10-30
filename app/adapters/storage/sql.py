@@ -92,6 +92,7 @@ class ConversationRow(Base):
     dropped_at: Mapped[str | None] = mapped_column(String(32))
     duration_minutes: Mapped[float | None] = mapped_column(Float)
     interview_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    keep_on_file: Mapped[bool | None] = mapped_column(Boolean)  # retention: kept if True
     next_reminder_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
     # conversation (webhook inbound, worker reply) queue up instead of colliding.
@@ -166,6 +167,20 @@ class JobLeaseRow(Base):
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner: Mapped[str] = mapped_column(String(32))
     until: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ErasureRow(Base):
+    """Proof that a candidate's data was erased under the retention policy. No personal data:
+    the conversation's id, its final status and when, nothing else."""
+
+    __tablename__ = "erasures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36))
+    status: Mapped[str] = mapped_column(String(32))
+    last_activity_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    erased_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class RateLimitHitRow(Base):
@@ -555,6 +570,7 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.dropped_at = state.dropped_at
     row.duration_minutes = _duration_minutes(state)
     row.interview_at = state.interview_at
+    row.keep_on_file = state.keep_on_file
     row.next_reminder_at = state.next_reminder_at
     row.updated_at = now
     row.state = state.model_dump(mode="json")
