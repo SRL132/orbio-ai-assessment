@@ -191,7 +191,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 
 | Bonus | Where it plugs in | Effort |
 | --- | --- | --- |
-| Analytics | SQL over the event log (funnel, drop-off, duration, outcomes) | Low |
+| Analytics | Done: SQL aggregates over projected columns of `conversations` (`progress`, `dropped_at`, `duration_minutes`, `interview_at`), so the page costs a few small queries however many candidates there are. The event log stays the record for replay and for metrics the projection doesn't hold | Low |
 | Re-engagement | Done: scheduler + reminder templates; on WhatsApp the outbox delivers reminders to the phone at 2 h and 23 h (inside the 24 h window) | Low |
 | Multi-language | Extractor returns `language`; templates per language; stored values language-neutral, so code-switching is handled | Low |
 | Sentiment | `sentiment` / `confused` from the extractor; the policy rephrases with options or offers a human. Never used for qualification | Low |

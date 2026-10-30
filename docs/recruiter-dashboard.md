@@ -46,6 +46,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - Funnel: started → each stage → completed, with drop-off per stage.
 - Completion rate, outcome mix, median time to complete.
 - Breakdown by location and language.
+- Computed with SQL aggregates over projected columns, never by loading every conversation.
 
 ## Rules
 

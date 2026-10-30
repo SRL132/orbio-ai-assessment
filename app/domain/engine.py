@@ -48,6 +48,7 @@ from app.domain.policy import (
     add_review_reason,
     apply_extraction,
     next_missing_field,
+    progress,
     register_failed_attempt,
 )
 from app.domain.ports import Ports
@@ -376,6 +377,7 @@ def _ask_current(t: _Turn) -> None:
 def _finish(t: _Turn, schedule_reminder: bool = True) -> TurnResult:
     if schedule_reminder:
         _schedule_reminder(t)
+    t.state.progress = progress(t.state.candidate, t.config)
     if t.state.status in TERMINAL_STATUSES:
         t.state.summary = build_summary(t.state, t.config)
     replies, render_events = render(t.actions, t.state, t.config, t.ports)

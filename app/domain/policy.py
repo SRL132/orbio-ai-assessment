@@ -63,6 +63,16 @@ def next_missing_field(candidate: Candidate, config: ClientConfig) -> FieldName 
     return None
 
 
+def progress(candidate: Candidate, config: ClientConfig) -> int:
+    """Funnel position: the number of leading priority fields that have an answer."""
+    done = 0
+    for name in config.field_priority:
+        if candidate.meta[name].status == FieldStatus.MISSING:
+            break
+        done += 1
+    return done
+
+
 def missing_count(candidate: Candidate) -> int:
     return sum(1 for meta in candidate.meta.values() if meta.status == FieldStatus.MISSING)
 

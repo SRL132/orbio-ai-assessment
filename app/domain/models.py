@@ -172,6 +172,10 @@ class ConversationState(BaseModel):
     dropped_at: str | None = Field(
         default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
     )
+    progress: int = Field(
+        default=0,
+        description="How many fields, in the client's priority order, are answered (funnel).",
+    )
 
 
 class InboundMessage(BaseModel):

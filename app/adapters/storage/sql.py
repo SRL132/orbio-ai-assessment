@@ -19,6 +19,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Engine,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -82,6 +83,11 @@ class ConversationRow(Base):
     schedule: Mapped[list[str]] = mapped_column(JSON, default=list)
     start_date: Mapped[date | None] = mapped_column(Date)
     review_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Analytics inputs, so the dashboard aggregates in SQL instead of loading every state.
+    progress: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    dropped_at: Mapped[str | None] = mapped_column(String(32))
+    duration_minutes: Mapped[float | None] = mapped_column(Float)
+    interview_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     next_reminder_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
     # conversation (webhook inbound, worker reply) queue up instead of colliding.
@@ -447,9 +453,19 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.schedule = [s.value for s in candidate.schedule]
     row.start_date = candidate.start_date
     row.review_reasons = list(state.review_reasons)
+    row.progress = state.progress
+    row.dropped_at = state.dropped_at
+    row.duration_minutes = _duration_minutes(state)
+    row.interview_at = state.interview_at
     row.next_reminder_at = state.next_reminder_at
     row.updated_at = now
     row.state = state.model_dump(mode="json")
+
+
+def _duration_minutes(state: ConversationState) -> float | None:
+    if state.started_at is None or state.ended_at is None:
+        return None
+    return (state.ended_at - state.started_at).total_seconds() / 60
 
 
 def _message(row: MessageRow) -> StoredMessage:

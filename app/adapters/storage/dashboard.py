@@ -5,17 +5,16 @@ Writes such as overrides go through the domain and the service, never through he
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import Engine, case, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.adapters.storage.sql import ConversationRow
-from app.domain.models import ConversationState, FieldName, FieldStatus, Stage, Status
+from app.domain.models import FieldName, Stage, Status
 
 
 class CandidateItem(BaseModel):
@@ -99,10 +98,84 @@ class DashboardQueries:
             return [_item(row) for row in session.scalars(query)]
 
     def analytics(self, field_order: list[FieldName]) -> Analytics:
-        query = select(ConversationRow.state).where(ConversationRow.client_id == self._client_id)
+        """Conversation metrics (docs/recruiter-dashboard.md, Analytics), aggregated in SQL over
+        the projected columns: a handful of small queries, whatever the number of candidates."""
+        row = ConversationRow
+        mine = row.client_id == self._client_id
+        completed = row.status.in_([s.value for s in COMPLETED])
+        consented = ~(
+            ((row.status == Status.IN_PROGRESS.value) & (row.stage == Stage.CONSENT.value))
+            | (func.coalesce(row.dropped_at, "") == "consent")
+        )
+        timed = completed & row.duration_minutes.is_not(None)
+        steps = [
+            func.count().filter(consented & (row.progress >= i)).label(f"step_{i}")
+            for i in range(1, len(field_order) + 1)
+        ]
+        totals = select(
+            func.count(),
+            func.count().filter(consented),
+            func.count().filter(completed),
+            func.count().filter(row.interview_at.is_not(None)),
+            func.count().filter(timed),
+            *steps,
+        ).where(mine)
         with Session(self._engine) as session:
-            states = [ConversationState.model_validate(raw) for raw in session.scalars(query)]
-        return compute_analytics(states, field_order)
+            started, n_consented, n_completed, booked, n_timed, *reached = session.execute(
+                totals
+            ).one()
+            outcomes = dict(
+                session.execute(
+                    select(row.status, func.count()).where(mine).group_by(row.status)
+                ).all()
+            )
+            drop_off = session.execute(
+                select(func.coalesce(row.dropped_at, "unknown"), func.count())
+                .where(mine, row.status == Status.ABANDONED.value)
+                .group_by(row.dropped_at)
+                .order_by(func.count().desc())
+            ).all()
+            median = session.scalar(  # the middle row: portable, unlike percentile functions
+                select(row.duration_minutes)
+                .where(mine, timed)
+                .order_by(row.duration_minutes)
+                .offset(n_timed // 2)
+                .limit(1)
+            )
+
+            def breakdown(column: InstrumentedAttribute[Any]) -> dict[str, tuple[int, int]]:
+                rows = session.execute(
+                    select(
+                        func.coalesce(column, "unknown"),
+                        func.count(),
+                        func.count().filter(completed),
+                    )
+                    .where(mine)
+                    .group_by(column)
+                ).all()
+                return {label: (total, done) for label, total, done in sorted(rows)}
+
+            by_language = breakdown(row.language)
+            by_channel = breakdown(row.channel)
+            by_location = breakdown(row.location_id)
+
+        funnel = [("started", started), ("consented", n_consented)]
+        funnel += [(name.value, count) for name, count in zip(field_order, reached, strict=True)]
+        # No "finished" row: knockouts and hand-offs finish early, so it isn't a funnel step.
+        return Analytics(
+            started=started,
+            consented=n_consented,
+            completed=n_completed,
+            completion_rate=round(n_completed / started, 3) if started else 0.0,
+            outcomes={status.value: outcomes.get(status.value, 0) for status in Status},
+            funnel=funnel,
+            drop_off=dict(drop_off),
+            median_minutes=round(median, 1) if median is not None else None,
+            by_language=by_language,
+            by_channel=by_channel,
+            by_location=by_location,
+            interviews_booked=booked,
+        )
 
     def counters(self, since: datetime) -> dict[str, int]:
         query = select(
@@ -141,71 +214,6 @@ class Analytics(BaseModel):
     by_channel: dict[str, tuple[int, int]]
     by_location: dict[str, tuple[int, int]]
     interviews_booked: int
-
-
-def compute_analytics(states: list[ConversationState], field_order: list[FieldName]) -> Analytics:
-    """Conversation metrics from the projected states (docs/recruiter-dashboard.md, Analytics).
-
-    Computed in Python over the whole set: fine for the demo; production would use SQL views.
-    """
-    started = len(states)
-    consented = [
-        s
-        for s in states
-        if not (s.status == Status.IN_PROGRESS and s.stage == Stage.CONSENT)
-        and s.dropped_at != "consent"
-    ]
-    finished = [s for s in states if s.status in COMPLETED]
-    outcomes = {status.value: sum(s.status == status for s in states) for status in Status}
-
-    funnel: list[tuple[str, int]] = [("started", started), ("consented", len(consented))]
-    for index, name in enumerate(field_order):
-        reached = sum(
-            1
-            for s in consented
-            if all(
-                s.candidate.meta[f].status != FieldStatus.MISSING for f in field_order[: index + 1]
-            )
-        )
-        funnel.append((name.value, reached))
-    # No "finished" row: knockouts and hand-offs finish early, so it isn't a funnel step.
-    # Completion is reported separately.
-
-    drop_off: dict[str, int] = {}
-    for s in states:
-        if s.status == Status.ABANDONED:
-            where = s.dropped_at or "unknown"
-            drop_off[where] = drop_off.get(where, 0) + 1
-
-    durations = sorted(
-        (s.ended_at - s.started_at).total_seconds() / 60
-        for s in finished
-        if s.started_at and s.ended_at
-    )
-    median = durations[len(durations) // 2] if durations else None
-
-    def breakdown(key: Callable[[ConversationState], str | None]) -> dict[str, tuple[int, int]]:
-        table: dict[str, tuple[int, int]] = {}
-        for s in states:
-            label = key(s) or "unknown"
-            total, done = table.get(label, (0, 0))
-            table[label] = (total + 1, done + (s.status in COMPLETED))
-        return dict(sorted(table.items()))
-
-    return Analytics(
-        started=started,
-        consented=len(consented),
-        completed=len(finished),
-        completion_rate=round(len(finished) / started, 3) if started else 0.0,
-        outcomes=outcomes,
-        funnel=funnel,
-        drop_off=dict(sorted(drop_off.items(), key=lambda kv: -kv[1])),
-        median_minutes=round(median, 1) if median is not None else None,
-        by_language=breakdown(lambda s: s.language),
-        by_channel=breakdown(lambda s: s.channel),
-        by_location=breakdown(lambda s: s.candidate.location_id),
-        interviews_booked=sum(s.interview_at is not None for s in states),
-    )
 
 
 # Reached a final outcome through the conversation (not dropped off).
