@@ -15,6 +15,7 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.dashboard import DashboardQueries
+from app.adapters.storage.rate_limit import SqlRateLimiter
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
@@ -34,6 +35,7 @@ class Container:
     runner: Runner
     queries: DashboardQueries
     db: Engine
+    limiter: SqlRateLimiter
     tts: ElevenLabsTTS | None = None
     whatsapp: WhatsAppChannel | None = None
 
@@ -101,7 +103,8 @@ def build(settings: Settings | None = None) -> Container:
         runner.add_periodic(
             "whatsapp_outbox", whatsapp.dispatch_once, settings.whatsapp_dispatch_seconds
         )
-    return Container(settings, config, clock, service, runner, queries, db, tts, whatsapp)
+    limiter = SqlRateLimiter(db, clock, config.client_id)
+    return Container(settings, config, clock, service, runner, queries, db, limiter, tts, whatsapp)
 
 
 def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChannel | None:

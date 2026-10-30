@@ -22,6 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
+from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
 from app.domain.models import Channel
@@ -119,7 +120,12 @@ def create_app(container: Container | None = None) -> FastAPI:
         request: Request, response: Response, body: StartIn | None = None
     ) -> dict[str, str]:
         channel = body.channel if body else "chat"
-        conversation_id = await asyncio.to_thread(get(request).service.start_conversation, channel)
+        c = get(request)
+        if not c.limiter.allow(
+            f"chat-start:{client_ip(request)}", c.settings.chat_starts_per_ip_per_hour, HOUR
+        ):
+            raise too_many(HOUR)
+        conversation_id = await asyncio.to_thread(c.service.start_conversation, channel)
         response.set_cookie(
             CHAT_COOKIE,
             chat_signer.dumps(str(conversation_id)),
@@ -162,6 +168,9 @@ def create_app(container: Container | None = None) -> FastAPI:
     ) -> dict[str, bool]:
         require_owner(request, conversation_id)
         c = get(request)
+        limit = c.settings.chat_messages_per_conversation_per_minute
+        if not c.limiter.allow(f"chat-message:{conversation_id}", limit, MINUTE):
+            raise too_many(MINUTE)
         try:
             await asyncio.to_thread(c.service.receive, conversation_id, body.text)
         except KeyError:

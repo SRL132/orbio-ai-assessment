@@ -23,6 +23,7 @@ from sqlalchemy import (
     Engine,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -165,6 +166,18 @@ class JobLeaseRow(Base):
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner: Mapped[str] = mapped_column(String(32))
     until: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class RateLimitHitRow(Base):
+    """One counted request (a login attempt, a chat message) for rate limiting."""
+
+    __tablename__ = "rate_limit_hits"
+    __table_args__ = (Index("ix_rate_limit_hits_key", "client_id", "key", "at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    key: Mapped[str] = mapped_column(String(200))
+    at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class InterviewRow(Base):

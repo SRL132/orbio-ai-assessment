@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     recruiter_users: SecretStr | None = None
     session_secret: SecretStr | None = None
 
+    # Rate limits (shared by every worker: counted in the database).
+    login_attempts_per_ip_per_15_min: int = 20
+    login_failures_per_email_per_15_min: int = 5  # only failures, so nobody can lock you out
+    chat_starts_per_ip_per_hour: int = 30
+    chat_messages_per_conversation_per_minute: int = 20  # caps LLM spend per conversation
+
     @field_validator(
         "openrouter_api_key",
         "anthropic_api_key",

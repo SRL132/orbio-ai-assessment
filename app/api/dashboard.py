@@ -21,6 +21,7 @@ from pydantic import SecretStr
 
 from app.adapters.storage.dashboard import Filters
 from app.api.auth import parse_users, verify_password
+from app.api.limits import QUARTER_HOUR, client_ip
 from app.bootstrap import Container
 from app.domain.config import ClientConfig
 from app.domain.engine import OVERRIDABLE
@@ -74,17 +75,23 @@ async def login(
     password: Annotated[str, Form()],
 ) -> HTMLResponse | RedirectResponse:
     users = parse_users(_secret(c.settings.recruiter_users))
-    stored = users.get(email.strip().lower())
+    email = email.strip().lower()
+    by_ip, by_email = f"login-ip:{client_ip(request)}", f"login-email:{email}"
+    s, limiter = c.settings, c.limiter
+    if limiter.exceeded(by_ip, s.login_attempts_per_ip_per_15_min, QUARTER_HOUR) or (
+        limiter.exceeded(by_email, s.login_failures_per_email_per_15_min, QUARTER_HOUR)
+    ):
+        return _login_page(request, bool(users), TOO_MANY_LOGINS, status.HTTP_429_TOO_MANY_REQUESTS)
+    limiter.hit(by_ip, QUARTER_HOUR)
+    stored = users.get(email)
     ok = stored is not None and await asyncio.to_thread(verify_password, password, stored)
     if not ok:
-        return TEMPLATES.TemplateResponse(
-            request,
-            "login.html",
-            {"configured": bool(users), "error": "Wrong email or password."},
-            status_code=status.HTTP_401_UNAUTHORIZED,
+        limiter.hit(by_email, QUARTER_HOUR)  # only failures count against an account
+        return _login_page(
+            request, bool(users), "Wrong email or password.", status.HTTP_401_UNAUTHORIZED
         )
     request.session.clear()
-    request.session["user"] = email.strip().lower()
+    request.session["user"] = email
     return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -257,6 +264,15 @@ def field_rows(candidate: Candidate, config: ClientConfig) -> list[dict[str, Any
         }
         for name in FieldName
     ]
+
+
+TOO_MANY_LOGINS = "Too many login attempts. Wait 15 minutes and try again."
+
+
+def _login_page(request: Request, configured: bool, error: str, code: int) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request, "login.html", {"configured": configured, "error": error}, status_code=code
+    )
 
 
 def _secret(value: SecretStr | None) -> str | None:

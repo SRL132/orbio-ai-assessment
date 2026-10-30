@@ -26,6 +26,7 @@ The agent collects only what screening needs, and every decision can be traced.
 - **Access:** the recruiter dashboard is behind a login with one account per recruiter. No default or shared passwords. Secrets live in environment variables.
 - **IDs:** random UUIDs, never sequential numbers, so one record can't be guessed from another.
 - **Web chat access:** a conversation id isn't a password (it appears in logs and URLs). The browser that starts a conversation gets a signed, HttpOnly cookie naming it, and the chat API serves only that conversation; anyone else gets a 404.
+- **Rate limits** (counted in the database, so all workers share them; `*_per_*` settings in `app/settings.py`): 20 login attempts per address and 5 *failed* logins per account per 15 minutes (successes don't count, so nobody can lock a recruiter out by guessing), 30 new chats per address per hour, and 20 messages per conversation per minute, which caps LLM spend per conversation.
 - **Logs:** personal data is masked in application logs. An audit log records who viewed or changed each candidate, and every status decision with its reason.
 
 ## C. Regulatory and platform context
