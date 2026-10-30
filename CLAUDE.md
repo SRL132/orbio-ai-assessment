@@ -41,7 +41,7 @@ uv sync                                       # install (Python 3.13, pinned in 
 cp .env.example .env                          # LLM_PROVIDER=fake needs no API key
 uv run uvicorn --factory app.api.main:create_app --reload   # /chat, /voice (Chrome/Edge), /dashboard
 uv run ruff format . && uv run ruff check .   # format and lint
-uv run mypy app                               # types (strict on app.domain)
+uv run mypy app                               # types (strict on all of app/)
 uv run lint-imports                           # architecture boundaries
 uv run pytest --cov                           # tests + coverage ratchet
 uv run deptry . && uv run pip-audit           # dependency hygiene

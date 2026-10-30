@@ -21,7 +21,7 @@ from app.domain.models import (
     FieldStatus,
     InvalidReason,
     Reason,
-    review_reason,
+    ReviewReason,
 )
 from app.domain.validators import (
     Outcome,
@@ -217,6 +217,6 @@ def register_failed_attempt(
 def add_review_reason(
     state: ConversationState, reason: Reason, field_name: FieldName | None = None
 ) -> None:
-    stored = review_reason(reason, field_name)
-    if stored not in state.review_reasons:
-        state.review_reasons.append(stored)
+    added = ReviewReason(reason=reason, field=field_name)
+    if added not in state.review_reasons:
+        state.review_reasons.append(added)

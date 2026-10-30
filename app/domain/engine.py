@@ -315,7 +315,7 @@ def _end(state: ConversationState, status: Status, stage: Stage = Stage.CLOSED) 
 def _close(t: _Turn, status: Status, stage: Stage = Stage.CLOSED) -> None:
     previous = _end(t.state, status, stage)
     t.state.ended_at = t.now
-    reason = ",".join(t.state.review_reasons) or None
+    reason = ",".join(str(r) for r in t.state.review_reasons) or None
     t.events.append(
         DomainEvent(
             type=EventType.STATUS_CHANGED,

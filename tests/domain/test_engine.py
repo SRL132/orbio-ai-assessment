@@ -17,6 +17,8 @@ from app.domain.models import (
     FieldStatus,
     InboundMessage,
     ReAsk,
+    Reason,
+    ReviewReason,
     Schedule,
     Stage,
     Status,
@@ -150,7 +152,9 @@ def test_borderline_zone_continues_then_goes_to_review(chat: Chat) -> None:
     chat.say(ex(experience_years=0, start_date=date(2026, 11, 3)))
     chat.say(ex(yes_no=True))
     assert chat.state.status == Status.NEEDS_REVIEW
-    assert chat.state.review_reasons == ["borderline_zone:location"]
+    assert chat.state.review_reasons == [
+        ReviewReason(reason=Reason.BORDERLINE_ZONE, field=FieldName.LOCATION)
+    ]
 
 
 def test_invalid_answer_is_asked_again_then_sent_to_review(chat: Chat) -> None:
@@ -180,7 +184,7 @@ def test_human_request_hands_off(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(intent="human_request"))
     assert chat.state.status == Status.NEEDS_REVIEW
-    assert "human_requested" in chat.state.review_reasons
+    assert ReviewReason(reason=Reason.HUMAN_REQUESTED) in chat.state.review_reasons
     assert chat.result.replies[-1] == chat.config.template("es", "handoff_human")
 
 
@@ -191,7 +195,7 @@ def test_repeated_abuse_ends_politely(chat: Chat) -> None:
     assert chat.result.replies[0] == chat.config.template("es", "abuse_warning")
     chat.say(ex(intent="abuse"))
     assert chat.state.status == Status.NEEDS_REVIEW
-    assert "flagged_behaviour" in chat.state.review_reasons
+    assert ReviewReason(reason=Reason.FLAGGED_BEHAVIOUR) in chat.state.review_reasons
 
 
 def test_sensitive_data_is_flagged_for_redaction(chat: Chat) -> None:

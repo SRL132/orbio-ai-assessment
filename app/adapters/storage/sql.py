@@ -565,7 +565,7 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.availability = [a.value for a in candidate.availability]
     row.schedule = [s.value for s in candidate.schedule]
     row.start_date = candidate.start_date
-    row.review_reasons = list(state.review_reasons)
+    row.review_reasons = [str(r) for r in state.review_reasons]
     row.progress = state.progress
     row.dropped_at = state.dropped_at
     row.duration_minutes = _duration_minutes(state)

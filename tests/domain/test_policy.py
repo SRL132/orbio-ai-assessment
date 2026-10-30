@@ -1,7 +1,14 @@
 from datetime import date
 
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, FieldName, FieldStatus, Vehicle
+from app.domain.models import (
+    ConversationState,
+    FieldName,
+    FieldStatus,
+    Reason,
+    ReviewReason,
+    Vehicle,
+)
 from app.domain.policy import (
     apply_extraction,
     missing_count,
@@ -62,7 +69,9 @@ def test_knockout_stops_processing(state: ConversationState, config: ClientConfi
 def test_review_outcome_records_reason(state: ConversationState, config: ClientConfig) -> None:
     apply_extraction(state, ex(city="Getafe").fields, config, TODAY)
     assert state.candidate.meta[FieldName.LOCATION].status == FieldStatus.NEEDS_REVIEW
-    assert state.review_reasons == ["borderline_zone:location"]
+    assert state.review_reasons == [
+        ReviewReason(reason=Reason.BORDERLINE_ZONE, field=FieldName.LOCATION)
+    ]
 
 
 def test_changed_answer_is_logged(state: ConversationState, config: ClientConfig) -> None:
@@ -79,7 +88,9 @@ def test_two_failed_attempts_send_field_to_review(
     assert register_failed_attempt(state, FieldName.START_DATE, config) is False
     assert register_failed_attempt(state, FieldName.START_DATE, config) is True
     assert state.candidate.meta[FieldName.START_DATE].status == FieldStatus.NEEDS_REVIEW
-    assert state.review_reasons == ["field_failed_twice:start_date"]
+    assert state.review_reasons == [
+        ReviewReason(reason=Reason.FIELD_FAILED_TWICE, field=FieldName.START_DATE)
+    ]
 
 
 def test_first_name_alone_is_accepted_after_retries(

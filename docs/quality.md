@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Environment and dependencies | **uv** | One lockfile; `uv run` for everything |
 | Lint and format | **ruff** | Replaces flake8, isort and black |
-| Types | **mypy** | `--strict` on `app/domain/`, looser elsewhere; Pydantic plugin |
+| Types | **mypy** | `--strict` on all of `app/`; Pydantic plugin |
 | Architecture boundaries | **import-linter** | `domain/` imports nothing from adapters, api, worker or SDKs |
 | Unit tests | **pytest** + **hypothesis** | Property tests for parsers and validators, and for the engine: Hypothesis plays an arbitrary (even adversarial) extractor for whole conversations and checks the code-owned rules after every turn (only complete, unflagged candidates qualify; a final status never reopens; every message gets an answer) |
 | Coverage | **pytest-cov** | Ratcheted; ~90% target on `domain/`, no target on adapters |
@@ -22,7 +22,7 @@
 ## Ratchets: the bar only goes up
 
 1. **Coverage.** `fail_under` starts at the current value. When coverage rises, raise it in the same change. Never lower it.
-2. **Typing.** `domain/` is strict from day one. Modules get added to the strict list one by one; none are removed.
+2. **Typing.** `domain/` was strict from day one; the rest of `app/` joined once it passed. The strict list never shrinks.
 3. **Lint ignores.** `per-file-ignores` and `# noqa` are a debt list: they may shrink, never grow.
 4. **Eval baseline.** `evals/baseline.json` stores per-scenario metrics: extraction accuracy, knockout correctness, turns to complete, guardrail passes. A prompt or policy change must match or beat it. Raising the baseline is an explicit, reviewed change. This is the ratchet that protects *behaviour*, not just code.
 
@@ -80,7 +80,7 @@ select = ["E","F","I","B","UP","SIM","RUF","PT","S","ANN","TID"]
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
-module = "app.domain.*"
+module = ["app", "app.*"]
 strict = true
 
 [tool.importlinter]

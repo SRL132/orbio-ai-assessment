@@ -10,7 +10,14 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, FieldName, FieldStatus, Reason, Status
+from app.domain.models import (
+    ConversationState,
+    FieldName,
+    FieldStatus,
+    Reason,
+    ReviewReason,
+    Status,
+)
 
 REASON_TEXT: dict[str, str] = {
     Reason.NO_LICENSE: "no driving license",
@@ -33,9 +40,13 @@ def local_time(moment: datetime, state: ConversationState, config: ClientConfig)
     return f"{moment.astimezone(ZoneInfo(location.timezone)):%d/%m/%Y %H:%M} ({location.city} time)"
 
 
-def describe_reason(reason: str) -> str:
-    """'borderline_zone:location' -> 'borderline zone (location)'."""
-    key, _, field = reason.partition(":")
+def describe_reason(reason: ReviewReason | Reason | str) -> str:
+    """'borderline_zone:location' -> 'borderline zone (location)'. Also takes the projection's
+    text form, and an unknown reason (an old one) falls back to its words."""
+    if isinstance(reason, ReviewReason):
+        key, field = reason.reason.value, reason.field.value if reason.field else ""
+    else:
+        key, _, field = str(reason).partition(":")
     text = REASON_TEXT.get(key, key.replace("_", " "))
     return f"{text} ({field.replace('_', ' ')})" if field else text
 

@@ -211,7 +211,9 @@ class Harness:
         if expect.language:
             check(state.language == expect.language, f"language {state.language}")
         for reason in expect.review_reasons_include:
-            check(reason in state.review_reasons, f"missing review reason {reason}")
+            check(
+                reason in {str(r) for r in state.review_reasons}, f"missing review reason {reason}"
+            )
         if expect.disqualify_reason:
             check(
                 state.disqualify_reason == expect.disqualify_reason,

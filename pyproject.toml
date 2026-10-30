@@ -59,9 +59,9 @@ plugins = ["pydantic.mypy"]
 warn_unused_configs = true
 ignore_missing_imports = true
 
-# Ratchet: modules may be added to the strict list, never removed.
+# Ratchet: modules may be added to the strict list, never removed. All of app/ is strict.
 [[tool.mypy.overrides]]
-module = ["app.domain", "app.domain.*"]
+module = ["app", "app.*"]
 strict = true
 
 # --- Architecture boundaries -----------------------------------------------

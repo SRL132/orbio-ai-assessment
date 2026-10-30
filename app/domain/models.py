@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FieldName(StrEnum):
@@ -102,9 +102,26 @@ InvalidReason = Literal[
 ]
 
 
-def review_reason(reason: Reason, field: FieldName | None = None) -> str:
-    """The stored form of a review reason: 'borderline_zone:location' when tied to a field."""
-    return f"{reason.value}:{field.value}" if field else reason.value
+class ReviewReason(BaseModel):
+    """Why a recruiter must look at a candidate, and which field it's about (if any)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: Reason
+    field: FieldName | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_text(cls, value: object) -> object:
+        """Read the text form too ('borderline_zone:location'), as states saved before this
+        model, the dashboard projection and eval scenarios store it."""
+        if isinstance(value, str):
+            reason, _, field = value.partition(":")
+            return {"reason": reason, "field": field or None}
+        return value
+
+    def __str__(self) -> str:
+        return f"{self.reason.value}:{self.field.value}" if self.field else self.reason.value
 
 
 Language = Literal["es", "en"]
@@ -153,9 +170,7 @@ class ConversationState(BaseModel):
     stage: Stage = Stage.CONSENT
     awaiting: FieldName | None = None
     language: Language = "es"
-    review_reasons: list[str] = Field(
-        default_factory=list, description="See `review_reason()`: 'reason' or 'reason:field'."
-    )
+    review_reasons: list[ReviewReason] = Field(default_factory=list)
     disqualify_reason: Reason | None = None
     keep_on_file: bool | None = None
     abuse_strikes: int = 0

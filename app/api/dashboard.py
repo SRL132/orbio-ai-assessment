@@ -259,7 +259,7 @@ def export(conversation_id: UUID, c: App, user: Recruiter) -> JSONResponse:
         "candidate": state.candidate.model_dump(mode="json"),
         "status": state.status.value,
         "summary": state.summary,
-        "review_reasons": state.review_reasons,
+        "review_reasons": [str(r) for r in state.review_reasons],
         "disqualify_reason": state.disqualify_reason,
         "language": state.language,
         "messages": [

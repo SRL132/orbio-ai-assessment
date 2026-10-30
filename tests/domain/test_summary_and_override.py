@@ -8,6 +8,8 @@ from app.domain.models import (
     Availability,
     ConversationState,
     FieldName,
+    Reason,
+    ReviewReason,
     Schedule,
     Status,
     Vehicle,
@@ -106,3 +108,12 @@ def test_in_progress_and_more_flags(state: ConversationState, config: ClientConf
 def test_abandoned_before_any_question(state: ConversationState, config: ClientConfig) -> None:
     state.status = Status.ABANDONED
     assert build_summary(state, config).startswith("Abandoned at: consent.")
+
+
+def test_review_reasons_read_their_text_form() -> None:
+    # States saved before review reasons were typed, the projection and eval scenarios use it.
+    parsed = ReviewReason.model_validate("borderline_zone:location")
+    assert parsed == ReviewReason(reason=Reason.BORDERLINE_ZONE, field=FieldName.LOCATION)
+    assert str(parsed) == "borderline_zone:location"
+    assert ReviewReason.model_validate("human_requested").field is None
+    assert describe_reason(parsed) == describe_reason("borderline_zone:location")
