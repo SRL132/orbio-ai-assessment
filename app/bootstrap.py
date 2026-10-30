@@ -5,10 +5,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from sqlalchemy import Engine
+
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.storage.dashboard import DashboardQueries
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.ports import Clock, Extractor, Ports, Responder
@@ -24,6 +27,11 @@ class Container:
     clock: Clock
     service: ScreeningService
     runner: Runner
+    queries: DashboardQueries
+    db: Engine
+
+    def close(self) -> None:
+        self.db.dispose()
 
 
 def _llm(settings: Settings) -> tuple[Extractor, Responder]:
@@ -62,7 +70,8 @@ def build(settings: Settings | None = None) -> Container:
     config = load_client_config(settings.client_id)
     extractor, responder = _llm(settings)
     ports = Ports(extractor=extractor, responder=responder, clock=clock)
-    repo = SqlRepository(make_engine(settings.database_url), clock)
-    service = ScreeningService(repo, config, ports)
+    db = make_engine(settings.database_url)
+    service = ScreeningService(SqlRepository(db, clock), config, ports)
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
-    return Container(settings, config, clock, service, runner)
+    queries = DashboardQueries(db, config.client_id)
+    return Container(settings, config, clock, service, runner, queries, db)

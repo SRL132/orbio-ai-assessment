@@ -14,7 +14,7 @@ from uuid import UUID
 
 from app.domain import engine
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, InboundMessage, TurnResult
+from app.domain.models import ConversationState, DomainEvent, InboundMessage, Status, TurnResult
 from app.domain.ports import Ports, Repository
 
 logger = logging.getLogger("app.service")
@@ -94,3 +94,32 @@ class ScreeningService:
                     result.state.reminders_sent,
                 )
         return changed
+
+    # --- Recruiter actions (writes go through the domain, never straight to the database) -----
+
+    def override(self, conversation_id: UUID, status: Status, reason: str, actor: str) -> None:
+        with self._lock(conversation_id):
+            state = self.repo.get(conversation_id)
+            if state is None:
+                raise KeyError(conversation_id)
+            new_state, events = engine.override_status(
+                state, status, reason, actor, self.config, self.ports
+            )
+            self.repo.save_turn(new_state, events, [], [])
+            logger.info("override id=%s to=%s", conversation_id, status.value)
+
+    def add_note(self, conversation_id: UUID, text: str, actor: str) -> None:
+        state = self.repo.get(conversation_id)
+        if state is None:
+            raise KeyError(conversation_id)
+        note = text.strip()[:MAX_MESSAGE_CHARS]
+        if note:
+            self.repo.append_events(
+                state, [DomainEvent(type="note_added", data={"text": note, "actor": actor})]
+            )
+
+    def record_view(self, conversation_id: UUID, actor: str) -> ConversationState | None:
+        state = self.repo.get(conversation_id)
+        if state is not None:
+            self.repo.append_events(state, [DomainEvent(type="viewed", data={"actor": actor})])
+        return state

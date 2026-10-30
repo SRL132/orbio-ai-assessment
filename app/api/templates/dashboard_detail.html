@@ -1,0 +1,68 @@
+{% extends "dashboard_base.html" %}
+{% set active = "" %}
+{% block title %}{{ state.candidate.full_name or 'Candidate' }}{% endblock %}
+{% block content %}
+<p><a href="/dashboard">← Candidates</a></p>
+<h1>{{ state.candidate.full_name or 'Unnamed candidate' }}
+  <span class="chip s-{{ state.status.value }}">{{ state.status.value.replace('_', ' ') }}</span>
+  <span class="muted" style="font-size:13px">· {{ location.city if location else 'location unknown' }} · {{ state.language }}</span>
+</h1>
+<div class="grid">
+  <div>
+    <div class="card"><h2 style="margin-top:0">Summary</h2>
+      <div class="summary">{{ state.summary or 'Conversation still in progress.' }}</div>
+      {% if state.review_reasons %}<p><b>Review reasons:</b> {{ state.review_reasons|map('reason')|join('; ') }}</p>{% endif %}
+    </div>
+
+    <h2>Screening answers</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Value</th><th>Candidate's words</th><th>Confidence</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for f in fields %}
+        <tr class="{{ 'low' if f.meta.confidence is not none and f.meta.confidence < 0.6 }}">
+          <td>{{ f.label }}</td>
+          <td>{{ f.value or '—' }}</td>
+          <td class="quote">{{ f.meta.quote or '' }}</td>
+          <td>{{ '%.0f%%'|format(f.meta.confidence * 100) if f.meta.confidence is not none else '—' }}</td>
+          <td>{{ f.meta.status.value.replace('_', ' ') }}{% if f.meta.note %}<br><small class="muted">{{ f.meta.note|reason }}</small>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Actions</h2>
+    <div class="card">
+      <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/override" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap">
+        <label>Change status to <select name="status">
+          {% for s in overridable %}<option value="{{ s }}">{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select></label>
+        <label style="flex:1">Reason (required) <input name="reason" required maxlength="500" placeholder="e.g. Confirmed by phone that the zone is served"></label>
+        <button type="submit">Save override</button>
+      </form>
+      <p class="muted" style="margin:8px 0 0">The agent's original decision stays in the timeline.</p>
+      <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/notes" style="display:flex; gap:8px; margin-top:12px">
+        <input name="text" required maxlength="2000" placeholder="Add a note" style="flex:1">
+        <button class="secondary" type="submit">Add note</button>
+      </form>
+      <p style="margin:12px 0 0"><a href="/dashboard/candidates/{{ state.conversation_id }}/export.json">Export JSON</a></p>
+    </div>
+  </div>
+  <div>
+    <div class="card"><h2 style="margin-top:0">Transcript</h2>
+      <div class="chat">
+      {% for m in messages %}
+        <div class="msg {{ m.direction }}">{{ m.text }}<small>{{ m.created_at.strftime('%d/%m %H:%M') }}</small></div>
+      {% endfor %}
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Timeline</h2>
+      <ul class="timeline">
+      {% for at, e in timeline %}
+        <li><span class="muted">{{ at.strftime('%d/%m %H:%M') }}</span> <b>{{ e.type.replace('_', ' ') }}</b>
+          {% if e.data %}<code>{% for k, v in e.data.items() if v is not none %}{{ k }}={{ v }} {% endfor %}</code>{% endif %}</li>
+      {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · Grupo Sazón recruiting</title>
+  <style>
+    body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:#f9fafb; display:grid; place-items:center; height:100vh; margin:0; }
+    form { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:24px; width:320px; display:flex; flex-direction:column; gap:10px; }
+    h1 { font-size:18px; margin:0 0 6px; color:#c2410c; }
+    input { font:inherit; padding:8px; border:1px solid #d1d5db; border-radius:6px; }
+    button { font:inherit; padding:8px; border-radius:6px; border:none; background:#c2410c; color:#fff; cursor:pointer; }
+    .error { color:#991b1b; font-size:13px; } .note { color:#6b7280; font-size:13px; }
+  </style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>Recruiter login</h1>
+  {% if not configured %}
+    <p class="note">No recruiter accounts are configured. Set <code>RECRUITER_USERS</code>
+      (create a hash with <code>uv run python -m app.cli hash-password</code>).</p>
+  {% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <input name="email" type="email" placeholder="Email" required autocomplete="username">
+  <input name="password" type="password" placeholder="Password" required autocomplete="current-password">
+  <button type="submit">Log in</button>
+</form>
+</body>
+</html>

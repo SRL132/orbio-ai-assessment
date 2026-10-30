@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
+    TERMINAL_STATUSES,
     Action,
     AnswerQuestion,
     AskField,
@@ -39,6 +40,7 @@ from app.domain.policy import (
     register_failed_attempt,
 )
 from app.domain.ports import Ports
+from app.domain.summary import build_summary
 from app.domain.validators import final_review_reasons
 
 # Intents that count as a (possibly failed) attempt at answering the awaited question.
@@ -426,6 +428,8 @@ def _finish(
     ports: Ports,
     redact: bool = False,
 ) -> TurnResult:
+    if state.status in TERMINAL_STATUSES:
+        state.summary = build_summary(state, config)
     replies, render_events = render(actions, state, config, ports)
     return TurnResult(
         state=state,
@@ -434,3 +438,36 @@ def _finish(
         events=[*events, *render_events],
         redact_inbound=redact,
     )
+
+
+# --- Recruiter actions ----------------------------------------------------------------------------
+
+OVERRIDABLE = frozenset({Status.QUALIFIED, Status.DISQUALIFIED, Status.NEEDS_REVIEW})
+
+
+def override_status(
+    state: ConversationState,
+    status: Status,
+    reason: str,
+    actor: str,
+    config: ClientConfig,
+    ports: Ports,
+) -> tuple[ConversationState, list[DomainEvent]]:
+    """A recruiter changes the outcome. Needs a reason; the original decision stays in the log."""
+    if status not in OVERRIDABLE:
+        raise ValueError(f"cannot override to {status.value}")
+    if not reason.strip():
+        raise ValueError("an override needs a reason")
+    state = state.model_copy(deep=True)
+    previous = state.status
+    state.status = status
+    state.stage = Stage.CLOSED
+    state.awaiting = None
+    state.next_reminder_at = None
+    state.ended_at = state.ended_at or ports.clock.now()
+    state.summary = build_summary(state, config)
+    event = DomainEvent(
+        type="override",
+        data={"from": previous.value, "to": status.value, "reason": reason.strip(), "actor": actor},
+    )
+    return state, [event]

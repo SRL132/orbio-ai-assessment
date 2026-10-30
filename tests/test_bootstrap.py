@@ -18,6 +18,7 @@ def test_fake_provider_runs_offline(tmp_path: Path) -> None:
     container = build(settings(tmp_path))
     assert isinstance(container.service.ports.extractor, KeywordExtractor)
     assert isinstance(container.clock, OffsetClock)
+    container.close()
 
 
 def test_openrouter_provider(tmp_path: Path) -> None:
@@ -25,6 +26,7 @@ def test_openrouter_provider(tmp_path: Path) -> None:
         settings(tmp_path, llm_provider="openrouter", openrouter_api_key="k", openrouter_model="m")
     )
     assert isinstance(container.service.ports.extractor, OpenRouterLLM)
+    container.close()
 
 
 def test_openrouter_needs_a_key(tmp_path: Path) -> None:
@@ -38,6 +40,7 @@ def test_anthropic_provider_and_real_clock(tmp_path: Path) -> None:
     )
     assert isinstance(container.service.ports.responder, AnthropicLLM)
     assert isinstance(container.clock, SystemClock)
+    container.close()
 
 
 def test_offset_clock_only_moves_forward() -> None:

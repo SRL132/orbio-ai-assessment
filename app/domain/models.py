@@ -124,6 +124,7 @@ class ConversationState(BaseModel):
     started_at: datetime | None = None
     last_inbound_at: datetime | None = None
     ended_at: datetime | None = None
+    summary: str | None = None
 
 
 class InboundMessage(BaseModel):

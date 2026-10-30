@@ -1,0 +1,51 @@
+{% extends "dashboard_base.html" %}
+{% set active = "list" %}
+{% block title %}Candidates{% endblock %}
+{% block content %}
+<div class="counters">
+  <div class="counter"><b>{{ counters.new_today }}</b><span>New today</span></div>
+  <div class="counter"><b>{{ counters.qualified }}</b><span>Qualified</span></div>
+  <div class="counter"><b>{{ counters.needs_review }}</b><span><a href="/dashboard/review">Waiting for review</a></span></div>
+  <div class="counter"><b>{{ counters.in_progress }}</b><span>In progress</span></div>
+</div>
+<form class="filters" method="get">
+  <label>Name <input name="q" value="{{ filters.get('q', '') }}" placeholder="Search"></label>
+  <label>Status <select name="status"><option value="">Any</option>
+    {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if filters.get('status') == s }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+  </select></label>
+  <label>Location <select name="location"><option value="">Any</option>
+    {% for loc in locations %}<option value="{{ loc.id }}" {{ 'selected' if filters.get('location') == loc.id }}>{{ loc.city }}</option>{% endfor %}
+  </select></label>
+  <label>Availability <select name="availability"><option value="">Any</option>
+    {% for a in ['full_time', 'part_time', 'weekends'] %}<option value="{{ a }}" {{ 'selected' if filters.get('availability') == a }}>{{ a.replace('_', ' ') }}</option>{% endfor %}
+  </select></label>
+  <label>Hours <select name="schedule"><option value="">Any</option>
+    {% for s in ['morning', 'afternoon', 'evening', 'flexible'] %}<option value="{{ s }}" {{ 'selected' if filters.get('schedule') == s }}>{{ s }}</option>{% endfor %}
+  </select></label>
+  <label>Language <select name="language"><option value="">Any</option>
+    {% for l in ['es', 'en'] %}<option value="{{ l }}" {{ 'selected' if filters.get('language') == l }}>{{ l }}</option>{% endfor %}
+  </select></label>
+  <label>Starts by <input type="date" name="start_before" value="{{ filters.get('start_before', '') }}"></label>
+  <button type="submit">Filter</button>
+  <a href="/dashboard" class="muted">Clear</a>
+</form>
+<table>
+  <thead><tr><th>Name</th><th>Status</th><th>Location</th><th>Availability</th><th>Hours</th><th>Start</th><th>Lang</th><th>Last activity</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+    <tr onclick="location.href='/dashboard/candidates/{{ i.id }}'" style="cursor:pointer">
+      <td><a class="row" href="/dashboard/candidates/{{ i.id }}">{{ i.full_name or '—' }}</a></td>
+      <td><span class="chip s-{{ i.status }}">{{ i.status.replace('_', ' ') }}</span></td>
+      <td>{{ [i.zone, i.city]|select|join(', ') or '—' }}</td>
+      <td>{{ ', '.join(i.availability).replace('_', ' ') or '—' }}</td>
+      <td>{{ ', '.join(i.schedule) or '—' }}</td>
+      <td>{{ i.start_date.strftime('%d/%m/%Y') if i.start_date else '—' }}</td>
+      <td>{{ i.language }}</td>
+      <td class="muted">{{ i.updated_at.strftime('%d/%m %H:%M') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="empty">No candidates match these filters.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

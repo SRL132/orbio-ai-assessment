@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Recruiter dashboard{% endblock %} · Grupo Sazón</title>
+  <style>
+    :root { --brand:#c2410c; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f9fafb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); font-size:14px; }
+    nav { background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; display:flex; gap:20px; align-items:center; }
+    nav .brand { font-weight:700; color:var(--brand); }
+    nav a { color:var(--ink); text-decoration:none; }
+    nav a.active { font-weight:600; border-bottom:2px solid var(--brand); padding-bottom:2px; }
+    nav .right { margin-left:auto; color:var(--muted); display:flex; gap:12px; align-items:center; }
+    main { padding:20px 24px; max-width:1200px; margin:0 auto; }
+    h1 { font-size:20px; margin:0 0 16px; }
+    h2 { font-size:15px; margin:24px 0 8px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { background:#f3f4f6; font-weight:600; font-size:12px; color:#374151; }
+    tr:hover td { background:#fffbeb; }
+    a.row { color:inherit; text-decoration:none; display:block; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:600; white-space:nowrap; }
+    .s-qualified { background:#dcfce7; color:#166534; } .s-needs_review { background:#fef3c7; color:#92400e; }
+    .s-disqualified { background:#fee2e2; color:#991b1b; } .s-in_progress { background:#dbeafe; color:#1e40af; }
+    .s-abandoned { background:#e5e7eb; color:#374151; }
+    .counters { display:flex; gap:12px; margin-bottom:16px; }
+    .counter { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 14px; min-width:140px; }
+    .counter b { display:block; font-size:22px; }
+    .counter span { color:var(--muted); font-size:12px; }
+    form.filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; align-items:end; }
+    label { font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:2px; }
+    input, select, textarea { font:inherit; padding:6px 8px; border:1px solid #d1d5db; border-radius:6px; background:#fff; }
+    button { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; }
+    button.secondary { background:#fff; color:var(--brand); }
+    .muted { color:var(--muted); }
+    .grid { display:grid; grid-template-columns: 1.3fr 1fr; gap:20px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .summary { white-space:pre-wrap; line-height:1.5; }
+    .quote { color:var(--muted); font-style:italic; }
+    .low { background:#fef9c3; }
+    .chat { display:flex; flex-direction:column; gap:6px; max-height:520px; overflow-y:auto; }
+    .msg { max-width:85%; padding:6px 9px; border-radius:8px; white-space:pre-wrap; font-size:13px; }
+    .msg.out { background:#f3f4f6; align-self:flex-start; } .msg.in { background:#dcf8c6; align-self:flex-end; }
+    .msg small { display:block; color:var(--muted); font-size:10px; }
+    .timeline li { margin-bottom:6px; } .timeline code { font-size:12px; }
+    .empty { padding:24px; text-align:center; color:var(--muted); }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">Grupo Sazón · Recruiting</span>
+  <a href="/dashboard" class="{{ 'active' if active == 'list' }}">Candidates</a>
+  <a href="/dashboard/review" class="{{ 'active' if active == 'review' }}">Review queue</a>
+  <span class="right">{{ user }}
+    <form method="post" action="/logout"><button class="secondary" type="submit">Log out</button></form>
+  </span>
+</nav>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

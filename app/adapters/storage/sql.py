@@ -105,6 +105,7 @@ class EventRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
     client_id: Mapped[str] = mapped_column(String(64))
+    seq: Mapped[int] = mapped_column(Integer, default=0)
     type: Mapped[str] = mapped_column(String(64), index=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
@@ -191,6 +192,10 @@ class SqlRepository:
                 session.execute(update(MessageRow).where(MessageRow.id.in_(ids)).values(**values))
             self._append(session, state, events, replies, now)
 
+    def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
+        with self._sessions.begin() as session:
+            self._append(session, state, events, [], self._clock.now())
+
     def _append(
         self,
         session: Session,
@@ -200,12 +205,13 @@ class SqlRepository:
         now: datetime,
     ) -> None:
         conversation_id = str(state.conversation_id)
-        for event in events:
+        for index, event in enumerate(events):
             session.add(
                 EventRow(
                     id=str(uuid4()),
                     conversation_id=conversation_id,
                     client_id=state.client_id,
+                    seq=index,
                     type=event.type,
                     data=json.loads(json.dumps(event.data, default=str)),
                     created_at=now,
@@ -270,13 +276,16 @@ class SqlRepository:
             return [UUID(i) for i in ids]
 
     def events(self, conversation_id: UUID) -> list[DomainEvent]:
+        return [event for _, event in self.timeline(conversation_id)]
+
+    def timeline(self, conversation_id: UUID) -> list[tuple[datetime, DomainEvent]]:
         with self._sessions() as session:
             rows = session.scalars(
                 select(EventRow)
                 .where(EventRow.conversation_id == str(conversation_id))
-                .order_by(EventRow.created_at)
+                .order_by(EventRow.created_at, EventRow.seq)
             ).all()
-            return [DomainEvent(type=r.type, data=r.data) for r in rows]
+            return [(r.created_at, DomainEvent(type=r.type, data=r.data)) for r in rows]
 
 
 def _next_seq(session: Session, conversation_id: str) -> int:

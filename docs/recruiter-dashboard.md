@@ -14,7 +14,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 | Resolve the cases the agent couldn't | A review queue, each item with the reason it is there |
 | Trust an extraction | Every field shows the candidate's own words it came from |
 | Find candidates for a specific need | Filters: location, availability, schedule, start date |
-| Fix a mistake | Edit a field or change a status, with a required reason, logged |
+| Fix a mistake | Change the status with a required reason, or add a note; both logged |
 
 ## Views
 
@@ -39,7 +39,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - **Fields:** each screening field with its value, a confidence score, and the source quote. Low-confidence fields are highlighted.
 - **Transcript:** the full conversation, with timestamps and language.
 - **Timeline:** status changes, reminders sent, manual edits (who, when, why).
-- **Actions:** edit a field, override the status, add a note. Every action is written to the audit log.
+- **Actions:** override the status (reason required), add a note, export JSON. Every action, and every view, is written to the audit log with the recruiter's email.
 
 ### 4. Analytics (bonus)
 
@@ -51,10 +51,11 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 
 - The dashboard never deletes data; retention is handled by a scheduled job (see the appendix to the process design).
 - Overrides need a reason, and the original agent decision stays visible.
-- Login with one account per recruiter; no shared credentials.
+- Login with one account per recruiter; no shared credentials. Accounts come from `RECRUITER_USERS` (`email:hash;email:hash`), with scrypt hashes made by `uv run python -m app.cli hash-password`.
 
 ## Out of scope for the demo
 
+- Editing a field value from the dashboard (a recruiter overrides the status and explains why in the reason or a note instead).
 - Per-location permissions (all recruiters see all locations).
 - Bulk actions and CSV export (only JSON export per candidate is in scope).
 - Messaging the candidate from the dashboard (shown as a disabled "contact" action).

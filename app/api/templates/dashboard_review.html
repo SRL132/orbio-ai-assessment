@@ -1,0 +1,22 @@
+{% extends "dashboard_base.html" %}
+{% set active = "review" %}
+{% block title %}Review queue{% endblock %}
+{% block content %}
+<h1>Review queue <span class="muted">({{ items|length }})</span></h1>
+<p class="muted">Cases the agent did not decide on its own. Oldest first.</p>
+<table>
+  <thead><tr><th>Name</th><th>Why it's here</th><th>Location</th><th>Waiting since</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+    <tr onclick="location.href='/dashboard/candidates/{{ i.id }}'" style="cursor:pointer">
+      <td><a class="row" href="/dashboard/candidates/{{ i.id }}">{{ i.full_name or '—' }}</a></td>
+      <td>{% for r in i.review_reasons %}<div>{{ r|reason }}</div>{% else %}—{% endfor %}</td>
+      <td>{{ [i.zone, i.city]|select|join(', ') or '—' }}</td>
+      <td class="muted">{{ i.updated_at.strftime('%d/%m %H:%M') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty">Nothing waiting for review.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

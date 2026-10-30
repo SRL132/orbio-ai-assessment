@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,12 +15,15 @@ from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.adapters.clock.clocks import OffsetClock
+from app.api.dashboard import router as dashboard_router
 from app.bootstrap import Container, build
 from app.worker.service import MAX_MESSAGE_CHARS
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
+logger = logging.getLogger("app.api")
 
 
 class MessageIn(BaseModel):
@@ -30,15 +35,30 @@ class AdvanceIn(BaseModel):
 
 
 def create_app(container: Container | None = None) -> FastAPI:
+    """App factory: `uv run uvicorn --factory app.api.main:create_app`."""
+    c = container or build()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        c = container or build()
-        app.state.container = c
         c.runner.start()
         yield
         await c.runner.stop()
+        c.close()
 
     app = FastAPI(title="Sazón Screening Agent", lifespan=lifespan)
+    app.state.container = c
+    secret = c.settings.session_secret
+    if secret is None:
+        logger.warning("SESSION_SECRET not set: using a random one, logins reset on restart")
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=secret.get_secret_value() if secret else secrets.token_urlsafe(32),
+        session_cookie="sazon_session",
+        max_age=8 * 3600,
+        same_site="lax",
+        https_only=not c.settings.demo_mode,
+    )
+    app.include_router(dashboard_router)
 
     def get(request: Request) -> Container:
         c: Container = request.app.state.container
@@ -115,6 +135,3 @@ def create_app(container: Container | None = None) -> FastAPI:
         return {"now": c.clock.now().isoformat(), "conversations_changed": changed}
 
     return app
-
-
-app = create_app()

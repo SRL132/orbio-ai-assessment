@@ -38,13 +38,14 @@ When code and design disagree, don't let them drift silently: update the relevan
 ```bash
 uv sync                                       # install (Python 3.13, pinned in .python-version)
 cp .env.example .env                          # LLM_PROVIDER=fake needs no API key
-uv run uvicorn app.api.main:app --reload      # run the app
+uv run uvicorn --factory app.api.main:create_app --reload   # chat at /chat, dashboard at /dashboard
 uv run ruff format . && uv run ruff check .   # format and lint
 uv run mypy app                               # types (strict on app.domain)
 uv run lint-imports                           # architecture boundaries
 uv run pytest --cov                           # tests + coverage ratchet
 uv run deptry . && uv run pip-audit           # dependency hygiene
 uv run pre-commit install                     # enable the git pre-commit hooks
+uv run python -m app.cli hash-password        # hash for a RECRUITER_USERS entry
 uv run python -m evals                        # live evals vs evals/baseline.json (not built yet; costs money)
 ```
 
