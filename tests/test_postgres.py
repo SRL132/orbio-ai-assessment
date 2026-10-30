@@ -9,10 +9,10 @@ from sqlalchemy import create_engine, text
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
-from app.adapters.storage.dashboard import DashboardQueries
+from app.adapters.storage.dashboard import DashboardQueries, Filters
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, DomainEvent, Stage, Status
+from app.domain.models import Availability, ConversationState, DomainEvent, Stage, Status
 from tests.conftest import write_concurrently
 
 URL = os.environ.get("TEST_DATABASE_URL")
@@ -96,3 +96,19 @@ def test_exactly_one_worker_wins_a_lease_race(engine, config: ClientConfig) -> N
     for thread in threads:
         thread.join()
     assert len(winners) == 1
+
+
+def test_list_filters_on_json_columns(engine, config: ClientConfig) -> None:
+    repo = SqlRepository(engine, FakeClock(datetime(2026, 11, 2, tzinfo=UTC)), config.client_id)
+    for availability in (
+        [Availability.WEEKENDS],
+        [Availability.FULL_TIME, Availability.WEEKENDS],
+        [],
+    ):
+        state = ConversationState(client_id=config.client_id)
+        state.candidate.availability = availability
+        repo.create(state, [], [])
+    page = DashboardQueries(engine, config.client_id).candidates(
+        Filters(availability=Availability.WEEKENDS), per_page=1
+    )
+    assert (page.total, len(page.items), page.pages) == (2, 1, 2)

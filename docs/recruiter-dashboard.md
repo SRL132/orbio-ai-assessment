@@ -25,6 +25,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - Default sort: `needs_review` and `qualified` first, then most recent activity.
 - Filters: status, location, availability, schedule, start date range, language.
 - Text search by name.
+- 50 per page; every filter runs in SQL, so the total and the pages agree.
 - Counters at the top: new today, qualified, waiting for review.
 
 ### 2. Review queue

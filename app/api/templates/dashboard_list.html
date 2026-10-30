@@ -52,4 +52,11 @@
   {% endfor %}
   </tbody>
 </table>
+{% if page.total %}
+<nav class="pager muted">
+  {{ page.first }} to {{ page.first + page.items|length - 1 }} of {{ page.total }}
+  {% if page.page > 1 %}<a href="{{ page_url(page.page - 1) }}">← Previous</a>{% endif %}
+  {% if page.page < page.pages %}<a href="{{ page_url(page.page + 1) }}">Next →</a>{% endif %}
+</nav>
+{% endif %}
 {% endblock %}

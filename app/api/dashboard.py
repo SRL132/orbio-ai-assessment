@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, time
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -22,7 +24,7 @@ from app.api.auth import parse_users, verify_password
 from app.bootstrap import Container
 from app.domain.config import ClientConfig
 from app.domain.engine import OVERRIDABLE
-from app.domain.models import Candidate, FieldName, Language, Status
+from app.domain.models import Availability, Candidate, FieldName, Language, Schedule, Status
 from app.domain.render import field_values
 from app.domain.summary import describe_reason, local_time
 from app.worker.service import ConversationBusy
@@ -105,20 +107,23 @@ def candidate_list(
     filters = Filters(
         status=params.get("status") or None,
         location_id=params.get("location") or None,
-        availability=params.get("availability") or None,
-        schedule=params.get("schedule") or None,
+        availability=_choice(Availability, params.get("availability")),
+        schedule=_choice(Schedule, params.get("schedule")),
         language=params.get("language") or None,
         channel=params.get("channel") or None,
         search=params.get("q") or None,
         start_before=_date(params.get("start_before")),
     )
     today = datetime.combine(c.clock.now().date(), time.min, tzinfo=c.clock.now().tzinfo)
+    page = c.queries.candidates(filters, page=_page_number(params.get("page")))
     return TEMPLATES.TemplateResponse(
         request,
         "dashboard_list.html",
         {
             "user": user,
-            "items": c.queries.candidates(filters),
+            "page": page,
+            "items": page.items,
+            "page_url": lambda n: "?" + urlencode({**params, "page": n}),
             "counters": c.queries.counters(since=today),
             "filters": params,
             "locations": c.config.locations,
@@ -268,6 +273,18 @@ def _license_text(candidate: Candidate, vehicle: str | None) -> str | None:
 
 def _years(value: float | None) -> str | None:
     return f"{value:g} years" if value is not None else None
+
+
+def _choice[E: StrEnum](enum: type[E], raw: str | None) -> E | None:
+    """A filter value from the query string; unknown values mean no filter."""
+    try:
+        return enum(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _page_number(raw: str | None) -> int:
+    return int(raw) if raw and raw.isdigit() and int(raw) > 0 else 1
 
 
 def _date(raw: str | None) -> date | None:

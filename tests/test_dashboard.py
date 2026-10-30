@@ -200,3 +200,15 @@ def test_channel_filter_and_analytics(logged_in: TestClient, container: Containe
     assert "Pablo Gil" not in page
     assert "voice" in logged_in.get(f"/dashboard/candidates/{voice}").text
     assert "By channel" in logged_in.get("/dashboard/analytics").text
+
+
+def test_candidate_list_is_paged(logged_in: TestClient, container: Container) -> None:
+    for _ in range(55):
+        container.service.start_conversation()
+    first = logged_in.get("/dashboard?status=in_progress").text
+    assert "1 to 50 of 55" in first
+    assert "?status=in_progress&amp;page=2" in first  # the filters survive paging
+    second = logged_in.get("/dashboard?status=in_progress&page=2").text
+    assert "51 to 55 of 55" in second
+    assert "Next" not in second
+    assert logged_in.get("/dashboard?page=abc").status_code == 200  # bad input: first page

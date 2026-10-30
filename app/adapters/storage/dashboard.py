@@ -10,11 +10,11 @@ from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import Engine, case, func, select
+from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.adapters.storage.sql import ConversationRow
-from app.domain.models import FieldName, Stage, Status
+from app.domain.models import Availability, FieldName, Schedule, Stage, Status
 
 
 class CandidateItem(BaseModel):
@@ -39,12 +39,39 @@ class CandidateItem(BaseModel):
 class Filters:
     status: str | None = None
     location_id: str | None = None
-    availability: str | None = None
-    schedule: str | None = None
+    availability: Availability | None = None
+    schedule: Schedule | None = None
     language: str | None = None
     channel: str | None = None
     search: str | None = None
     start_before: date | None = None
+
+
+PER_PAGE = 50
+
+
+class Page(BaseModel):
+    items: list[CandidateItem]
+    total: int
+    page: int
+    per_page: int
+
+    @property
+    def pages(self) -> int:
+        return max(1, -(-self.total // self.per_page))
+
+    @property
+    def first(self) -> int:
+        """1-based position of the first item shown (0 when the page is empty)."""
+        return (self.page - 1) * self.per_page + 1 if self.items else 0
+
+
+def _json_list_has(
+    column: InstrumentedAttribute[list[str]], value: Availability | Schedule
+) -> ColumnElement[bool]:
+    """A JSON list column contains `value`, portably: match '"value"' in its text. Enum values
+    hold no quotes or LIKE wildcards. (At scale: a GIN index on JSONB in Postgres.)"""
+    return cast(column, String).like(f'%"{value.value}"%')
 
 
 # Recruiters act on qualified and needs-review candidates first.
@@ -61,7 +88,9 @@ class DashboardQueries:
         self._engine = engine
         self._client_id = client_id
 
-    def candidates(self, filters: Filters, limit: int = 500) -> list[CandidateItem]:
+    def candidates(self, filters: Filters, page: int = 1, per_page: int = PER_PAGE) -> Page:
+        """One page of the filtered list, recruiters' priorities first; every filter is SQL, so
+        the total and the pages agree."""
         query = select(ConversationRow).where(ConversationRow.client_id == self._client_id)
         if filters.status:
             query = query.where(ConversationRow.status == filters.status)
@@ -75,15 +104,20 @@ class DashboardQueries:
             query = query.where(ConversationRow.full_name.ilike(f"%{filters.search.strip()}%"))
         if filters.start_before:
             query = query.where(ConversationRow.start_date <= filters.start_before)
-        query = query.order_by(_STATUS_ORDER, ConversationRow.updated_at.desc()).limit(limit)
-        with Session(self._engine) as session:
-            items = [_item(row) for row in session.scalars(query)]
-        # JSON list columns: filtered in Python (fine at demo scale; a GIN index in Postgres).
         if filters.availability:
-            items = [i for i in items if filters.availability in i.availability]
+            query = query.where(_json_list_has(ConversationRow.availability, filters.availability))
         if filters.schedule:
-            items = [i for i in items if filters.schedule in i.schedule]
-        return items
+            query = query.where(_json_list_has(ConversationRow.schedule, filters.schedule))
+        page = max(page, 1)
+        listed = (
+            query.order_by(_STATUS_ORDER, ConversationRow.updated_at.desc(), ConversationRow.id)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        with Session(self._engine) as session:
+            total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
+            items = [_item(row) for row in session.scalars(listed)]
+        return Page(items=items, total=total, page=page, per_page=per_page)
 
     def review_queue(self) -> list[CandidateItem]:
         query = (
