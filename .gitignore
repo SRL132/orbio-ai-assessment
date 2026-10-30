@@ -23,3 +23,4 @@ data/
 
 # Eval run outputs (baseline.json is committed; per-run results are not)
 evals/results/
+mutants/

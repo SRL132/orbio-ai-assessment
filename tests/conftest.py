@@ -1,9 +1,11 @@
+import os
 import re
 import threading
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from hypothesis import HealthCheck, settings
 
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.config.yaml_loader import load_client_config
@@ -13,6 +15,14 @@ from app.domain.models import ConversationState, ExtractedFields, ExtractionResu
 from app.domain.ports import Ports
 
 START = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)  # a Monday
+
+# Under mutmut (`uv run mutmut run`) each test runs once per mutant: fewer examples keep that
+# fast, and mutmut's runner trips a health check meant for class-based tests run normally.
+settings.register_profile(
+    "mutmut", max_examples=25, suppress_health_check=[HealthCheck.differing_executors]
+)
+if "MUTANT_UNDER_TEST" in os.environ:
+    settings.load_profile("mutmut")
 
 
 @pytest.fixture(scope="session")

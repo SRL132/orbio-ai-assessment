@@ -27,6 +27,7 @@ dev = [
     "deptry>=0.25.1",
     "hypothesis>=6.170.14",
     "import-linter>=2.15",
+    "mutmut>=3.8.1",
     "mypy>=2.4.1",
     "pip-audit>=2.10.1",
     "pytest>=9.2.0",
@@ -97,7 +98,7 @@ branch = true
 
 [tool.coverage.report]
 # Ratchet: raise with every change that increases coverage, never lower.
-fail_under = 96.3
+fail_under = 96.5
 show_missing = true
 skip_covered = true
 
@@ -107,3 +108,12 @@ skip_covered = true
 # template engine behind fastapi.templating, and the Postgres driver SQLAlchemy loads from a
 # postgresql+psycopg:// URL.
 DEP002 = ["uvicorn", "python-multipart", "jinja2", "psycopg"]
+
+# --- Mutation testing: the rules that decide who qualifies -----------------------------------
+# `uv run mutmut run`, then `uv run python -m tests.mutation_check` (CI runs both). Ratchet:
+# tests/mutation_baseline.json's survivor count may go down, never up.
+[tool.mutmut]
+source_paths = ["app/domain/validators.py", "app/domain/policy.py"]
+pytest_add_cli_args_test_selection = ["tests/domain/"]
+also_copy = ["app/", "tests/"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q", "-x"]

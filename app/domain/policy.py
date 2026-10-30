@@ -87,7 +87,9 @@ def _proposals(fields: ExtractedFields, name: FieldName) -> dict[str, object]:
     return found
 
 
-def _evidence(fields: ExtractedFields, name: FieldName) -> tuple[str | None, float | None]:
+def _evidence(fields: ExtractedFields, name: FieldName) -> tuple[str | None, float]:
+    """The candidate's words behind a field (each quote once) and the least sure part's
+    confidence. Called only for fields the extraction proposes, so there's at least one."""
     quotes: list[str] = []
     confidences: list[float] = []
     for attr in FIELD_GROUPS[name]:
@@ -96,8 +98,7 @@ def _evidence(fields: ExtractedFields, name: FieldName) -> tuple[str | None, flo
             if extracted.quote and extracted.quote not in quotes:
                 quotes.append(extracted.quote)
             confidences.append(extracted.confidence)
-    quote = " / ".join(quotes) if quotes else None
-    return quote, (min(confidences) if confidences else None)
+    return (" / ".join(quotes) or None), min(confidences)
 
 
 def _validate(name: FieldName, draft: Candidate, config: ClientConfig, today: date) -> Outcome:
@@ -157,10 +158,7 @@ def apply_extraction(
             # Keep only the partial value the validator vouches for (e.g. a first name).
             for attr, value in outcome.updates.items():
                 setattr(candidate, attr, value)
-            problem = outcome.reason
-            result.rejected[name] = (
-                "unclear" if problem is None or isinstance(problem, Reason) else problem
-            )
+            result.rejected[name] = outcome.problem
             result.events.append(
                 DomainEvent(
                     type=EventType.FIELD_REJECTED,
@@ -172,7 +170,7 @@ def apply_extraction(
         for attr, value in {**proposals, **outcome.updates}.items():
             setattr(candidate, attr, value)
         meta.quote, meta.confidence = quote, confidence
-        meta.note = outcome.note or (outcome.reason if outcome.kind == "review" else None)
+        meta.note = outcome.note or outcome.reason  # a review's reason; valid ones have none
         if outcome.kind == "review":
             meta.status = FieldStatus.NEEDS_REVIEW
             add_review_reason(state, outcome.verdict, name)

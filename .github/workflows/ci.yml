@@ -38,6 +38,8 @@ jobs:
         run: uv run pytest --cov
       - name: Offline evals vs baseline
         run: uv run python -m evals --check
+      - name: Mutation testing (qualification rules)
+        run: uv run mutmut run && uv run python -m tests.mutation_check
       - name: Dependency hygiene
         run: uv run deptry . && uv run pip-audit
       - name: Secrets

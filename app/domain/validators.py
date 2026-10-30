@@ -34,6 +34,13 @@ class Outcome:
             raise ValueError(f"a {self.kind} outcome has no knockout or review reason")
         return self.reason
 
+    @property
+    def problem(self) -> InvalidReason:
+        """Why an answer was not accepted. Only invalid outcomes have one."""
+        if self.kind != "invalid" or self.reason is None or isinstance(self.reason, Reason):
+            raise ValueError(f"a {self.kind} outcome has no invalid-answer reason")
+        return self.reason
+
     @staticmethod
     def valid(note: str | None = None, **updates: object) -> Outcome:
         return Outcome("valid", updates=updates, note=note)

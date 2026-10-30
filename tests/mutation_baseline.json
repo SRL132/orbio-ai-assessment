@@ -1,0 +1,4 @@
+{
+  "max_survivors": 1,
+  "note": "final_review_reasons: looking up location None returns None either way (equivalent)"
+}
