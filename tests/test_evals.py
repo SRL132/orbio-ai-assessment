@@ -3,7 +3,7 @@
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.domain.config import ClientConfig
-from evals.__main__ import _regressions, _summarize, main
+from evals.__main__ import _regressions, main, summarize
 from evals.runner import Expect, Harness, Scenario, load_scenarios
 
 
@@ -30,7 +30,7 @@ def test_wrong_expectation_is_reported(config: ClientConfig) -> None:
 
 def test_regressions_ratchet(config: ClientConfig) -> None:
     harness = Harness(config, KeywordExtractor(), TemplateResponder())
-    baseline = _summarize([harness.run_scripted(s) for s in load_scenarios(["no_license"])])
+    baseline = summarize([harness.run_scripted(s) for s in load_scenarios(["no_license"])])
     assert _regressions(baseline, baseline) == []
     worse = {
         **baseline,

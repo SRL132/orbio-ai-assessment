@@ -1,0 +1,24 @@
+# Provider comparison (docs/architecture.md → LLM provider → Selection process).
+# Run: uv run python -m evals.compare            (needs OPENROUTER_API_KEY in .env; costs money)
+#      uv run python -m evals.compare --check-models   (free: only checks the model ids exist)
+# Model ids are checked against your account's live OpenRouter model list before anything runs.
+
+budget_usd: 5.0
+# One cheap model plays the candidate in every simulated run, so all providers face the same people.
+simulator_model: google/gemini-3.5-flash-lite
+
+runs:
+  # Mid tier, one per shortlisted provider: extraction and replies.
+  - {name: Claude Sonnet 5.5, model: anthropic/claude-sonnet-5.5}
+  - {name: Gemini 3.8 Flash, model: google/gemini-3.8-flash}
+  - {name: GPT-5.6 Terra, model: openai/gpt-5.6-terra}
+  # Small models for extraction only; the mid-tier model of the same provider writes replies.
+  - {name: Claude Haiku 5.5 extract, model: anthropic/claude-haiku-5.5, responder_model: anthropic/claude-sonnet-5.5}
+  - {name: Gemini Flash-Lite extract, model: google/gemini-3.5-flash-lite, responder_model: google/gemini-3.8-flash}
+  - {name: GPT-5.6 Luna extract, model: openai/gpt-5.6-luna, responder_model: openai/gpt-5.6-terra}
+  # The same mid-tier models against LLM-simulated candidates (harder, less predictable).
+  - {name: Claude Sonnet 5.5 (simulated), model: anthropic/claude-sonnet-5.5, simulate: true}
+  - {name: Gemini 3.8 Flash (simulated), model: google/gemini-3.8-flash, simulate: true}
+  - {name: GPT-5.6 Terra (simulated), model: openai/gpt-5.6-terra, simulate: true}
+  # Reference: the current default, scripted only.
+  - {name: Claude Opus 5.5 (reference), model: anthropic/claude-opus-5.5}

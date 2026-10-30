@@ -50,7 +50,8 @@ uv run python -m app.cli hash-password        # hash for a RECRUITER_USERS entry
 uv run alembic revision --autogenerate -m "…"  # after changing models in app/adapters/storage/sql.py
 docker compose up --build                     # app + Postgres, like production
 uv run python -m evals --check                # offline evals vs evals/baseline.json (free)
-uv run python -m evals --provider openrouter --model <slug>   # live evals (costs money)
+uv run python -m evals --provider openrouter --model <slug> --budget-usd 1   # live (costs money)
+uv run python -m evals.compare                # provider comparison (evals/compare.yaml, capped)
 ```
 
 Claude Code hooks (`.claude/settings.json`): Python files are formatted and lint-fixed after every edit, and pytest, mypy and import-linter run before Claude finishes a task. If they fail, Claude is sent back to fix them.

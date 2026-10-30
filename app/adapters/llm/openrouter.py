@@ -19,6 +19,7 @@ from app.adapters.llm.prompting import (
     responder_system,
     responder_user,
 )
+from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
     AnswerQuestion,
@@ -41,10 +42,12 @@ class OpenRouterLLM:
         model: str,
         timeout: float = 20.0,
         transport: httpx.BaseTransport | None = None,
+        meter: UsageMeter | None = None,
     ) -> None:
         if not model:
             raise ValueError("OPENROUTER_MODEL is not set (see .env.example)")
         self._model = model
+        self.meter = meter
         self._client = httpx.Client(
             base_url=BASE_URL,
             timeout=timeout,
@@ -109,13 +112,20 @@ class OpenRouterLLM:
         response = self._post(body)
         data = response.json()
         usage = data.get("usage") or {}
+        if self.meter is not None:  # OpenRouter always returns usage, including `cost`
+            self.meter.record(
+                int(usage.get("prompt_tokens") or 0),
+                int(usage.get("completion_tokens") or 0),
+                float(usage.get("cost") or 0.0),
+            )
         logger.info(
             "llm_call provider=openrouter kind=%s model=%s input_tokens=%s output_tokens=%s "
-            "latency_ms=%d",
+            "cost=%s latency_ms=%d",
             kind,
             data.get("model", self._model),
             usage.get("prompt_tokens"),
             usage.get("completion_tokens"),
+            usage.get("cost"),
             (time.monotonic() - started) * 1000,
         )
         content = data["choices"][0]["message"].get("content")

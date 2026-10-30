@@ -11,10 +11,11 @@ relative dates ("mañana", "el lunes") are deterministic.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 import yaml
@@ -23,6 +24,7 @@ from sqlalchemy import Engine
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
+from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.engine import check_reply, speakable
@@ -72,6 +74,8 @@ class ScenarioResult:
     replies_failed: int
     seconds: float
     transcript: list[tuple[str, str]] = field(default_factory=list)
+    turn_seconds: list[float] = field(default_factory=list)
+    cost_usd: float = 0.0
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -82,6 +86,15 @@ class ScenarioResult:
         }
 
 
+def percentile(values: list[float], q: float) -> float | None:
+    """Nearest-rank percentile; None when there are no values."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, max(0, round(q * len(ordered)) - 1))]
+
+
+@runtime_checkable
 class Completer(Protocol):
     def complete(self, system: str, user: str, max_tokens: int = ...) -> str: ...
 
@@ -95,11 +108,20 @@ def load_scenarios(only: list[str] | None = None) -> list[Scenario]:
 
 
 class Harness:
-    def __init__(self, config: ClientConfig, extractor: Extractor, responder: Responder) -> None:
+    def __init__(
+        self,
+        config: ClientConfig,
+        extractor: Extractor,
+        responder: Responder,
+        meter: UsageMeter | None = None,
+    ) -> None:
         self.config = config
         self.extractor = extractor
         self.responder = responder
         self._engines: list[Engine] = []
+        self.meter = meter
+        self._turn_seconds: list[float] = []
+        self._cost_start = 0.0
 
     def close(self) -> None:
         for engine in self._engines:
@@ -107,6 +129,8 @@ class Harness:
         self._engines.clear()
 
     def _service(self) -> tuple[ScreeningService, FakeClock, SqlRepository]:
+        self._turn_seconds = []
+        self._cost_start = self.meter.cost_usd if self.meter else 0.0
         clock = FakeClock(EVAL_START)
         db = make_engine("sqlite:///:memory:")
         self._engines.append(db)
@@ -116,6 +140,11 @@ class Harness:
             extractor=self.extractor, responder=self.responder, clock=clock, calendar=calendar
         )
         return ScreeningService(repo, self.config, ports), clock, repo
+
+    def _timed(self, service: ScreeningService, cid: UUID) -> None:
+        started = time.monotonic()
+        service.process_pending(cid)
+        self._turn_seconds.append(time.monotonic() - started)
 
     def run_scripted(self, scenario: Scenario) -> ScenarioResult:
         service, clock, repo = self._service()
@@ -129,7 +158,7 @@ class Harness:
                 continue
             turns += 1
             service.receive(cid, step)
-            service.process_pending(cid)
+            self._timed(service, cid)
         result = self._score(scenario, repo, cid, turns, time.monotonic() - started)
         self.close()
         return result
@@ -159,7 +188,7 @@ class Harness:
                 break
             turns += 1
             service.receive(cid, message)
-            service.process_pending(cid)
+            self._timed(service, cid)
         result = self._score(scenario, repo, cid, turns, time.monotonic() - started)
         self.close()
         return result
@@ -239,6 +268,8 @@ class Harness:
             replies_failed=len(bad),
             seconds=seconds,
             transcript=[(m.direction, m.text) for m in messages],
+            turn_seconds=list(self._turn_seconds),
+            cost_usd=(self.meter.cost_usd - self._cost_start) if self.meter else 0.0,
         )
 
 
@@ -269,3 +300,29 @@ def _reply_ok(text: str, channel: Channel, config: ClientConfig) -> bool:
     if "\n•" in text or text.startswith(LONG_ALLOWED):
         return channel == "chat" or speakable(text)  # length and question count exempt
     return check_reply(text, config, channel)
+
+
+def run_suite(
+    harness: Harness,
+    scenarios: list[Scenario],
+    simulator: Completer | None = None,
+    budget_usd: float | None = None,
+    on_result: Callable[[Scenario, ScenarioResult], None] | None = None,
+) -> tuple[list[ScenarioResult], bool]:
+    """Run scenarios (scripted, or simulated when a simulator is given). Stops once the meter
+    passes the budget; returns the results and whether every scenario ran."""
+    results: list[ScenarioResult] = []
+    for scenario in scenarios:
+        meter = harness.meter
+        if budget_usd is not None and meter is not None and meter.cost_usd >= budget_usd:
+            return results, False
+        if simulator is not None:
+            if any(isinstance(step, dict) for step in scenario.steps):
+                continue  # waiting needs the scripted clock
+            result = harness.run_simulated(scenario, simulator)
+        else:
+            result = harness.run_scripted(scenario)
+        results.append(result)
+        if on_result is not None:
+            on_result(scenario, result)
+    return results, True

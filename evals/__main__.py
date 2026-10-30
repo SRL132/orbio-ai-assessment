@@ -18,10 +18,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.llm.openrouter import OpenRouterLLM
+from app.adapters.llm.usage import UsageMeter
 from app.bootstrap import make_llm
 from app.settings import Settings
-from evals.runner import Completer, Harness, ScenarioResult, load_scenarios
+from evals.runner import (
+    Completer,
+    Harness,
+    Scenario,
+    ScenarioResult,
+    load_scenarios,
+    percentile,
+    run_suite,
+)
 
 EVALS_DIR = Path(__file__).parent
 BASELINE = EVALS_DIR / "baseline.json"
@@ -32,7 +44,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals", description=__doc__)
     parser.add_argument("--provider", choices=["fake", "openrouter", "anthropic"], default="fake")
     parser.add_argument("--model", default=None, help="model id/slug for the provider")
+    parser.add_argument("--responder-model", help="OpenRouter: a different model writes replies")
+    parser.add_argument("--simulator-model", help="OpenRouter: the model playing the candidate")
     parser.add_argument("--simulate", action="store_true", help="LLM-simulated candidates")
+    parser.add_argument("--budget-usd", type=float, help="stop once this much has been spent")
     parser.add_argument("--scenario", action="append", help="run only these scenario ids")
     parser.add_argument("--check", action="store_true", help="exit 1 on regression")
     parser.add_argument("--write-baseline", action="store_true")
@@ -50,20 +65,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     settings = Settings(**overrides)
     config = load_client_config(settings.client_id)
-    extractor, responder = make_llm(settings)
-    harness = Harness(config, extractor, responder)
+    meter = UsageMeter()
+    if args.provider == "openrouter":
+        extractor, responder, simulator = openrouter_trio(
+            settings, settings.openrouter_model, args.responder_model, args.simulator_model, meter
+        )
+    else:
+        extractor, responder = make_llm(settings)
+        simulator = extractor if isinstance(extractor, Completer) else None
+    harness = Harness(config, extractor, responder, meter)
     key = _key(args, settings)
 
-    results: list[ScenarioResult] = []
-    for scenario in load_scenarios(args.scenario):
-        if args.simulate:
-            if any(isinstance(step, dict) for step in scenario.steps):
-                continue  # waiting needs the scripted clock
-            completer: Completer = extractor  # type: ignore[assignment]
-            result = harness.run_simulated(scenario, completer)
-        else:
-            result = harness.run_scripted(scenario)
-        results.append(result)
+    def report(scenario: Scenario, result: ScenarioResult) -> None:
         _print_row(result)
         if args.export_samples:
             _export_sample(args.export_samples, scenario.description, key, result)
@@ -72,10 +85,18 @@ def main(argv: list[str] | None = None) -> int:
                 who = "BOT" if direction == "out" else "YOU"
                 print(f"      {who}: {text.replace(chr(10), ' / ')}")
 
-    run = _summarize(results)
+    results, complete = run_suite(
+        harness,
+        load_scenarios(args.scenario),
+        simulator if args.simulate else None,
+        args.budget_usd,
+        report,
+    )
+    run = summarize(results, complete)
     print(
         f"\n{key}: {run['passed']}/{run['total']} passed · pass rate {run['pass_rate']:.0%} · "
-        f"field accuracy {run['field_accuracy']:.0%} · {run['seconds']:.1f}s"
+        f"field accuracy {run['field_accuracy']:.0%} · p95 turn {run['p95_turn_s']}s · "
+        f"cost ${run['cost_usd']:.4f}{'' if complete else ' · STOPPED AT BUDGET'}"
     )
     _save(key, run)
 
@@ -84,13 +105,40 @@ def main(argv: list[str] | None = None) -> int:
     for line in regressions:
         print(f"REGRESSION {line}")
     if args.write_baseline:
-        baseline[key] = run
+        if not complete:
+            print("not writing a baseline from an incomplete run")
+            return 1
+        baseline[key] = _baseline_entry(run)
         BASELINE.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n")
         print(f"baseline updated for {key}")
     if args.check and baseline.get(key) is None:
         print(f"no baseline for {key}; run with --write-baseline first")
         return 1
     return 1 if args.check and regressions else 0
+
+
+def openrouter_trio(
+    settings: Settings,
+    model: str,
+    responder_model: str | None,
+    simulator_model: str | None,
+    meter: UsageMeter,
+    transport: httpx.BaseTransport | None = None,
+) -> tuple[OpenRouterLLM, OpenRouterLLM, OpenRouterLLM]:
+    """Extractor, responder and simulated candidate, all on one meter."""
+    if settings.openrouter_api_key is None:
+        raise SystemExit("OPENROUTER_API_KEY is not set (add it to .env)")
+    key = settings.openrouter_api_key.get_secret_value()
+
+    def llm(slug: str) -> OpenRouterLLM:
+        return OpenRouterLLM(
+            key, slug, timeout=settings.llm_timeout_seconds, transport=transport, meter=meter
+        )
+
+    extractor = llm(model)
+    responder = llm(responder_model) if responder_model else extractor
+    simulator = llm(simulator_model) if simulator_model else extractor
+    return extractor, responder, simulator
 
 
 def _key(args: argparse.Namespace, settings: Settings) -> str:
@@ -110,19 +158,33 @@ def _print_row(r: ScenarioResult) -> None:
     )
 
 
-def _summarize(results: list[ScenarioResult]) -> dict[str, Any]:
+def summarize(results: list[ScenarioResult], complete: bool = True) -> dict[str, Any]:
     total = len(results)
     passed = sum(r.passed for r in results)
+    turns = [t for r in results for t in r.turn_seconds]
+    cost = sum(r.cost_usd for r in results)
+    p50, p95 = percentile(turns, 0.5), percentile(turns, 0.95)
     return {
         "passed": passed,
         "total": total,
+        "complete": complete,
         "pass_rate": round(passed / total, 3) if total else 0.0,
         "field_accuracy": round(sum(r.field_accuracy for r in results) / total, 3)
         if total
         else 0.0,
         "seconds": round(sum(r.seconds for r in results), 1),
+        "p50_turn_s": round(p50, 2) if p50 is not None else None,
+        "p95_turn_s": round(p95, 2) if p95 is not None else None,
+        "cost_usd": round(cost, 4),
+        "cost_per_conversation_usd": round(cost / total, 5) if total else 0.0,
         "scenarios": {r.id: r.summary() for r in results},
     }
+
+
+def _baseline_entry(run: dict[str, Any]) -> dict[str, Any]:
+    """What the ratchet compares: quality only (latency and cost vary between runs)."""
+    keep = ("passed", "total", "pass_rate", "field_accuracy", "scenarios")
+    return {k: run[k] for k in keep}
 
 
 def _regressions(baseline: dict[str, Any] | None, run: dict[str, Any]) -> list[str]:

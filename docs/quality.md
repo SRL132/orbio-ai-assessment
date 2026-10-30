@@ -52,7 +52,11 @@ uv run python -m evals --provider anthropic --simulate           # an LLM plays 
 uv run python -m evals --check               # exit 1 on regression vs evals/baseline.json
 uv run python -m evals --write-baseline      # record this run (an explicit, reviewed change)
 uv run python -m evals -v --scenario abusive # show the transcript of failures
+uv run python -m evals.compare --check-models   # free: are the model ids in evals/compare.yaml available?
+uv run python -m evals.compare                  # the provider comparison, capped at budget_usd
 ```
+
+Live runs record cost (from OpenRouter's `usage.cost`) and seconds per candidate turn. `--budget-usd` stops a run at a spending cap, and an incomplete run can't become a baseline. The comparison writes a Markdown table to `evals/results/compare-<time>.md` with pass rate, field accuracy, p50/p95 seconds per turn and cost per conversation.
 
 Scores per scenario: outcome correct, field accuracy against the expected record, number of turns, and the output check on every agent message. `evals/baseline.json` holds one entry per provider/model/mode. The offline entry passing says the engine and policy are right; it says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. Live entries are the real measure and are added when a key is available.
 
