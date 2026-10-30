@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
 from sqlalchemy import Engine
 
+from app import tracing
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.channels.whatsapp import WhatsAppClient
 from app.adapters.clock.clocks import OffsetClock, SystemClock
@@ -82,7 +82,8 @@ def make_llm(settings: Settings, meter: UsageMeter | None = None) -> tuple[Extra
 
 def build(settings: Settings | None = None) -> Container:
     settings = settings or Settings()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    tracing.configure_logging()
+    tracing.configure_tracing(f"sazon-{settings.role}")
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
     config = load_client_config(settings.client_id)
     extractor, responder = make_llm(settings)

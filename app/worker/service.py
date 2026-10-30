@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from app import metrics
+from app import metrics, tracing
 from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -117,15 +117,20 @@ class ScreeningService:
             received_at=pending[-1].created_at,
         )
         started = time.monotonic()
-        result = engine.turn(state, message, self.config, self.ports)
-        self.repo.save_turn(
-            result.state,
-            result.events,
-            result.replies,
-            pending,
-            redact=result.redact_inbound,
-            lease_owner=owner,
-        )
+        attributes = {"conversation.id": str(conversation_id), "channel": state.channel}
+        with tracing.tracer.start_as_current_span("turn", attributes=attributes) as span:
+            result = engine.turn(state, message, self.config, self.ports)
+            self.repo.save_turn(
+                result.state,
+                result.events,
+                result.replies,
+                pending,
+                redact=result.redact_inbound,
+                lease_owner=owner,
+            )
+            span.set_attribute("messages", len(pending))
+            span.set_attribute("status", result.state.status.value)
+            span.set_attribute("stage", result.state.stage.value)
         metrics.TURN_SECONDS.labels(state.channel).observe(time.monotonic() - started)
         metrics.record_events(result.events)
         logger.info(

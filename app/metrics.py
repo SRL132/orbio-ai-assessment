@@ -8,6 +8,7 @@ enums and provider names only: never ids, names or message text. Each process ex
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Iterator
 from datetime import datetime
 
@@ -15,6 +16,7 @@ from prometheus_client import Counter, Histogram
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
+from app import tracing
 from app.domain.models import DomainEvent, EventType
 
 TURN_SECONDS = Histogram(
@@ -60,6 +62,19 @@ def record_llm_call(
     completion_tokens: int,
     cost_usd: float,
 ) -> None:
+    """Metrics for one LLM call, and its span (inside the turn's span, if any)."""
+    now = time.time_ns()
+    span = tracing.tracer.start_span(
+        f"llm.{kind}",
+        start_time=now - int(seconds * 1e9),
+        attributes={
+            "llm.provider": provider,
+            "llm.prompt_tokens": prompt_tokens,
+            "llm.completion_tokens": completion_tokens,
+            "llm.cost_usd": cost_usd,
+        },
+    )
+    span.end(end_time=now)
     LLM_CALLS.labels(provider, kind).inc()
     LLM_SECONDS.labels(provider, kind).observe(seconds)
     LLM_TOKENS.labels(provider, "prompt").inc(prompt_tokens)

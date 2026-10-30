@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import secrets
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -18,11 +19,12 @@ from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
+from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import metrics
+from app import metrics, tracing
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
@@ -87,6 +89,24 @@ def create_app(container: Container | None = None) -> FastAPI:
         same_site="lax",
         https_only=not c.settings.demo_mode,
     )
+
+    @app.middleware("http")
+    async def trace_request(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """A request id for logs (`req=`), the response (`X-Request-ID`) and the trace: FastAPI
+        makes the request's spans itself; this tags them with the id."""
+        incoming = request.headers.get("x-request-id", "")
+        rid = incoming if _REQUEST_ID.fullmatch(incoming) else secrets.token_hex(8)
+        token = tracing.request_id.set(rid)
+        trace.get_current_span().set_attribute("request.id", rid)
+        try:
+            response = await call_next(request)
+        finally:
+            tracing.request_id.reset(token)
+        response.headers["X-Request-ID"] = rid
+        return response
+
     app.include_router(dashboard_router)
     app.include_router(whatsapp_router)
 
@@ -257,6 +277,8 @@ def create_app(container: Container | None = None) -> FastAPI:
 
 
 STREAM_POLL_SECONDS = 0.5
+# Accept a caller's request id (e.g. from a proxy) only if it's short and plain.
+_REQUEST_ID = re.compile(r"[A-Za-z0-9-]{8,64}")
 
 
 def _snapshot(
