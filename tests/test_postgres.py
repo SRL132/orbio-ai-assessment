@@ -112,3 +112,15 @@ def test_list_filters_on_json_columns(engine, config: ClientConfig) -> None:
         Filters(availability=Availability.WEEKENDS), per_page=1
     )
     assert (page.total, len(page.items), page.pages) == (2, 1, 2)
+
+
+def test_backlog_ages_are_timezone_aware(engine, config: ClientConfig) -> None:
+    clock = FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC))
+    repo = SqlRepository(engine, clock, config.client_id)
+    state = ConversationState(client_id=config.client_id)
+    repo.create(state, [], [])
+    repo.add_inbound(state.conversation_id, "hola")
+    count, oldest = DashboardQueries(engine, config.client_id).backlog()["pending_messages"]
+    assert count == 1
+    assert oldest is not None
+    assert clock.now() - oldest == timedelta(0)  # would raise if the timestamp were naive
