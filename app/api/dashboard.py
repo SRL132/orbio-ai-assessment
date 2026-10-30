@@ -20,8 +20,10 @@ from pydantic import SecretStr
 from app.adapters.storage.dashboard import Filters
 from app.api.auth import parse_users, verify_password
 from app.bootstrap import Container
+from app.domain.config import ClientConfig
 from app.domain.engine import OVERRIDABLE
-from app.domain.models import Candidate, DomainEvent, FieldName, Status
+from app.domain.models import Candidate, FieldName, Language, Status
+from app.domain.render import field_values
 from app.domain.summary import describe_reason, local_time
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -29,15 +31,9 @@ TEMPLATES.env.filters["reason"] = describe_reason
 
 router = APIRouter()
 
-FIELD_LABELS = {
-    FieldName.FULL_NAME: "Name",
-    FieldName.LICENSE: "Driver's license",
-    FieldName.LOCATION: "City / zone",
-    FieldName.AVAILABILITY: "Availability",
-    FieldName.SCHEDULE: "Preferred hours",
-    FieldName.EXPERIENCE: "Experience",
-    FieldName.START_DATE: "Start date",
-}
+# The dashboard is in English; field labels and values come from the client's English templates,
+# the same ones the candidate's recap uses.
+DASHBOARD_LANGUAGE: Language = "en"
 
 
 def container(request: Request) -> Container:
@@ -164,9 +160,9 @@ async def candidate_detail(
             "user": user,
             "state": state,
             "location": location,
-            "fields": field_rows(state.candidate),
-            "messages": c.service.repo.messages(conversation_id),
-            "timeline": list(reversed(c.service.repo.timeline(conversation_id))),
+            "fields": field_rows(state.candidate, c.config),
+            "messages": c.service.messages(conversation_id),
+            "timeline": list(reversed(c.service.timeline(conversation_id))),
             "overridable": sorted(s.value for s in OVERRIDABLE),
             "interview": local_time(state.interview_at, state, c.config)
             if state.interview_at
@@ -211,10 +207,9 @@ async def add_note(
 
 @router.get("/dashboard/candidates/{conversation_id}/export.json")
 def export(conversation_id: UUID, c: App, user: Recruiter) -> JSONResponse:
-    state = c.service.repo.get(conversation_id)
+    state = c.service.export(conversation_id, user)
     if state is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    c.service.repo.append_events(state, [_exported(user)])
     payload: dict[str, Any] = {
         "candidate": state.candidate.model_dump(mode="json"),
         "status": state.status.value,
@@ -224,11 +219,11 @@ def export(conversation_id: UUID, c: App, user: Recruiter) -> JSONResponse:
         "language": state.language,
         "messages": [
             m.model_dump(mode="json", include={"seq", "direction", "text", "created_at"})
-            for m in c.service.repo.messages(conversation_id)
+            for m in c.service.messages(conversation_id)
         ],
         "events": [
             {"at": at.isoformat(), **event.model_dump(mode="json")}
-            for at, event in c.service.repo.timeline(conversation_id)
+            for at, event in c.service.timeline(conversation_id)
         ],
     }
     return JSONResponse(
@@ -240,29 +235,13 @@ def export(conversation_id: UUID, c: App, user: Recruiter) -> JSONResponse:
 # --- Helpers ------------------------------------------------------------------------------------
 
 
-def field_rows(candidate: Candidate) -> list[dict[str, Any]]:
-    values = {
-        FieldName.FULL_NAME: candidate.full_name,
-        FieldName.LICENSE: _license_text(candidate),
-        FieldName.LOCATION: ", ".join(
-            p for p in (candidate.zone, candidate.city, candidate.postal_code) if p
-        )
-        or None,
-        FieldName.AVAILABILITY: ", ".join(a.value for a in candidate.availability) or None,
-        FieldName.SCHEDULE: ", ".join(s.value for s in candidate.schedule) or None,
-        FieldName.EXPERIENCE: (
-            f"{candidate.experience_years:g} years"
-            + (f" ({', '.join(candidate.platforms)})" if candidate.platforms else "")
-            if candidate.experience_years is not None
-            else None
-        ),
-        FieldName.START_DATE: candidate.start_date.strftime("%d/%m/%Y")
-        if candidate.start_date
-        else None,
-    }
+def field_rows(candidate: Candidate, config: ClientConfig) -> list[dict[str, Any]]:
+    values = field_values(candidate, config, DASHBOARD_LANGUAGE)
+    values[FieldName.LICENSE] = _license_text(candidate, values[FieldName.LICENSE])
+    labels = config.templates[DASHBOARD_LANGUAGE]
     return [
         {
-            "label": FIELD_LABELS[name],
+            "label": labels.get(f"label_{name.value}", name.value),
             "value": values[name],
             "meta": candidate.meta[name],
         }
@@ -270,19 +249,16 @@ def field_rows(candidate: Candidate) -> list[dict[str, Any]]:
     ]
 
 
-def _exported(user: str) -> DomainEvent:
-    return DomainEvent(type="exported", data={"actor": user})
-
-
 def _secret(value: SecretStr | None) -> str | None:
     return value.get_secret_value() if value is not None else None
 
 
-def _license_text(candidate: Candidate) -> str | None:
-    if candidate.vehicle is None:
+def _license_text(candidate: Candidate, vehicle: str | None) -> str | None:
+    """The recap's vehicle plus what recruiters also need: license type and years held."""
+    if vehicle is None:
         return "no" if candidate.has_license is False else None
     details = [d for d in (candidate.license_type, _years(candidate.license_years)) if d]
-    return candidate.vehicle.value + (f" ({', '.join(details)})" if details else "")
+    return vehicle + (f" ({', '.join(details)})" if details else "")
 
 
 def _years(value: float | None) -> str | None:

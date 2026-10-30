@@ -76,7 +76,7 @@ The API normalizes input to `InboundMessage`, drops duplicates by channel messag
 
 ### 4. One conversation at a time
 
-A per-conversation lock (`SELECT … FOR UPDATE`, or a queue grouped by conversation ID), plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
+A per-conversation lock (in the demo, one of 256 striped in-process locks; in production `SELECT … FOR UPDATE` or a queue grouped by conversation ID), plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
 
 Storing an inbound message doesn't wait for that lock: a webhook must be acknowledged even while a turn is running. So message numbers come from a counter on the conversation row (`last_seq`), reserved with one atomic `UPDATE … RETURNING` that holds the row lock until commit. Concurrent writers to one conversation queue up instead of colliding, which reading `max(seq) + 1` didn't guarantee.
 
@@ -122,10 +122,13 @@ What we deliberately **don't** do:
 ```
 app/
   domain/            # pure: no I/O, no SDKs
-    models.py        # Candidate, ConversationState, fields, statuses, actions
+    models.py        # Candidate, ConversationState, fields, statuses, actions,
+                     #   event types and reasons (enums, not free strings)
     policy.py        # next action, knockouts, outcomes
     validators.py    # field rules, read from config
-    engine.py        # turn(state, msg, config, ports) -> (state, actions)
+    engine.py        # turn(state, msg, config, ports) -> (state, actions): one handler per stage
+    render.py        # actions -> replies (templates + responder); checks a config's templates
+    summary.py       # recruiter summary
     ports.py         # Protocols: Extractor, Responder, Repository, EventLog,
                      #            CalendarProvider, KnowledgeBase, Clock, Channel
   adapters/

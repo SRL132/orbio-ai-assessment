@@ -105,10 +105,10 @@ def create_app(container: Container | None = None) -> FastAPI:
         request: Request, conversation_id: UUID, after: Annotated[int, Query(ge=0)] = 0
     ) -> dict[str, object]:
         service = get(request).service
-        state = service.repo.get(conversation_id)
+        state = service.get(conversation_id)
         if state is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "conversation not found")
-        messages = service.repo.messages(conversation_id, after)
+        messages = service.messages(conversation_id, after)
         return {
             "status": state.status.value,
             "stage": state.stage.value,
@@ -134,7 +134,7 @@ def create_app(container: Container | None = None) -> FastAPI:
             await asyncio.to_thread(c.service.receive, conversation_id, body.text)
         except KeyError:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "conversation not found") from None
-        state = c.service.repo.get(conversation_id)
+        state = c.service.get(conversation_id)
         # Push-to-talk sends one complete utterance: voice skips the debounce to cut latency.
         if c.settings.debounce_seconds <= 0 or (state is not None and state.channel == "voice"):
             await asyncio.to_thread(c.service.process_pending, conversation_id)

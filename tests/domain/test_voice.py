@@ -6,7 +6,6 @@ import pytest
 
 from app.domain import engine
 from app.domain.config import ClientConfig
-from app.domain.engine import check_reply, recap_spoken, speakable
 from app.domain.models import (
     Availability,
     ConversationState,
@@ -14,6 +13,7 @@ from app.domain.models import (
     Vehicle,
 )
 from app.domain.ports import Ports
+from app.domain.render import check_reply, recap_spoken, speakable
 from app.domain.validators import validate_full_name
 from tests.conftest import ex
 

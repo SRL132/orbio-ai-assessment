@@ -14,10 +14,14 @@ from app.domain.models import (
     Candidate,
     ConversationState,
     DomainEvent,
+    EventType,
     ExtractedFields,
     FieldMeta,
     FieldName,
     FieldStatus,
+    InvalidReason,
+    Reason,
+    review_reason,
 )
 from app.domain.validators import (
     Outcome,
@@ -45,8 +49,8 @@ FIELD_GROUPS: dict[FieldName, tuple[str, ...]] = {
 @dataclass
 class ApplyResult:
     events: list[DomainEvent] = field(default_factory=list)
-    knockout: str | None = None
-    rejected: dict[FieldName, str] = field(default_factory=dict)
+    knockout: Reason | None = None
+    rejected: dict[FieldName, InvalidReason] = field(default_factory=dict)
     progressed: set[FieldName] = field(default_factory=set)
     changed: set[FieldName] = field(default_factory=set)
 
@@ -130,9 +134,11 @@ def apply_extraction(
             meta.quote, meta.confidence = quote, confidence
             for attr, value in proposals.items():
                 setattr(candidate, attr, value)
-            result.knockout = outcome.reason
+            result.knockout = outcome.verdict
             result.events.append(
-                DomainEvent(type="knockout", data={"field": name.value, "reason": outcome.reason})
+                DomainEvent(
+                    type=EventType.KNOCKOUT, data={"field": name.value, "reason": outcome.reason}
+                )
             )
             return result
 
@@ -140,10 +146,14 @@ def apply_extraction(
             # Keep only the partial value the validator vouches for (e.g. a first name).
             for attr, value in outcome.updates.items():
                 setattr(candidate, attr, value)
-            result.rejected[name] = outcome.reason or "invalid"
+            problem = outcome.reason
+            result.rejected[name] = (
+                "unclear" if problem is None or isinstance(problem, Reason) else problem
+            )
             result.events.append(
                 DomainEvent(
-                    type="field_rejected", data={"field": name.value, "reason": outcome.reason}
+                    type=EventType.FIELD_REJECTED,
+                    data={"field": name.value, "reason": outcome.reason},
                 )
             )
             continue
@@ -154,18 +164,18 @@ def apply_extraction(
         meta.note = outcome.note or (outcome.reason if outcome.kind == "review" else None)
         if outcome.kind == "review":
             meta.status = FieldStatus.NEEDS_REVIEW
-            reason = f"{outcome.reason}:{name.value}"
-            if reason not in state.review_reasons:
-                state.review_reasons.append(reason)
+            add_review_reason(state, outcome.verdict, name)
         else:
             meta.status = FieldStatus.VALID
         result.progressed.add(name)
         if was_set and _snapshot(candidate, name) != before:
             result.changed.add(name)
-            result.events.append(DomainEvent(type="field_changed", data={"field": name.value}))
+            result.events.append(
+                DomainEvent(type=EventType.FIELD_CHANGED, data={"field": name.value})
+            )
         result.events.append(
             DomainEvent(
-                type="field_extracted",
+                type=EventType.FIELD_EXTRACTED,
                 data={"field": name.value, "status": meta.status.value, "confidence": confidence},
             )
         )
@@ -187,7 +197,13 @@ def register_failed_attempt(
         return True
     meta.status = FieldStatus.NEEDS_REVIEW
     meta.note = "failed_twice"
-    reason = f"field_failed_twice:{name.value}"
-    if reason not in state.review_reasons:
-        state.review_reasons.append(reason)
+    add_review_reason(state, Reason.FIELD_FAILED_TWICE, name)
     return True
+
+
+def add_review_reason(
+    state: ConversationState, reason: Reason, field_name: FieldName | None = None
+) -> None:
+    stored = review_reason(reason, field_name)
+    if stored not in state.review_reasons:
+        state.review_reasons.append(stored)

@@ -16,7 +16,7 @@ import httpx
 
 from app.adapters.channels.quick_replies import quick_replies
 from app.adapters.channels.whatsapp import WhatsAppClient, parse_webhook
-from app.domain.models import TERMINAL_STATUSES, Channel, DomainEvent, Stage
+from app.domain.models import TERMINAL_STATUSES, Channel, DomainEvent, EventType, Stage
 from app.worker.service import ScreeningService
 
 logger = logging.getLogger("app.whatsapp")
@@ -63,7 +63,7 @@ class WhatsAppChannel:
                 continue
             if message.text is None:
                 text = self.service.config.template(state.language, "text_only", CHANNEL)
-                repo.save_turn(state, [DomainEvent(type="non_text_message")], [text], [])
+                repo.save_turn(state, [DomainEvent(type=EventType.NON_TEXT_MESSAGE)], [text], [])
                 continue
             if self.service.receive(cid, message.text, channel_message_id=message.message_id):
                 to_process.append(cid)

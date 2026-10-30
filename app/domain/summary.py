@@ -10,18 +10,18 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
-from app.domain.models import ConversationState, FieldName, FieldStatus, Status
+from app.domain.models import ConversationState, FieldName, FieldStatus, Reason, Status
 
-_REASONS = {
-    "no_license": "no driving license",
-    "outside_area": "lives outside the service area",
-    "human_requested": "asked to talk to a person",
-    "flagged_behaviour": "abusive messages",
-    "license_unclear": "license may not cover a motorbike",
-    "borderline_zone": "borderline zone",
-    "zone_not_listed": "zone not in the service list",
-    "postal_code_not_listed": "postal code not in the service list",
-    "field_failed_twice": "no usable answer after two tries",
+REASON_TEXT: dict[str, str] = {
+    Reason.NO_LICENSE: "no driving license",
+    Reason.OUTSIDE_AREA: "lives outside the service area",
+    Reason.HUMAN_REQUESTED: "asked to talk to a person",
+    Reason.FLAGGED_BEHAVIOUR: "abusive messages",
+    Reason.LICENSE_UNCLEAR: "license may not cover a motorbike",
+    Reason.BORDERLINE_ZONE: "borderline zone",
+    Reason.ZONE_NOT_LISTED: "zone not in the service list",
+    Reason.POSTAL_CODE_NOT_LISTED: "postal code not in the service list",
+    Reason.FIELD_FAILED_TWICE: "no usable answer after two tries",
 }
 
 
@@ -36,7 +36,7 @@ def local_time(moment: datetime, state: ConversationState, config: ClientConfig)
 def describe_reason(reason: str) -> str:
     """'borderline_zone:location' -> 'borderline zone (location)'."""
     key, _, field = reason.partition(":")
-    text = _REASONS.get(key, key.replace("_", " "))
+    text = REASON_TEXT.get(key, key.replace("_", " "))
     return f"{text} ({field.replace('_', ' ')})" if field else text
 
 

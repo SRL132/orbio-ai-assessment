@@ -71,6 +71,42 @@ class FieldStatus(StrEnum):
     NEEDS_REVIEW = "needs_review"
 
 
+class Reason(StrEnum):
+    """Why a candidate was knocked out or sent to review. Recruiters see each one described."""
+
+    NO_LICENSE = "no_license"
+    OUTSIDE_AREA = "outside_area"
+    HUMAN_REQUESTED = "human_requested"
+    FLAGGED_BEHAVIOUR = "flagged_behaviour"
+    LICENSE_UNCLEAR = "license_unclear"
+    BORDERLINE_ZONE = "borderline_zone"
+    ZONE_NOT_LISTED = "zone_not_listed"
+    POSTAL_CODE_NOT_LISTED = "postal_code_not_listed"
+    FIELD_FAILED_TWICE = "field_failed_twice"
+
+
+# Knockouts end the screening; each needs a `disqualified_<reason>` template.
+KNOCKOUT_REASONS = frozenset({Reason.NO_LICENSE, Reason.OUTSIDE_AREA})
+
+# Why an answer was not accepted: the responder uses it to re-ask helpfully.
+InvalidReason = Literal[
+    "missing",
+    "not_a_name",
+    "surname_missing",
+    "vehicle_missing",
+    "zone_missing",
+    "city_missing",
+    "out_of_range",
+    "in_past",
+    "unclear",
+]
+
+
+def review_reason(reason: Reason, field: FieldName | None = None) -> str:
+    """The stored form of a review reason: 'borderline_zone:location' when tied to a field."""
+    return f"{reason.value}:{field.value}" if field else reason.value
+
+
 Language = Literal["es", "en"]
 Channel = Literal["chat", "voice", "whatsapp"]
 
@@ -117,8 +153,10 @@ class ConversationState(BaseModel):
     stage: Stage = Stage.CONSENT
     awaiting: FieldName | None = None
     language: Language = "es"
-    review_reasons: list[str] = Field(default_factory=list)
-    disqualify_reason: str | None = None
+    review_reasons: list[str] = Field(
+        default_factory=list, description="See `review_reason()`: 'reason' or 'reason:field'."
+    )
+    disqualify_reason: Reason | None = None
     keep_on_file: bool | None = None
     abuse_strikes: int = 0
     offered_human: bool = False
@@ -203,7 +241,7 @@ class AskField(BaseModel):
 class ReAsk(BaseModel):
     kind: Literal["re_ask"] = "re_ask"
     field: FieldName
-    reason: str
+    reason: InvalidReason
     offer_options: bool = False
 
 
@@ -214,12 +252,12 @@ class AnswerQuestion(BaseModel):
 
 class Disqualify(BaseModel):
     kind: Literal["disqualify"] = "disqualify"
-    reason: str
+    reason: Reason
 
 
 class HandOff(BaseModel):
     kind: Literal["hand_off"] = "hand_off"
-    reason: str
+    reason: Literal["human_requested", "review"]
 
 
 class Recap(BaseModel):
@@ -230,11 +268,40 @@ class Qualified(BaseModel):
     kind: Literal["qualified"] = "qualified"
 
 
+# Fixed messages the engine can say. Every key must exist in each language's templates; the
+# config loader checks that at startup (`render.template_problems`).
+SayTemplate = Literal[
+    "greeting_consent",
+    "closed",
+    "technical_retry",
+    "sensitive_data",
+    "abuse_warning",
+    "abuse_end",
+    "consent_reask",
+    "consent_declined",
+    "keep_on_file_reask",
+    "keep_on_file_yes",
+    "keep_on_file_no",
+    "ask_change",
+    "offer_human",
+    "qualified_no_slots",
+    "slot_taken",
+    "no_slot_fits",
+]
+
+
 class Say(BaseModel):
     """A fixed template message (consent, warnings, closings)."""
 
     kind: Literal["say"] = "say"
-    template: str
+    template: SayTemplate
+
+
+class Remind(BaseModel):
+    """The n-th reminder to a silent candidate (template `reminder_<n>`)."""
+
+    kind: Literal["remind"] = "remind"
+    number: int
 
 
 class OfferSlots(BaseModel):
@@ -263,6 +330,7 @@ Action = Annotated[
     | Recap
     | Qualified
     | Say
+    | Remind
     | OfferSlots
     | InterviewBooked
     | ScheduleReminder,
@@ -294,8 +362,41 @@ class Outbound(BaseModel):
 EXTERNAL_CHANNELS = frozenset({"whatsapp"})
 
 
+class EventType(StrEnum):
+    """Everything the event log can record. Analytics and the dashboard read these."""
+
+    CONVERSATION_STARTED = "conversation_started"
+    MESSAGE_RECEIVED = "message_received"
+    CONSENT_GIVEN = "consent_given"
+    CONSENT_DECLINED = "consent_declined"
+    FIELD_EXTRACTED = "field_extracted"
+    FIELD_REJECTED = "field_rejected"
+    FIELD_CHANGED = "field_changed"
+    FIELD_GAVE_UP = "field_gave_up"
+    KNOCKOUT = "knockout"
+    STATUS_CHANGED = "status_changed"
+    KEEP_ON_FILE = "keep_on_file"
+    SLOTS_OFFERED = "slots_offered"
+    SLOT_TAKEN = "slot_taken"
+    NO_SLOT_FITS = "no_slot_fits"
+    INTERVIEW_BOOKED = "interview_booked"
+    REMINDER_SENT = "reminder_sent"
+    ABANDONED = "abandoned"
+    ABUSE_FLAGGED = "abuse_flagged"
+    SENSITIVE_DATA_REDACTED = "sensitive_data_redacted"
+    EXTRACTOR_FAILED = "extractor_failed"
+    RESPONDER_FAILED = "responder_failed"
+    REPLY_REJECTED = "reply_rejected"
+    NON_TEXT_MESSAGE = "non_text_message"
+    # Recruiter actions
+    OVERRIDE = "override"
+    NOTE_ADDED = "note_added"
+    VIEWED = "viewed"
+    EXPORTED = "exported"
+
+
 class DomainEvent(BaseModel):
-    type: str
+    type: EventType
     data: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 

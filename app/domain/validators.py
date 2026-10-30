@@ -13,7 +13,7 @@ from datetime import date
 from typing import Literal
 
 from app.domain.config import ClientConfig, ServiceLocation
-from app.domain.models import Availability, Candidate, Schedule, Vehicle
+from app.domain.models import Availability, Candidate, InvalidReason, Reason, Schedule, Vehicle
 
 OutcomeKind = Literal["valid", "invalid", "knockout", "review"]
 
@@ -23,24 +23,31 @@ MAX_EXPERIENCE_YEARS = 60
 @dataclass(frozen=True)
 class Outcome:
     kind: OutcomeKind
-    reason: str | None = None
+    reason: Reason | InvalidReason | None = None
     updates: dict[str, object] = field(default_factory=dict)
     note: str | None = None
+
+    @property
+    def verdict(self) -> Reason:
+        """The knockout or review reason. Only those outcomes have one."""
+        if not isinstance(self.reason, Reason):
+            raise ValueError(f"a {self.kind} outcome has no knockout or review reason")
+        return self.reason
 
     @staticmethod
     def valid(note: str | None = None, **updates: object) -> Outcome:
         return Outcome("valid", updates=updates, note=note)
 
     @staticmethod
-    def invalid(reason: str, **partial: object) -> Outcome:
+    def invalid(reason: InvalidReason, **partial: object) -> Outcome:
         return Outcome("invalid", reason=reason, updates=partial)
 
     @staticmethod
-    def knockout(reason: str) -> Outcome:
+    def knockout(reason: Reason) -> Outcome:
         return Outcome("knockout", reason=reason)
 
     @staticmethod
-    def review(reason: str, **updates: object) -> Outcome:
+    def review(reason: Reason, **updates: object) -> Outcome:
         return Outcome("review", reason=reason, updates=updates)
 
 
@@ -75,7 +82,7 @@ def validate_license(has_license: bool | None, vehicle: Vehicle | None) -> Outco
     if has_license is None:
         return Outcome.invalid("missing")
     if not has_license:
-        return Outcome.knockout("no_license")
+        return Outcome.knockout(Reason.NO_LICENSE)
     if vehicle is None:
         return Outcome.invalid("vehicle_missing", has_license=True)
     return Outcome.valid(has_license=True, vehicle=vehicle)
@@ -124,17 +131,17 @@ def validate_location(
                         location_id=served_city.id, city=served_city.city, zone=zone
                     )
                 if _is_nearby(zone, [served_city]):
-                    return Outcome.review("borderline_zone", city=served_city.city, zone=zone)
-                return Outcome.review("zone_not_listed", city=served_city.city, zone=zone)
+                    return Outcome.review(Reason.BORDERLINE_ZONE, city=served_city.city, zone=zone)
+                return Outcome.review(Reason.ZONE_NOT_LISTED, city=served_city.city, zone=zone)
             if pc:
                 return Outcome.review(
-                    "postal_code_not_listed", city=served_city.city, postal_code=pc
+                    Reason.POSTAL_CODE_NOT_LISTED, city=served_city.city, postal_code=pc
                 )
             return Outcome.invalid("zone_missing", city=served_city.city)
         nearby = _is_nearby(city, config.locations)
         if nearby is not None:
-            return Outcome.review("borderline_zone", city=city, zone=zone)
-        return Outcome.knockout("outside_area")
+            return Outcome.review(Reason.BORDERLINE_ZONE, city=city, zone=zone)
+        return Outcome.knockout(Reason.OUTSIDE_AREA)
 
     if pc:
         return Outcome.invalid("city_missing", postal_code=pc)
@@ -187,9 +194,9 @@ def validate_start_date(start_date: date | None, today: date, config: ClientConf
     return Outcome.valid(start_date=start_date)
 
 
-def final_review_reasons(candidate: Candidate, config: ClientConfig) -> list[str]:
+def final_review_reasons(candidate: Candidate, config: ClientConfig) -> list[Reason]:
     """Checks that need several fields at once, run before qualifying (e.g. license by country)."""
-    reasons: list[str] = []
+    reasons: list[Reason] = []
     loc = config.location(candidate.location_id) if candidate.location_id else None
     rules = config.license_rules.get(loc.country) if loc else None
     rides_moto = candidate.vehicle in (Vehicle.MOTO, Vehicle.BOTH)
@@ -209,5 +216,5 @@ def final_review_reasons(candidate: Candidate, config: ClientConfig) -> list[str
             )
             years = candidate.license_years
             if conditional is None or years is None or years < conditional.min_years:
-                reasons.append("license_unclear")
+                reasons.append(Reason.LICENSE_UNCLEAR)
     return reasons

@@ -27,9 +27,9 @@ from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.engine import check_reply, speakable
 from app.domain.models import Channel, ConversationState, Stage
 from app.domain.ports import Extractor, Ports, Responder
+from app.domain.render import check_reply, speakable
 from app.domain.validators import normalize
 from app.worker.service import ScreeningService
 

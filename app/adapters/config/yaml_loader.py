@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from app.domain.config import ClientConfig
+from app.domain.render import template_problems
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 
@@ -22,4 +23,7 @@ def load_client_config(client_id: str, config_dir: Path = CONFIG_DIR) -> ClientC
                 voice[lang_dir.name] = yaml.safe_load(voice_file.read_text(encoding="utf-8"))
     raw["templates"] = templates
     raw["voice_templates"] = voice
-    return ClientConfig.model_validate(raw)
+    config = ClientConfig.model_validate(raw)
+    if problems := template_problems(config):  # fail at startup, not mid-conversation
+        raise ValueError(f"{client_id} templates: " + "; ".join(problems))
+    return config

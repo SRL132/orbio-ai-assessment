@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections import defaultdict
+from datetime import datetime
 from uuid import UUID
 
 from app.domain import engine
@@ -18,8 +18,10 @@ from app.domain.models import (
     Channel,
     ConversationState,
     DomainEvent,
+    EventType,
     InboundMessage,
     Status,
+    StoredMessage,
     TurnResult,
 )
 from app.domain.ports import Ports, Repository
@@ -27,6 +29,9 @@ from app.domain.ports import Ports, Repository
 logger = logging.getLogger("app.service")
 
 MAX_MESSAGE_CHARS = 2000
+# Conversations share a fixed set of locks (by hash), so memory stays bounded however many
+# conversations the process sees. Two conversations rarely share one, and only wait if they do.
+LOCK_STRIPES = 256
 
 
 class ScreeningService:
@@ -34,12 +39,10 @@ class ScreeningService:
         self.repo = repo
         self.config = config
         self.ports = ports
-        self._locks: defaultdict[UUID, threading.Lock] = defaultdict(threading.Lock)
-        self._locks_guard = threading.Lock()
+        self._locks = [threading.Lock() for _ in range(LOCK_STRIPES)]
 
     def _lock(self, conversation_id: UUID) -> threading.Lock:
-        with self._locks_guard:
-            return self._locks[conversation_id]
+        return self._locks[conversation_id.int % LOCK_STRIPES]
 
     def start_conversation(self, channel: Channel = "chat") -> UUID:
         state = ConversationState(client_id=self.config.client_id, channel=channel)
@@ -116,17 +119,40 @@ class ScreeningService:
             logger.info("override id=%s to=%s", conversation_id, status.value)
 
     def add_note(self, conversation_id: UUID, text: str, actor: str) -> None:
-        state = self.repo.get(conversation_id)
-        if state is None:
-            raise KeyError(conversation_id)
         note = text.strip()[:MAX_MESSAGE_CHARS]
-        if note:
-            self.repo.append_events(
-                state, [DomainEvent(type="note_added", data={"text": note, "actor": actor})]
-            )
+        with self._lock(conversation_id):
+            state = self.repo.get(conversation_id)
+            if state is None:
+                raise KeyError(conversation_id)
+            if note:
+                self.repo.append_events(
+                    state,
+                    [DomainEvent(type=EventType.NOTE_ADDED, data={"text": note, "actor": actor})],
+                )
 
     def record_view(self, conversation_id: UUID, actor: str) -> ConversationState | None:
-        state = self.repo.get(conversation_id)
-        if state is not None:
-            self.repo.append_events(state, [DomainEvent(type="viewed", data={"actor": actor})])
+        return self._read_logged(conversation_id, EventType.VIEWED, actor)
+
+    def export(self, conversation_id: UUID, actor: str) -> ConversationState | None:
+        return self._read_logged(conversation_id, EventType.EXPORTED, actor)
+
+    def _read_logged(
+        self, conversation_id: UUID, event: EventType, actor: str
+    ) -> ConversationState | None:
+        """Recruiter reads of personal data are logged too (who saw or exported what)."""
+        with self._lock(conversation_id):
+            state = self.repo.get(conversation_id)
+            if state is not None:
+                self.repo.append_events(state, [DomainEvent(type=event, data={"actor": actor})])
         return state
+
+    # --- Reads for the API (it never reaches into the repository) -----------------------------
+
+    def get(self, conversation_id: UUID) -> ConversationState | None:
+        return self.repo.get(conversation_id)
+
+    def messages(self, conversation_id: UUID, after_seq: int = 0) -> list[StoredMessage]:
+        return self.repo.messages(conversation_id, after_seq)
+
+    def timeline(self, conversation_id: UUID) -> list[tuple[datetime, DomainEvent]]:
+        return self.repo.timeline(conversation_id)
