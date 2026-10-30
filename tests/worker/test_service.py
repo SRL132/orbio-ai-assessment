@@ -84,11 +84,12 @@ class FlakyRepository(SqlRepository):
         replies: list[str],
         processed: list[StoredMessage],
         redact: bool = False,
+        lease_owner: str | None = None,
     ) -> None:
         if self.fail_next_save:
             self.fail_next_save = False
             raise RuntimeError("database unavailable")
-        super().save_turn(state, events, replies, processed, redact)
+        super().save_turn(state, events, replies, processed, redact, lease_owner)
 
 
 def at_scheduling(

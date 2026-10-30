@@ -57,6 +57,10 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+class LeaseLost(RuntimeError):
+    """Another worker took over the conversation (our lease expired): don't save over it."""
+
+
 class Repository(Protocol):
     """Persistence of conversations, messages and the append-only event log, for one client:
     reads never return another client's data, and writing another client's state is an error."""
@@ -82,9 +86,18 @@ class Repository(Protocol):
         replies: list[str],
         processed: list[StoredMessage],
         redact: bool = False,
+        lease_owner: str | None = None,
     ) -> None:
-        """Atomically save the new state, events and replies, and mark inbound messages done."""
+        """Atomically save the new state, events and replies, and mark inbound messages done.
+        With `lease_owner`, raises `LeaseLost` unless that owner still holds the lease."""
         ...
+
+    def try_lease(self, conversation_id: UUID, owner: str, until: datetime) -> bool:
+        """Take the conversation's lease if nobody holds it (or theirs expired): one worker
+        at a time, across processes. Expires on its own if the holder dies."""
+        ...
+
+    def release_lease(self, conversation_id: UUID, owner: str) -> None: ...
 
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         """Audit events that don't change the state (a recruiter viewed it, added a note)."""

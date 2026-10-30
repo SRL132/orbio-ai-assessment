@@ -1,16 +1,18 @@
 """Application service: the use cases the API and the background runner call.
 
 Synchronous on purpose: LLM calls block, so the async runner calls these in worker threads.
-A per-conversation lock guarantees one conversation is never processed twice at the same time
-(docs/architecture.md, "One conversation at a time").
+A lease on the conversation row guarantees one conversation is never processed twice at the
+same time, by any worker in any process (docs/architecture.md, "One conversation at a time").
 """
 
 from __future__ import annotations
 
 import logging
-import threading
-from datetime import datetime
-from uuid import UUID
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from uuid import UUID, uuid4
 
 from app.domain import engine
 from app.domain.config import ClientConfig
@@ -29,20 +31,44 @@ from app.domain.ports import Ports, Repository
 logger = logging.getLogger("app.service")
 
 MAX_MESSAGE_CHARS = 2000
-# Conversations share a fixed set of locks (by hash), so memory stays bounded however many
-# conversations the process sees. Two conversations rarely share one, and only wait if they do.
-LOCK_STRIPES = 256
+# Longer than any turn can take (two LLM calls with their timeouts and a retry). A worker that
+# dies holding a lease blocks its conversation for at most this long.
+LEASE = timedelta(minutes=2)
+LEASE_POLL_SECONDS = 0.05
+
+
+class ConversationBusy(RuntimeError):
+    """Another worker is processing the conversation; try again in a moment."""
 
 
 class ScreeningService:
-    def __init__(self, repo: Repository, config: ClientConfig, ports: Ports) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        config: ClientConfig,
+        ports: Ports,
+        recruiter_wait_seconds: float = 10.0,
+    ) -> None:
         self.repo = repo
         self.config = config
         self.ports = ports
-        self._locks = [threading.Lock() for _ in range(LOCK_STRIPES)]
+        self.recruiter_wait_seconds = recruiter_wait_seconds
 
-    def _lock(self, conversation_id: UUID) -> threading.Lock:
-        return self._locks[conversation_id.int % LOCK_STRIPES]
+    @contextmanager
+    def _leased(self, conversation_id: UUID, wait_seconds: float = 0.0) -> Iterator[str | None]:
+        """Hold the conversation's lease for the block. Yields the owner token, or None if
+        another worker kept it for `wait_seconds`."""
+        owner = uuid4().hex
+        deadline = time.monotonic() + wait_seconds
+        while not self.repo.try_lease(conversation_id, owner, self.ports.clock.now() + LEASE):
+            if time.monotonic() >= deadline:
+                yield None
+                return
+            time.sleep(LEASE_POLL_SECONDS)
+        try:
+            yield owner
+        finally:
+            self.repo.release_lease(conversation_id, owner)
 
     def start_conversation(self, channel: Channel = "chat") -> UUID:
         state = ConversationState(client_id=self.config.client_id, channel=channel)
@@ -60,42 +86,67 @@ class ScreeningService:
         )
 
     def process_pending(self, conversation_id: UUID) -> TurnResult | None:
-        """Run one engine turn over every unprocessed message of the conversation."""
-        with self._lock(conversation_id):
-            state = self.repo.get(conversation_id)
-            pending = self.repo.pending_inbound(conversation_id)
-            if state is None or not pending:
-                return None
-            message = InboundMessage(
-                conversation_id=conversation_id,
-                text="\n".join(m.text for m in pending),
-                received_at=pending[-1].created_at,
-            )
-            result = engine.turn(state, message, self.config, self.ports)
-            self.repo.save_turn(
-                result.state, result.events, result.replies, pending, redact=result.redact_inbound
-            )
-            logger.info(
-                "turn id=%s messages=%d status=%s stage=%s",
-                conversation_id,
-                len(pending),
-                result.state.status.value,
-                result.state.stage.value,
-            )
-            return result
+        """Run engine turns until no unprocessed message is left. Returns the last turn.
+
+        If another worker holds the conversation, return at once: that worker checks for new
+        messages after releasing it (messages are stored before anyone asks for the lease), so
+        nothing is left behind.
+        """
+        result: TurnResult | None = None
+        while True:
+            with self._leased(conversation_id) as owner:
+                if owner is None:
+                    return result
+                turn = self._turn(conversation_id, owner)
+            if turn is None:
+                return result
+            result = turn
+            if not self.repo.pending_inbound(conversation_id):
+                return result
+
+    def _turn(self, conversation_id: UUID, owner: str) -> TurnResult | None:
+        state = self.repo.get(conversation_id)
+        pending = self.repo.pending_inbound(conversation_id)
+        if state is None or not pending:
+            return None
+        message = InboundMessage(
+            conversation_id=conversation_id,
+            text="\n".join(m.text for m in pending),
+            received_at=pending[-1].created_at,
+        )
+        result = engine.turn(state, message, self.config, self.ports)
+        self.repo.save_turn(
+            result.state,
+            result.events,
+            result.replies,
+            pending,
+            redact=result.redact_inbound,
+            lease_owner=owner,
+        )
+        logger.info(
+            "turn id=%s messages=%d status=%s stage=%s",
+            conversation_id,
+            len(pending),
+            result.state.status.value,
+            result.state.stage.value,
+        )
+        return result
 
     def send_due_reminders(self) -> int:
-        """Send due reminders (or mark candidates abandoned). Returns how many changed."""
+        """Send due reminders (or mark candidates abandoned). Returns how many changed.
+        A conversation that is busy right now is skipped: its turn reschedules the reminder."""
         changed = 0
         for conversation_id in self.repo.due_reminders(self.ports.clock.now()):
-            with self._lock(conversation_id):
-                state = self.repo.get(conversation_id)
-                if state is None:
+            with self._leased(conversation_id) as owner:
+                if owner is None:
                     continue
-                result = engine.on_silence(state, self.config, self.ports)
+                state = self.repo.get(conversation_id)
+                result = engine.on_silence(state, self.config, self.ports) if state else None
                 if result is None:
                     continue
-                self.repo.save_turn(result.state, result.events, result.replies, [])
+                self.repo.save_turn(
+                    result.state, result.events, result.replies, [], lease_owner=owner
+                )
                 changed += 1
                 logger.info(
                     "silence id=%s status=%s reminders=%d",
@@ -105,30 +156,46 @@ class ScreeningService:
                 )
         return changed
 
+    def reply_text_only(self, conversation_id: UUID) -> None:
+        """The candidate sent something that isn't text (audio, photo): say we only read text."""
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            state = self.repo.get(conversation_id)
+            if owner is None or state is None:
+                return  # busy for 10 s: skip the notice rather than block the webhook
+            text = self.config.template(state.language, "text_only", state.channel)
+            event = DomainEvent(type=EventType.NON_TEXT_MESSAGE)
+            self.repo.save_turn(state, [event], [text], [], lease_owner=owner)
+
     # --- Recruiter actions (writes go through the domain, never straight to the database) -----
 
     def override(self, conversation_id: UUID, status: Status, reason: str, actor: str) -> None:
-        with self._lock(conversation_id):
+        """Waits briefly for a running turn to finish; raises `ConversationBusy` if it doesn't."""
+        if self.repo.get(conversation_id) is None:  # no row to lease: unknown, not busy
+            raise KeyError(conversation_id)
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            if owner is None:
+                raise ConversationBusy(conversation_id)
             state = self.repo.get(conversation_id)
             if state is None:
                 raise KeyError(conversation_id)
             new_state, events = engine.override_status(
                 state, status, reason, actor, self.config, self.ports
             )
-            self.repo.save_turn(new_state, events, [], [])
+            self.repo.save_turn(new_state, events, [], [], lease_owner=owner)
             logger.info("override id=%s to=%s", conversation_id, status.value)
+
+    # Notes, views and exports only append audit events, which never conflict with a turn.
 
     def add_note(self, conversation_id: UUID, text: str, actor: str) -> None:
         note = text.strip()[:MAX_MESSAGE_CHARS]
-        with self._lock(conversation_id):
-            state = self.repo.get(conversation_id)
-            if state is None:
-                raise KeyError(conversation_id)
-            if note:
-                self.repo.append_events(
-                    state,
-                    [DomainEvent(type=EventType.NOTE_ADDED, data={"text": note, "actor": actor})],
-                )
+        state = self.repo.get(conversation_id)
+        if state is None:
+            raise KeyError(conversation_id)
+        if note:
+            self.repo.append_events(
+                state,
+                [DomainEvent(type=EventType.NOTE_ADDED, data={"text": note, "actor": actor})],
+            )
 
     def record_view(self, conversation_id: UUID, actor: str) -> ConversationState | None:
         return self._read_logged(conversation_id, EventType.VIEWED, actor)
@@ -140,10 +207,9 @@ class ScreeningService:
         self, conversation_id: UUID, event: EventType, actor: str
     ) -> ConversationState | None:
         """Recruiter reads of personal data are logged too (who saw or exported what)."""
-        with self._lock(conversation_id):
-            state = self.repo.get(conversation_id)
-            if state is not None:
-                self.repo.append_events(state, [DomainEvent(type=event, data={"actor": actor})])
+        state = self.repo.get(conversation_id)
+        if state is not None:
+            self.repo.append_events(state, [DomainEvent(type=event, data={"actor": actor})])
         return state
 
     # --- Reads for the API (it never reaches into the repository) -----------------------------

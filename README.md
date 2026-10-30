@@ -73,7 +73,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 - `app/domain/`: models, validators, policy, engine, summary, ports. No I/O and no SDKs; import-linter enforces this.
 - `app/adapters/`: LLM (Anthropic SDK, OpenRouter, offline keyword rules), SQLAlchemy storage with an append-only event log, calendar, clocks, config loader.
-- `app/worker/`: application service (per-conversation lock, merging message bursts, reminders) and the async runner.
+- `app/worker/`: application service (a database lease per conversation, so any number of workers can run; merging message bursts; reminders) and the async runner.
 - `app/api/`: FastAPI chat API, chat page, dashboard. `app/config/`: the Grupo Sazón config and ES/EN templates.
 
 ## Key design decisions

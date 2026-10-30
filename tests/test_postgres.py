@@ -1,6 +1,7 @@
 """Postgres integration: runs only when TEST_DATABASE_URL points at a disposable database (CI)."""
 
 import os
+import threading
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -74,3 +75,24 @@ def test_analytics_aggregate_in_sql(engine, config: ClientConfig) -> None:
     a = DashboardQueries(engine, config.client_id).analytics(config.field_priority)
     assert (a.started, a.consented, a.completed, a.median_minutes) == (4, 3, 3, 4.0)
     assert dict(a.funnel)["start_date"] == 3
+
+
+def test_exactly_one_worker_wins_a_lease_race(engine, config: ClientConfig) -> None:
+    clock = FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC))
+    repo = SqlRepository(engine, clock, config.client_id)
+    state = ConversationState(client_id=config.client_id)
+    repo.create(state, [], [])
+    barrier = threading.Barrier(16)
+    winners: list[str] = []
+
+    def race(owner: str) -> None:
+        barrier.wait()
+        if repo.try_lease(state.conversation_id, owner, clock.now() + timedelta(minutes=2)):
+            winners.append(owner)
+
+    threads = [threading.Thread(target=race, args=(f"w{n}",)) for n in range(16)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(winners) == 1

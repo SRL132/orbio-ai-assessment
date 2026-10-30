@@ -25,6 +25,7 @@ from app.domain.engine import OVERRIDABLE
 from app.domain.models import Candidate, FieldName, Language, Status
 from app.domain.render import field_values
 from app.domain.summary import describe_reason, local_time
+from app.worker.service import ConversationBusy
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 TEMPLATES.env.filters["reason"] = describe_reason
@@ -185,6 +186,10 @@ async def override(
         )
     except KeyError:
         raise HTTPException(status.HTTP_404_NOT_FOUND) from None
+    except ConversationBusy:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "The agent is answering this candidate; try again."
+        ) from None
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
     return RedirectResponse(

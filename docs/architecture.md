@@ -76,7 +76,13 @@ The API normalizes input to `InboundMessage`, drops duplicates by channel messag
 
 ### 4. One conversation at a time
 
-A per-conversation lock (in the demo, one of 256 striped in-process locks; in production `SELECT … FOR UPDATE` or a queue grouped by conversation ID), plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
+A lease on the conversation row, plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
+
+- **Taking it:** one atomic `UPDATE conversations SET lease_owner, lease_until WHERE id = … AND lease is free or expired`. Of any number of workers, in any number of processes, exactly one matches. It works the same on SQLite and Postgres, and holds no database connection while the LLM is thinking.
+- **Expiry:** a lease lasts 2 minutes, longer than any turn. A worker that dies holding one blocks its conversation for at most that long.
+- **Fencing:** `save_turn` checks the caller still owns the lease, so a worker whose lease expired mid-turn gets `LeaseLost` instead of overwriting the new holder's state.
+- **No lost messages:** a worker that finds the lease taken returns at once; the holder checks for messages that arrived meanwhile after releasing it (messages are stored before anyone asks for the lease).
+- **Who waits:** reminders skip a busy conversation until the next tick; a recruiter override waits up to 10 s, then gets "try again" (409).
 
 Storing an inbound message doesn't wait for that lock: a webhook must be acknowledged even while a turn is running. So message numbers come from a counter on the conversation row (`last_seq`), reserved with one atomic `UPDATE … RETURNING` that holds the row lock until commit. Concurrent writers to one conversation queue up instead of colliding, which reading `max(seq) + 1` didn't guarantee.
 

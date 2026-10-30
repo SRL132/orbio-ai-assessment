@@ -44,7 +44,7 @@ from app.domain.models import (
     Outbound,
     StoredMessage,
 )
-from app.domain.ports import Clock
+from app.domain.ports import Clock, LeaseLost
 
 REDACTED = "[redacted]"
 
@@ -94,6 +94,9 @@ class ConversationRow(Base):
     # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
     # conversation (webhook inbound, worker reply) queue up instead of colliding.
     last_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Which worker is processing the conversation, until when (see `try_lease`).
+    lease_owner: Mapped[str | None] = mapped_column(String(32))
+    lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
     state: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -248,6 +251,7 @@ class SqlRepository:
         replies: list[str],
         processed: list[StoredMessage],
         redact: bool = False,
+        lease_owner: str | None = None,
     ) -> None:
         self._check_client(state)
         now = self._clock.now()
@@ -255,6 +259,8 @@ class SqlRepository:
             row = self._conversation(session, state.conversation_id)
             if row is None:
                 raise KeyError(state.conversation_id)
+            if lease_owner is not None and row.lease_owner != lease_owner:
+                raise LeaseLost(state.conversation_id)
             _project(row, state, now)
             if processed:
                 ids = [str(m.id) for m in processed]
@@ -263,6 +269,28 @@ class SqlRepository:
                     values |= {"text": REDACTED, "redacted": True}
                 session.execute(update(MessageRow).where(MessageRow.id.in_(ids)).values(**values))
             self._append(session, state, events, replies, now)
+
+    def try_lease(self, conversation_id: UUID, owner: str, until: datetime) -> bool:
+        """One atomic UPDATE: of two workers racing, exactly one matches the free lease."""
+        row = ConversationRow
+        free = row.lease_until.is_(None) | (row.lease_until < self._clock.now())
+        with self._sessions.begin() as session:
+            taken = session.scalar(
+                update(row)
+                .where(row.id == str(conversation_id), row.client_id == self._client_id, free)
+                .values(lease_owner=owner, lease_until=until)
+                .returning(row.id)
+            )
+        return taken is not None
+
+    def release_lease(self, conversation_id: UUID, owner: str) -> None:
+        row = ConversationRow
+        with self._sessions.begin() as session:
+            session.execute(
+                update(row)
+                .where(row.id == str(conversation_id), row.lease_owner == owner)
+                .values(lease_owner=None, lease_until=None)
+            )
 
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         self._check_client(state)
