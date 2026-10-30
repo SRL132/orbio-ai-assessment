@@ -34,6 +34,7 @@
     <h2>Actions</h2>
     <div class="card">
       <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/override" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <label>Change status to <select name="status" required>
           <option value="" selected disabled>Choose…</option>
           {% for s in overridable %}<option value="{{ s }}">{{ s.replace('_', ' ') }}</option>{% endfor %}
@@ -43,6 +44,7 @@
       </form>
       <p class="muted" style="margin:8px 0 0">The agent's original decision stays in the timeline.</p>
       <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/notes" style="display:flex; gap:8px; margin-top:12px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <input name="text" required maxlength="2000" placeholder="Add a note" style="flex:1">
         <button class="secondary" type="submit">Add note</button>
       </form>

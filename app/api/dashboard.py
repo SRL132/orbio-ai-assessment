@@ -7,6 +7,7 @@ through the service and the domain, and lands in the event log with the recruite
 from __future__ import annotations
 
 import asyncio
+import secrets
 from datetime import date, datetime, time
 from enum import StrEnum
 from pathlib import Path
@@ -32,6 +33,29 @@ from app.worker.service import ConversationBusy
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 TEMPLATES.env.filters["reason"] = describe_reason
+
+
+def csrf_token(request: Request) -> str:
+    """The session's form token, embedded in every dashboard form (`{{ csrf_token(request) }}`).
+    SameSite cookies already stop most cross-site posts; this covers the rest (old browsers,
+    same-site subdomains)."""
+    token = request.session.get("csrf")
+    if not isinstance(token, str):
+        token = secrets.token_urlsafe(32)
+        request.session["csrf"] = token
+    return token
+
+
+TEMPLATES.env.globals["csrf_token"] = csrf_token
+
+
+def check_csrf(request: Request, csrf: Annotated[str, Form(alias="csrf_token")] = "") -> None:
+    expected = request.session.get("csrf")
+    if not isinstance(expected, str) or not secrets.compare_digest(csrf, expected):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Form expired: reload the page and retry.")
+
+
+Csrf = Annotated[None, Depends(check_csrf)]
 
 router = APIRouter()
 
@@ -71,6 +95,7 @@ def login_page(request: Request, c: App) -> HTMLResponse:
 async def login(
     request: Request,
     c: App,
+    _: Csrf,
     email: Annotated[str, Form()],
     password: Annotated[str, Form()],
 ) -> HTMLResponse | RedirectResponse:
@@ -96,7 +121,7 @@ async def login(
 
 
 @router.post("/logout")
-def logout(request: Request) -> RedirectResponse:
+def logout(_: Csrf, request: Request) -> RedirectResponse:
     request.session.clear()
     return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -189,6 +214,7 @@ async def override(
     conversation_id: UUID,
     c: App,
     user: Recruiter,
+    _: Csrf,
     new_status: Annotated[str, Form(alias="status")],
     reason: Annotated[str, Form()],
 ) -> RedirectResponse:
@@ -211,7 +237,7 @@ async def override(
 
 @router.post("/dashboard/candidates/{conversation_id}/notes")
 async def add_note(
-    conversation_id: UUID, c: App, user: Recruiter, text: Annotated[str, Form()]
+    conversation_id: UUID, c: App, user: Recruiter, _: Csrf, text: Annotated[str, Form()]
 ) -> RedirectResponse:
     try:
         await asyncio.to_thread(c.service.add_note, conversation_id, text, user)

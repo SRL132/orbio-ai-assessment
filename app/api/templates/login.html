@@ -13,7 +13,7 @@
   </style>
 </head>
 <body>
-<form method="post" action="/login">
+<form method="post" action="/login"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
   <h1>Recruiter login</h1>
   {% if not configured %}
     <p class="note">No recruiter accounts are configured. Set <code>RECRUITER_USERS</code>

@@ -11,6 +11,7 @@ from app.api.auth import hash_password, parse_users, verify_password
 from app.api.main import create_app
 from app.bootstrap import Container, build
 from app.settings import Settings
+from tests.conftest import submit
 
 PASSWORD = secrets.token_urlsafe(16)
 
@@ -36,7 +37,7 @@ def client(container: Container) -> TestClient:
 
 @pytest.fixture
 def logged_in(client: TestClient) -> TestClient:
-    response = client.post("/login", data={"email": "REC@sazon.test", "password": PASSWORD})
+    response = submit(client, "/login", {"email": "REC@sazon.test", "password": PASSWORD})
     assert response.status_code == 200  # followed the redirect to /dashboard
     return client
 
@@ -56,7 +57,7 @@ def test_dashboard_requires_login(client: TestClient) -> None:
 
 
 def test_wrong_password(client: TestClient) -> None:
-    response = client.post("/login", data={"email": "rec@sazon.test", "password": "nope"})
+    response = submit(client, "/login", {"email": "rec@sazon.test", "password": "nope"})
     assert response.status_code == 401
     assert "Wrong email or password" in response.text
 
@@ -89,12 +90,13 @@ def test_detail_override_note_and_export(logged_in: TestClient, container: Conta
     assert "Needs review" in detail
     assert "Transcript" in detail
 
-    response = logged_in.post(
+    response = submit(
+        logged_in,
         f"/dashboard/candidates/{cid}/override",
-        data={"status": "qualified", "reason": "Called her, all fine"},
+        {"status": "qualified", "reason": "Called her, all fine"},
     )
     assert response.status_code == 200
-    logged_in.post(f"/dashboard/candidates/{cid}/notes", data={"text": "Prefers mornings"})
+    submit(logged_in, f"/dashboard/candidates/{cid}/notes", {"text": "Prefers mornings"})
 
     export = logged_in.get(f"/dashboard/candidates/{cid}/export.json").json()
     assert export["status"] == "qualified"
@@ -107,8 +109,8 @@ def test_detail_override_note_and_export(logged_in: TestClient, container: Conta
 
 def test_override_without_reason_is_rejected(logged_in: TestClient, container: Container) -> None:
     cid = chat(container, "sí")
-    response = logged_in.post(
-        f"/dashboard/candidates/{cid}/override", data={"status": "qualified", "reason": " "}
+    response = submit(
+        logged_in, f"/dashboard/candidates/{cid}/override", {"status": "qualified", "reason": " "}
     )
     assert response.status_code == 400
 
@@ -118,7 +120,7 @@ def test_unknown_candidate_is_404(logged_in: TestClient) -> None:
 
 
 def test_logout(logged_in: TestClient) -> None:
-    logged_in.post("/logout")
+    submit(logged_in, "/logout", {})
     assert logged_in.get("/dashboard", follow_redirects=False).status_code == 303
 
 
@@ -153,10 +155,12 @@ def test_every_filter(logged_in: TestClient, container: Container) -> None:
 def test_actions_on_unknown_candidate(logged_in: TestClient) -> None:
     unknown = UUID(int=9)
     assert logged_in.get(f"/dashboard/candidates/{unknown}/export.json").status_code == 404
-    note = logged_in.post(f"/dashboard/candidates/{unknown}/notes", data={"text": "x"})
+    note = submit(logged_in, f"/dashboard/candidates/{unknown}/notes", {"text": "x"})
     assert note.status_code == 404
-    override = logged_in.post(
-        f"/dashboard/candidates/{unknown}/override", data={"status": "qualified", "reason": "x"}
+    override = submit(
+        logged_in,
+        f"/dashboard/candidates/{unknown}/override",
+        {"status": "qualified", "reason": "x"},
     )
     assert override.status_code == 404
 
@@ -212,3 +216,26 @@ def test_candidate_list_is_paged(logged_in: TestClient, container: Container) ->
     assert "51 to 55 of 55" in second
     assert "Next" not in second
     assert logged_in.get("/dashboard?page=abc").status_code == 200  # bad input: first page
+
+
+def test_forms_without_the_page_token_are_refused(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí")
+    url = f"/dashboard/candidates/{cid}/notes"
+    assert logged_in.post(url, data={"text": "forged"}).status_code == 403  # no token
+    forged = {"text": "forged", "csrf_token": "guess"}
+    assert logged_in.post(url, data=forged).status_code == 403
+    assert submit(logged_in, url, {"text": "real"}).status_code == 200
+    assert "forged" not in logged_in.get(f"/dashboard/candidates/{cid}").text
+    assert logged_in.post("/logout").status_code == 403
+    assert submit(logged_in, "/logout", {}).status_code == 200
+
+
+def test_logged_out_form_posts_go_to_login(client: TestClient, container: Container) -> None:
+    cid = chat(container, "sí")
+    response = client.post(
+        f"/dashboard/candidates/{cid}/notes", data={"text": "x"}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"

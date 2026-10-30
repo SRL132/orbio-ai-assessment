@@ -1,3 +1,4 @@
+import re
 import threading
 from datetime import UTC, datetime
 from typing import Any
@@ -91,3 +92,10 @@ def write_concurrently(repo: Any, state: ConversationState, threads: int = 16) -
         worker.join()
     assert errors == []
     return [m.seq for m in repo.messages(state.conversation_id)]
+
+
+def submit(client: Any, path: str, data: dict[str, str], **kwargs: Any) -> Any:
+    """Post a dashboard form like a browser would: with the token the page embeds."""
+    found = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text)
+    assert found is not None
+    return client.post(path, data={**data, "csrf_token": found.group(1)}, **kwargs)

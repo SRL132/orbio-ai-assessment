@@ -14,6 +14,7 @@ from app.api.auth import hash_password
 from app.api.main import create_app
 from app.bootstrap import build
 from app.settings import Settings
+from tests.conftest import submit
 
 PASSWORD = secrets.token_urlsafe(16)
 
@@ -50,8 +51,8 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def login(client: TestClient, password: str, email: str = "rec@sazon.test") -> int:
-    response = client.post(
-        "/login", data={"email": email, "password": password}, follow_redirects=False
+    response = submit(
+        client, "/login", {"email": email, "password": password}, follow_redirects=False
     )
     return response.status_code
 

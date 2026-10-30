@@ -106,7 +106,7 @@ The offline result shows the engine and policy behave as designed. It says littl
 - **Run the live evals** on the shortlisted models, pick the provider on accuracy, then latency, then cost, and record the baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set.
 - **WhatsApp in production:** a permanent system-user token, approved reminder templates, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
-- **Production hardening:** a real queue and database-level locking (Postgres and migrations are in place), SSO for recruiters, rate limiting on login and chat, a CSRF token on dashboard forms (today: SameSite cookies), and retention jobs.
+- **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
 - **Smarter re-engagement:** reminder timing by time of day and channel, and A/B tests on reminder wording, measured with the drop-off analytics.
 

@@ -57,7 +57,7 @@
   <a href="/dashboard/review" class="{{ 'active' if active == 'review' }}">Review queue</a>
   <a href="/dashboard/analytics" class="{{ 'active' if active == 'analytics' }}">Analytics</a>
   <span class="right">{{ user }}
-    <form method="post" action="/logout"><button class="secondary" type="submit">Log out</button></form>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="secondary" type="submit">Log out</button></form>
   </span>
 </nav>
 <main>{% block content %}{% endblock %}</main>
