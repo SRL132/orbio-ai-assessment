@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.adapters.storage.sql import ConversationRow
+from app.adapters.storage.sql import ConversationRow, MessageRow
 from app.domain.models import Availability, FieldName, Schedule, Stage, Status
 
 
@@ -210,6 +210,29 @@ class DashboardQueries:
             by_location=by_location,
             interviews_booked=booked,
         )
+
+    def backlog(self) -> dict[str, tuple[int, datetime | None]]:
+        """Operational backlogs for monitoring: how many items wait, and since when."""
+        conv, msg = ConversationRow, MessageRow
+        pending = select(func.count(), func.min(msg.created_at)).where(
+            msg.client_id == self._client_id, msg.direction == "in", msg.processed.is_(False)
+        )
+        review = select(func.count(), func.min(conv.updated_at)).where(
+            conv.client_id == self._client_id, conv.status == Status.NEEDS_REVIEW.value
+        )
+        outbox = select(func.count(), func.min(msg.created_at)).where(
+            msg.client_id == self._client_id, msg.direction == "out", msg.delivered.is_(False)
+        )
+        backlog: dict[str, tuple[int, datetime | None]] = {}
+        with Session(self._engine) as session:
+            for name, query in (
+                ("pending_messages", pending),
+                ("review_queue", review),
+                ("whatsapp_outbox", outbox),
+            ):
+                count, oldest = session.execute(query).one()
+                backlog[name] = (count, oldest)
+        return backlog
 
     def counters(self, since: datetime) -> dict[str, int]:
         query = select(

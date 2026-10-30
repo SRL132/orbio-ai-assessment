@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
+from app import metrics
 from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -74,6 +75,7 @@ class ScreeningService:
         state = ConversationState(client_id=self.config.client_id, channel=channel)
         result = engine.start(state, self.config, self.ports)
         self.repo.create(result.state, result.events, result.replies)
+        metrics.record_events(result.events)
         logger.info("conversation_started id=%s channel=%s", state.conversation_id, channel)
         return state.conversation_id
 
@@ -114,6 +116,7 @@ class ScreeningService:
             text="\n".join(m.text for m in pending),
             received_at=pending[-1].created_at,
         )
+        started = time.monotonic()
         result = engine.turn(state, message, self.config, self.ports)
         self.repo.save_turn(
             result.state,
@@ -123,6 +126,8 @@ class ScreeningService:
             redact=result.redact_inbound,
             lease_owner=owner,
         )
+        metrics.TURN_SECONDS.labels(state.channel).observe(time.monotonic() - started)
+        metrics.record_events(result.events)
         logger.info(
             "turn id=%s messages=%d status=%s stage=%s",
             conversation_id,
@@ -147,6 +152,7 @@ class ScreeningService:
                 self.repo.save_turn(
                     result.state, result.events, result.replies, [], lease_owner=owner
                 )
+                metrics.record_events(result.events)
                 changed += 1
                 logger.info(
                     "silence id=%s status=%s reminders=%d",
@@ -165,6 +171,7 @@ class ScreeningService:
             text = self.config.template(state.language, "text_only", state.channel)
             event = DomainEvent(type=EventType.NON_TEXT_MESSAGE)
             self.repo.save_turn(state, [event], [text], [], lease_owner=owner)
+            metrics.record_events([event])
 
     # --- Recruiter actions (writes go through the domain, never straight to the database) -----
 
@@ -182,6 +189,7 @@ class ScreeningService:
                 state, status, reason, actor, self.config, self.ports
             )
             self.repo.save_turn(new_state, events, [], [], lease_owner=owner)
+            metrics.record_events(events)
             logger.info("override id=%s to=%s", conversation_id, status.value)
 
     # Notes, views and exports only append audit events, which never conflict with a turn.

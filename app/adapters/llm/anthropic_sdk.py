@@ -14,6 +14,7 @@ from typing import Literal
 import anthropic
 from anthropic.types.beta import BetaMessage, BetaOutputConfigParam, BetaTextBlockParam
 
+from app import metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
@@ -114,16 +115,19 @@ class AnthropicLLM:
 
     def _log(self, kind: str, response: BetaMessage, started: float) -> None:
         usage = response.usage
+        prompt = (
+            usage.input_tokens
+            + (usage.cache_read_input_tokens or 0)
+            + (usage.cache_creation_input_tokens or 0)
+        )
+        cost = 0.0
+        if self._prices is not None:
+            cost = (prompt * self._prices[0] + usage.output_tokens * self._prices[1]) / 1e6
         if self.meter is not None:
-            prompt = (
-                usage.input_tokens
-                + (usage.cache_read_input_tokens or 0)
-                + (usage.cache_creation_input_tokens or 0)
-            )
-            cost = 0.0
-            if self._prices is not None:
-                cost = (prompt * self._prices[0] + usage.output_tokens * self._prices[1]) / 1e6
             self.meter.record(prompt, usage.output_tokens, cost)
+        metrics.record_llm_call(
+            "anthropic", kind, time.monotonic() - started, prompt, usage.output_tokens, cost
+        )
         logger.info(
             "llm_call provider=anthropic kind=%s model=%s input_tokens=%s output_tokens=%s "
             "cache_read_tokens=%s stop_reason=%s latency_ms=%d request_id=%s",

@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
+from prometheus_client import REGISTRY
 
 from app.adapters.llm.anthropic_sdk import FALLBACK_BETA, AnthropicLLM, RefusalError
 from app.adapters.llm.openrouter import OpenRouterLLM
@@ -188,6 +189,9 @@ class TestAnthropic:
         assert reply == "¿Qué día podrías empezar?"
 
     def test_calls_are_metered_and_priced(self) -> None:
+        calls = REGISTRY.get_sample_value(
+            "sazon_llm_calls_total", {"provider": "anthropic", "kind": "complete"}
+        )
         meter = UsageMeter()
         messages = _StubMessages(_response(text="hola"))
         client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
@@ -196,6 +200,10 @@ class TestAnthropic:
         # 1,000 prompt tokens (cache included) at $1/M plus 80 output tokens at $5/M.
         assert (meter.calls, meter.prompt_tokens, meter.completion_tokens) == (1, 1000, 80)
         assert meter.cost_usd == pytest.approx(0.0014)
+        after = REGISTRY.get_sample_value(
+            "sazon_llm_calls_total", {"provider": "anthropic", "kind": "complete"}
+        )
+        assert after == (calls or 0) + 1  # also exported to Prometheus
 
     def test_unpriced_calls_count_tokens_only(self) -> None:
         meter = UsageMeter()

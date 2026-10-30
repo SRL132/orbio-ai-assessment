@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from app import metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
@@ -118,12 +119,14 @@ class OpenRouterLLM:
         response = self._post(body)
         data = response.json()
         usage = data.get("usage") or {}
-        if self.meter is not None:  # OpenRouter always returns usage, including `cost`
-            self.meter.record(
-                int(usage.get("prompt_tokens") or 0),
-                int(usage.get("completion_tokens") or 0),
-                float(usage.get("cost") or 0.0),
-            )
+        prompt = int(usage.get("prompt_tokens") or 0)
+        completion = int(usage.get("completion_tokens") or 0)
+        cost = float(usage.get("cost") or 0.0)  # OpenRouter always reports usage and cost
+        if self.meter is not None:
+            self.meter.record(prompt, completion, cost)
+        metrics.record_llm_call(
+            "openrouter", kind, time.monotonic() - started, prompt, completion, cost
+        )
         logger.info(
             "llm_call provider=openrouter kind=%s model=%s input_tokens=%s output_tokens=%s "
             "cost=%s latency_ms=%d",

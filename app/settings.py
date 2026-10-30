@@ -46,6 +46,8 @@ class Settings(BaseSettings):
 
     recruiter_users: SecretStr | None = None
     session_secret: SecretStr | None = None
+    # When set, /metrics needs "Authorization: Bearer <token>" (else keep it off the internet).
+    metrics_token: SecretStr | None = None
 
     # Rate limits (shared by every worker: counted in the database).
     login_attempts_per_ip_per_15_min: int = 20
@@ -62,6 +64,7 @@ class Settings(BaseSettings):
         "whatsapp_app_secret",
         "recruiter_users",
         "session_secret",
+        "metrics_token",
         mode="before",
     )
     @classmethod

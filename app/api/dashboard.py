@@ -20,6 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import SecretStr
 
+from app import metrics
 from app.adapters.storage.dashboard import Filters
 from app.api.auth import parse_users, verify_password
 from app.api.limits import QUARTER_HOUR, client_ip
@@ -106,6 +107,7 @@ async def login(
     if limiter.exceeded(by_ip, s.login_attempts_per_ip_per_15_min, QUARTER_HOUR) or (
         limiter.exceeded(by_email, s.login_failures_per_email_per_15_min, QUARTER_HOUR)
     ):
+        metrics.RATE_LIMITED.labels("login").inc()
         return _login_page(request, bool(users), TOO_MANY_LOGINS, status.HTTP_429_TOO_MANY_REQUESTS)
     limiter.hit(by_ip, QUARTER_HOUR)
     stored = users.get(email)

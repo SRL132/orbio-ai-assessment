@@ -189,6 +189,21 @@ Design only; the demo runs as one process.
 | Cost per conversation (tokens × price) | Budget at 10K/week | > 2× the baseline |
 | Outbox backlog | ATS sync stuck | undelivered > 1 h |
 
+Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token). Each signal above maps to a metric:
+
+| Signal | Metric |
+| --- | --- |
+| Turn latency | `sazon_turn_seconds` (histogram, by channel) |
+| LLM errors and fallbacks | `sazon_events_total{type="extractor_failed" \| "responder_failed" \| "reply_rejected"}`, against `sazon_llm_calls_total` |
+| LLM latency, tokens, cost | `sazon_llm_call_seconds`, `sazon_llm_tokens_total`, `sazon_llm_cost_usd_total` (by provider) |
+| Queue depth and age | `sazon_pending_messages`, `sazon_pending_messages_oldest_seconds` (read from the database at scrape time) |
+| Outcomes | `sazon_outcomes_total{status}` (completion and drop-off in detail: the analytics page) |
+| Review-queue size and age | `sazon_review_queue`, `sazon_review_queue_oldest_seconds` |
+| Outbox backlog | `sazon_whatsapp_outbox`, `sazon_whatsapp_outbox_oldest_seconds`, `sazon_whatsapp_messages_total{result}` |
+| Abuse | `sazon_rate_limited_total{endpoint}` |
+
+Labels are enums and provider names only, never ids or personal data. Not built yet: tracing and the nightly live eval job.
+
 Logs are structured and contain IDs, never message text or names (already true in the code). Traces follow one turn across API → queue → worker → LLM. A nightly job runs the live eval suite against production config and posts the scores.
 
 **10K candidates a week:** ~15K messages a day, a few per second at peak. Two to four worker replicas cover LLM latency comfortably; Postgres load is trivial. The real limits are LLM rate limits and cost, so the provider choice and prompt caching matter more than infrastructure.

@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import httpx
 
+from app import metrics
 from app.adapters.channels.quick_replies import quick_replies
 from app.adapters.channels.whatsapp import WhatsAppClient, parse_webhook
 from app.domain.models import TERMINAL_STATUSES, Channel, Stage
@@ -99,6 +100,7 @@ class WhatsAppChannel:
                 else:
                     # Free-form messages aren't allowed after 24 h and no template is set up.
                     repo.mark_delivery(item.message_id, True, "skipped: outside 24h window")
+                    metrics.WHATSAPP_SENT.labels("skipped").inc()
                     logger.info("whatsapp_skipped_outside_window id=%s", item.conversation_id)
                     continue
             except httpx.HTTPError as exc:
@@ -109,6 +111,7 @@ class WhatsAppChannel:
                 )
                 give_up = not retryable or item.attempts + 1 >= MAX_ATTEMPTS
                 repo.mark_delivery(item.message_id, give_up, f"failed: {type(exc).__name__}")
+                metrics.WHATSAPP_SENT.labels("gave_up" if give_up else "retrying").inc()
                 logger.warning(
                     "whatsapp_send_failed id=%s attempts=%d give_up=%s",
                     item.conversation_id,
@@ -117,5 +120,6 @@ class WhatsAppChannel:
                 )
                 continue
             repo.mark_delivery(item.message_id, True)
+            metrics.WHATSAPP_SENT.labels("sent").inc()
             sent += 1
         return sent

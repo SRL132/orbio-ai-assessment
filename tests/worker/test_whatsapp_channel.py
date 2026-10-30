@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import httpx
 import pytest
+from prometheus_client import REGISTRY
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
@@ -73,8 +74,12 @@ def say(service: ScreeningService, channel: WhatsAppChannel, text: str) -> None:
 
 def test_first_message_opens_a_conversation_with_buttons(setup) -> None:
     _service, channel, fake, _ = setup
+    sent = REGISTRY.get_sample_value("sazon_whatsapp_messages_total", {"result": "sent"}) or 0
     assert channel.handle(incoming("hola")) == []  # the greeting asks for consent first
     assert channel.dispatch_once() == 1
+    assert REGISTRY.get_sample_value("sazon_whatsapp_messages_total", {"result": "sent"}) == (
+        sent + 1
+    )
     to, text, options = fake.sent[0]
     assert to == PHONE
     assert "Lucía" in text

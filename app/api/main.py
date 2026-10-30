@@ -16,9 +16,11 @@ from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from app import metrics
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
@@ -102,6 +104,18 @@ def create_app(container: Container | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    backlog = CollectorRegistry()
+    backlog.register(metrics.BacklogCollector(c.queries.backlog, c.clock.now))
+
+    @app.get("/metrics")
+    def prometheus(request: Request) -> Response:
+        token = c.settings.metrics_token
+        sent = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if token is not None and not secrets.compare_digest(sent, token.get_secret_value()):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+        body = generate_latest(REGISTRY) + generate_latest(backlog)
+        return Response(body, media_type=CONTENT_TYPE_LATEST)
+
     @app.get("/")
     def root() -> RedirectResponse:
         return RedirectResponse("/chat")
@@ -124,7 +138,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         if not c.limiter.allow(
             f"chat-start:{client_ip(request)}", c.settings.chat_starts_per_ip_per_hour, HOUR
         ):
-            raise too_many(HOUR)
+            raise too_many("chat_start", HOUR)
         conversation_id = await asyncio.to_thread(c.service.start_conversation, channel)
         response.set_cookie(
             CHAT_COOKIE,
@@ -170,7 +184,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         c = get(request)
         limit = c.settings.chat_messages_per_conversation_per_minute
         if not c.limiter.allow(f"chat-message:{conversation_id}", limit, MINUTE):
-            raise too_many(MINUTE)
+            raise too_many("chat_message", MINUTE)
         try:
             await asyncio.to_thread(c.service.receive, conversation_id, body.text)
         except KeyError:
