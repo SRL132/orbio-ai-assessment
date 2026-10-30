@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -36,11 +37,13 @@ class Run(BaseModel):
     model: str
     responder_model: str | None = None
     simulate: bool = False
+    reasoning: str | None = "low"  # OpenRouter reasoning effort: none, minimal, low, …
 
 
 class Matrix(BaseModel):
     budget_usd: float = 5.0
     simulator_model: str
+    simulator_reasoning: str | None = "none"
     runs: list[Run]
 
     def slugs(self) -> set[str]:
@@ -87,6 +90,7 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
     parser.add_argument("--budget-usd", type=float, help="override the budget in the config")
     parser.add_argument("--check-models", action="store_true", help="only check the model ids")
     parser.add_argument("--scenario", action="append", help="run only these scenario ids")
+    parser.add_argument("--parallel", type=int, default=1, help="runs executed side by side")
     args = parser.parse_args(argv)
 
     matrix = Matrix.model_validate(yaml.safe_load(args.config.read_text(encoding="utf-8")))
@@ -110,22 +114,28 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
     config = load_client_config(settings.client_id)
     scenarios = load_scenarios(args.scenario)
     meter = UsageMeter()
-    rows: list[tuple[Run, dict[str, Any] | None]] = []
-    for run in matrix.runs:
+
+    def execute(run: Run) -> tuple[Run, dict[str, Any] | None]:
         if meter.cost_usd >= budget:
-            rows.append((run, None))
-            continue
+            return run, None
         simulator_model = matrix.simulator_model if run.simulate else None
         extractor, responder, simulator = openrouter_trio(
             settings, run.model, run.responder_model, simulator_model, meter, transport
         )
+        for llm in {id(x): x for x in (extractor, responder)}.values():
+            llm.reasoning_effort = run.reasoning
+        if run.simulate:
+            simulator.reasoning_effort = matrix.simulator_reasoning
         harness = Harness(config, extractor, responder, meter)
         results, complete = run_suite(
             harness, scenarios, simulator if run.simulate else None, budget
         )
         summary = summarize(results, complete)
-        rows.append((run, summary))
         print(f"{run.name}: {summary['passed']}/{summary['total']} · ${meter.cost_usd:.3f} so far")
+        return run, summary
+
+    with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
+        rows: list[tuple[Run, dict[str, Any] | None]] = list(pool.map(execute, matrix.runs))
 
     RESULTS.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")

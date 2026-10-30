@@ -11,6 +11,7 @@ from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import ConversationState, DomainEvent
+from tests.conftest import write_concurrently
 
 URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="TEST_DATABASE_URL not set")
@@ -44,3 +45,10 @@ def test_round_trip_and_double_booking(engine, config: ClientConfig) -> None:
     assert calendar.book("es-madrid", slot, state.conversation_id) is True
     # A real second candidate: the unique constraint (not a foreign key) must reject it.
     assert calendar.book("es-madrid", slot, other.conversation_id) is False
+
+
+def test_concurrent_writers_get_distinct_seqs(engine, config: ClientConfig) -> None:
+    repo = SqlRepository(engine, FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC)))
+    state = ConversationState(client_id=config.client_id)
+    repo.create(state, [], ["greeting"])
+    assert write_concurrently(repo, state) == list(range(1, 162))

@@ -109,3 +109,44 @@ def test_full_run_writes_a_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_table_marks_runs_skipped_by_the_budget() -> None:
     run = compare.Run(name="X", model="x/y")
     assert "not run: budget reached" in compare.table([(run, None)], 5.0, 5.0)
+
+
+def test_reasoning_effort_is_sent_and_can_be_turned_off(
+    config: ClientConfig, state: ConversationState
+) -> None:
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return fake_openrouter().handler(request)  # type: ignore[attr-defined]
+
+    llm = OpenRouterLLM("k", "m", transport=httpx.MockTransport(handler))
+    llm.compose(AskField(field=FieldName.FULL_NAME), state, config)
+    llm.reasoning_effort = None
+    llm.compose(AskField(field=FieldName.FULL_NAME), state, config)
+    assert bodies[0]["reasoning"] == {"effort": "low", "exclude": True}
+    assert "reasoning" not in bodies[1]
+
+
+def test_per_run_reasoning_reaches_the_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    efforts: list[object] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            efforts.append(json.loads(request.content).get("reasoning"))
+        return fake_openrouter(models=("a/one", "s/sim")).handler(request)  # type: ignore[attr-defined]
+
+    path = tmp_path / "m.yaml"
+    path.write_text("simulator_model: s/sim\nruns:\n  - {name: A, model: a/one, reasoning: none}\n")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(compare, "RESULTS", tmp_path / "results")
+    assert (
+        compare.main(
+            ["--config", str(path), "--scenario", "no_license"], httpx.MockTransport(handler)
+        )
+        == 0
+    )
+    assert efforts
+    assert all(e == {"effort": "none", "exclude": True} for e in efforts)

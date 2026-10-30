@@ -26,7 +26,6 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     create_engine,
-    func,
     select,
     true,
     update,
@@ -84,6 +83,9 @@ class ConversationRow(Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     review_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
     next_reminder_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
+    # conversation (webhook inbound, worker reply) queue up instead of colliding.
+    last_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
     state: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -207,7 +209,7 @@ class SqlRepository:
                     id=str(uuid4()),
                     conversation_id=row.id,
                     client_id=row.client_id,
-                    seq=_next_seq(session, row.id),
+                    seq=_reserve_seqs(session, row.id, 1),
                     direction="in",
                     text=text,
                     channel_message_id=channel_message_id,
@@ -264,7 +266,9 @@ class SqlRepository:
                     created_at=now,
                 )
             )
-        seq = _next_seq(session, conversation_id)
+        if not replies:
+            return
+        seq = _reserve_seqs(session, conversation_id, len(replies))
         external = state.channel in EXTERNAL_CHANNELS  # web chat and voice poll; others are pushed
         for offset, text in enumerate(replies):
             session.add(
@@ -416,11 +420,16 @@ class SqlRepository:
                 row.updated_at = now
 
 
-def _next_seq(session: Session, conversation_id: str) -> int:
-    current = session.scalar(
-        select(func.max(MessageRow.seq)).where(MessageRow.conversation_id == conversation_id)
-    )
-    return (current or 0) + 1
+def _reserve_seqs(session: Session, conversation_id: str, count: int) -> int:
+    """Reserve `count` consecutive message seqs and return the first. One atomic UPDATE: it holds
+    the conversation row lock until commit, unlike reading max(seq) and adding one."""
+    last = session.execute(
+        update(ConversationRow)
+        .where(ConversationRow.id == conversation_id)
+        .values(last_seq=ConversationRow.last_seq + count)
+        .returning(ConversationRow.last_seq)
+    ).scalar_one()
+    return int(last) - count + 1
 
 
 def _project(row: ConversationRow, state: ConversationState, now: datetime) -> None:

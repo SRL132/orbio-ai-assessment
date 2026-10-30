@@ -1,10 +1,12 @@
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.models import ConversationState, DomainEvent, Status
+from tests.conftest import write_concurrently
 
 
 @pytest.fixture
@@ -35,6 +37,17 @@ def test_messages_are_ordered_and_pending_until_processed(
     repo.save_turn(state, [], ["¿Apellido?"], pending)
     assert repo.pending_inbound(state.conversation_id) == []
     assert [m.seq for m in repo.messages(state.conversation_id, after_seq=1)] == [2, 3, 4]
+
+
+def test_concurrent_writers_get_distinct_seqs(
+    tmp_path: Path, clock: FakeClock, state: ConversationState
+) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'race.db'}")  # a file: threads share it for real
+    repo = SqlRepository(engine, clock)
+    repo.create(state, [], ["greeting"])
+    seqs = write_concurrently(repo, state)
+    engine.dispose()
+    assert seqs == list(range(1, 162))  # greeting + 160 messages, no gaps or duplicates
 
 
 def test_duplicate_channel_message_is_ignored(

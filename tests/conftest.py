@@ -1,3 +1,4 @@
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -64,3 +65,29 @@ def ex(
         sensitive_data=sensitive_data,
         question=question,
     )
+
+
+def write_concurrently(repo: Any, state: ConversationState, threads: int = 16) -> list[int]:
+    """Inbound messages and agent replies for one conversation from many threads at once, as
+    when a WhatsApp webhook arrives while the worker saves a turn. Returns the message seqs."""
+    errors: list[str] = []
+    barrier = threading.Barrier(threads)
+
+    def write(n: int) -> None:
+        barrier.wait()
+        for i in range(10):
+            try:
+                if n % 2:
+                    repo.add_inbound(state.conversation_id, f"in {n}.{i}")
+                else:
+                    repo.save_turn(state, [], [f"out {n}.{i}"], [])
+            except Exception as exc:
+                errors.append(type(exc).__name__)
+
+    workers = [threading.Thread(target=write, args=(n,)) for n in range(threads)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert errors == []
+    return [m.seq for m in repo.messages(state.conversation_id)]

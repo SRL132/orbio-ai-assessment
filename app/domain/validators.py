@@ -70,6 +70,8 @@ def validate_full_name(full_name: str | None) -> Outcome:
 
 
 def validate_license(has_license: bool | None, vehicle: Vehicle | None) -> Outcome:
+    if has_license is None and vehicle is not None:
+        has_license = True  # answering "Moto" / "Coche" / "Ambos" is a yes
     if has_license is None:
         return Outcome.invalid("missing")
     if not has_license:

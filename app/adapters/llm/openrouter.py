@@ -43,11 +43,15 @@ class OpenRouterLLM:
         timeout: float = 20.0,
         transport: httpx.BaseTransport | None = None,
         meter: UsageMeter | None = None,
+        reasoning_effort: str | None = "low",
     ) -> None:
         if not model:
             raise ValueError("OPENROUTER_MODEL is not set (see .env.example)")
         self._model = model
         self.meter = meter
+        # Screening turns are simple: little or no hidden reasoning keeps latency and cost down,
+        # and avoids reasoning eating the whole max_tokens budget (empty completion).
+        self.reasoning_effort = reasoning_effort
         self._client = httpx.Client(
             base_url=BASE_URL,
             timeout=timeout,
@@ -108,6 +112,8 @@ class OpenRouterLLM:
         }
         if response_format:
             body["response_format"] = response_format
+        if self.reasoning_effort:
+            body["reasoning"] = {"effort": self.reasoning_effort, "exclude": True}
         started = time.monotonic()
         response = self._post(body)
         data = response.json()

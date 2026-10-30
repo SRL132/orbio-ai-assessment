@@ -30,7 +30,7 @@ class MemoryCalendar:
 
     def book(self, location_id: str, starts_at: datetime, conversation_id: UUID) -> bool:
         if starts_at in self.booked:
-            return False
+            return self.booked[starts_at] == conversation_id
         self.booked[starts_at] = conversation_id
         return True
 

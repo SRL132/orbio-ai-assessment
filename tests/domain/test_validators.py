@@ -191,3 +191,10 @@ class TestFinalReviewReasons:
 
 def test_normalize() -> None:
     assert normalize("  Álvaro   OBREGÓN ") == "alvaro obregon"
+
+
+def test_choosing_a_vehicle_means_having_a_license() -> None:
+    # Found by the live evals: models extract "Moto" as the vehicle without has_license.
+    outcome = validate_license(None, Vehicle.MOTO)
+    assert outcome.kind == "valid"
+    assert outcome.updates == {"has_license": True, "vehicle": Vehicle.MOTO}

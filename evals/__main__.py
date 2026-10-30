@@ -48,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--simulator-model", help="OpenRouter: the model playing the candidate")
     parser.add_argument("--simulate", action="store_true", help="LLM-simulated candidates")
     parser.add_argument("--budget-usd", type=float, help="stop once this much has been spent")
+    parser.add_argument(
+        "--reasoning", default="low", help="OpenRouter reasoning effort (none, low…)"
+    )
     parser.add_argument("--scenario", action="append", help="run only these scenario ids")
     parser.add_argument("--check", action="store_true", help="exit 1 on regression")
     parser.add_argument("--write-baseline", action="store_true")
@@ -70,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
         extractor, responder, simulator = openrouter_trio(
             settings, settings.openrouter_model, args.responder_model, args.simulator_model, meter
         )
+        for llm in (extractor, responder, simulator):
+            llm.reasoning_effort = None if args.reasoning == "default" else args.reasoning
     else:
         extractor, responder = make_llm(settings)
         simulator = extractor if isinstance(extractor, Completer) else None

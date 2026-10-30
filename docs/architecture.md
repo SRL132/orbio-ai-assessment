@@ -78,6 +78,8 @@ The API normalizes input to `InboundMessage`, drops duplicates by channel messag
 
 A per-conversation lock (`SELECT … FOR UPDATE`, or a queue grouped by conversation ID), plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
 
+Storing an inbound message doesn't wait for that lock: a webhook must be acknowledged even while a turn is running. So message numbers come from a counter on the conversation row (`last_seq`), reserved with one atomic `UPDATE … RETURNING` that holds the row lock until commit. Concurrent writers to one conversation queue up instead of colliding, which reading `max(seq) + 1` didn't guarantee.
+
 ### 5. Append-only event log as source of truth
 
 Events (`message_received`, `field_extracted`, `field_rejected`, `status_changed`, `reminder_sent`, `override`) are never edited. The `candidates` table is a projection of them. One mechanism gives the audit trail, analytics, ATS sync (outbox) and replay for debugging.
@@ -193,7 +195,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Tests and evals | Pure engine + fake adapters; simulated candidates against the real engine | Low–Med |
 | Guardrails | Input: `intent` drives the policy. Output: a Python check on every reply, with a template fallback. Data: personal data redacted before logging | Low–Med |
 | RAG | `KnowledgeBase` port; a small FAQ goes in the cached prompt, embeddings only if it grows. Answers come only from the FAQ | Low–Med |
-| Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `BookSlot` actions; a database constraint prevents double-booking | Med |
+| Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `InterviewBooked` actions; a database constraint prevents double-booking. Booking is idempotent per candidate, so a turn that booked but failed to save can be retried (an external calendar can't join our transaction anyway) | Med |
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
 | Deployment design | Done: "Deployment and monitoring" above | Low |
 | Voice | Done: a `/voice` page on the same engine. Push-to-talk in the browser (Web Speech API, Chrome/Edge) → text → `engine.turn()` → reply spoken by ElevenLabs when `ELEVENLABS_API_KEY` is set, else by the browser. Voice templates (no emoji or "·" lists, options as sentences, spoken dates), a speech-aware prompt note, spoken-number parsing, no debounce. See "Voice channel" below | Done |

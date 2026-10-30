@@ -47,7 +47,9 @@ class CalendarProvider(Protocol):
     def available_slots(self, location_id: str, after: datetime, count: int) -> list[datetime]: ...
 
     def book(self, location_id: str, starts_at: datetime, conversation_id: UUID) -> bool:
-        """Returns False if the slot was taken in the meantime."""
+        """Returns False if another candidate took the slot in the meantime. Idempotent: the
+        candidate who already holds the slot gets True again (the turn may be retried after a
+        failed save, and an external calendar can't join our database transaction)."""
         ...
 
 

@@ -2,7 +2,8 @@
 
 Slots come from the client config (`interview.slot_times`) in each location's local time.
 Bookings live in the `interviews` table, whose unique constraint is what prevents double
-booking. In production this adapter would call each location's real calendar instead.
+booking (two candidates racing for a slot); the check before it makes rebooking idempotent.
+In production this adapter would call each location's real calendar instead.
 """
 
 from __future__ import annotations
@@ -57,6 +58,16 @@ class SqlCalendar:
         return slots
 
     def book(self, location_id: str, starts_at: datetime, conversation_id: UUID) -> bool:
+        """Idempotent per candidate: booking the slot they already hold returns True, so a turn
+        that booked but failed to save can be retried."""
+        with Session(self._engine) as session:
+            holder = session.scalar(
+                select(InterviewRow.conversation_id).where(
+                    InterviewRow.location_id == location_id, InterviewRow.starts_at == starts_at
+                )
+            )
+        if holder is not None:
+            return holder == str(conversation_id)
         row = InterviewRow(
             id=str(uuid4()),
             client_id=self._config.client_id,
