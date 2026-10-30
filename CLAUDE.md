@@ -27,6 +27,7 @@ Where the vision and the process design disagree on details, the process design 
 - **Ratchets never go down.** Don't lower `fail_under`, remove modules from mypy strict, add `per-file-ignores` / `# noqa`, or lower `evals/baseline.json` to make a check pass. Fix the code instead, or ask.
 - **When coverage rises, raise `fail_under`** in the same change.
 - **Prompts are code.** Prompts live in `app/adapters/llm/prompts/`. After changing a prompt or the policy, run the offline evals (`--check`) and, if a key is available, the live evals, and compare with the baseline. Evals only ever use the synthetic scenarios.
+- **Schema changes need a migration.** Change the models, then autogenerate a migration and review it; `tests/test_migrations.py` fails if they drift.
 - **Test the behaviour you change.** New validator or policy rule → unit test. New adapter → contract test against its fake.
 
 ## Working with the docs
@@ -46,6 +47,8 @@ uv run pytest --cov                           # tests + coverage ratchet
 uv run deptry . && uv run pip-audit           # dependency hygiene
 uv run pre-commit install                     # enable the git pre-commit hooks
 uv run python -m app.cli hash-password        # hash for a RECRUITER_USERS entry
+uv run alembic revision --autogenerate -m "…"  # after changing models in app/adapters/storage/sql.py
+docker compose up --build                     # app + Postgres, like production
 uv run python -m evals --check                # offline evals vs evals/baseline.json (free)
 uv run python -m evals --provider openrouter --model <slug>   # live evals (costs money)
 ```

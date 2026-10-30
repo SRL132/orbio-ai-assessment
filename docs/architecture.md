@@ -161,8 +161,8 @@ Design only; the demo runs as one process.
 **Deploy**
 
 - **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
-- **Services:** three container services from one image: `api` (webhooks, chat, dashboard), `worker` (turn processing, N replicas), `scheduler` (reminders, outbox dispatch). Stateless; scale `worker` on queue depth.
-- **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes through Alembic migrations, run before each deploy (the demo uses `create_all`).
+- **Services:** one image (`Dockerfile`; `docker-compose.yml` runs it locally with Postgres) deployed as three container services: `api` (webhooks, chat, dashboard), `worker` (turn processing, N replicas), `scheduler` (reminders, outbox dispatch). Stateless; scale `worker` on queue depth.
+- **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
 - **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
 - **Release:** CI gates (lint, types, boundaries, tests, offline evals) → image → staging with live evals → production. Prompt and config changes ship per client behind a version number, so one client can be rolled back without the others.
 

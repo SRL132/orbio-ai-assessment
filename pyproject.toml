@@ -5,11 +5,13 @@ description = "AI candidate screening agent and recruiter dashboard for Grupo Sa
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.20.1",
     "anthropic>=2.3.0",
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
     "itsdangerous>=2.2.0",
     "jinja2>=3.1.6",
+    "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
     "python-multipart>=0.0.32",
@@ -101,5 +103,6 @@ skip_covered = true
 # --- Dependency hygiene ----------------------------------------------------
 [tool.deptry.per_rule_ignores]
 # Used at runtime but never imported directly: the ASGI server, FastAPI's form parser, the
-# template engine behind fastapi.templating, and the signer behind Starlette's sessions.
-DEP002 = ["uvicorn", "python-multipart", "jinja2", "itsdangerous"]
+# template engine behind fastapi.templating, the signer behind Starlette's sessions, and the
+# Postgres driver SQLAlchemy loads from a postgresql+psycopg:// URL.
+DEP002 = ["uvicorn", "python-multipart", "jinja2", "itsdangerous", "psycopg"]

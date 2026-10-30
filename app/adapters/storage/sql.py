@@ -33,6 +33,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from app.adapters.storage.migrate import upgrade
 from app.domain.models import ConversationState, DomainEvent, StoredMessage
 from app.domain.ports import Clock
 
@@ -125,11 +126,17 @@ class InterviewRow(Base):
 
 
 def make_engine(url: str) -> Engine:
-    if url.startswith("sqlite:///") and not url.startswith("sqlite:///:memory:"):
+    """Engine for `url`. In-memory SQLite (tests, evals) gets `create_all`; real databases are
+    brought up to date with the Alembic migrations instead."""
+    in_memory = url in ("sqlite://", "sqlite:///:memory:")
+    if url.startswith("sqlite:///") and not in_memory:
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+    if not in_memory:
+        upgrade(url)
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     engine = create_engine(url, connect_args=connect_args)
-    Base.metadata.create_all(engine)
+    if in_memory:
+        Base.metadata.create_all(engine)
     return engine
 
 

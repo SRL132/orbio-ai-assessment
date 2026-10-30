@@ -10,6 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     env:
       LLM_PROVIDER: fake
+      TEST_DATABASE_URL: postgresql+psycopg://sazon:sazon@localhost:5432/sazon_test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sazon
+          POSTGRES_PASSWORD: sazon
+          POSTGRES_DB: sazon_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sazon" --health-interval 5s --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,3 +44,10 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag sazon-screening:ci .

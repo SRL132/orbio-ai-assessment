@@ -18,7 +18,15 @@ uv run uvicorn --factory app.api.main:create_app --reload
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
 - Recruiter dashboard: http://127.0.0.1:8000/dashboard. Create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
 
-Upgrading from an earlier version? Delete `data/sazon.db` first: the demo creates its tables at startup and has no migrations.
+The database schema is managed with Alembic migrations, which run automatically at startup. A demo database created before migrations existed is refused with a clear message: delete `data/sazon.db` once.
+
+### Docker
+
+```bash
+docker compose up --build          # app + Postgres at http://localhost:8000
+```
+
+The image is multi-stage, runs as a non-root user with a health check, and applies migrations before starting. Settings come from `.env` if present.
 
 ### Configuration
 
@@ -87,7 +95,7 @@ The offline result shows the engine and policy behave as designed. It says littl
 - **Run the live evals** on the shortlisted models, pick the provider on accuracy, then latency, then cost, and record the baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set.
 - **WhatsApp channel adapter**, with pre-approved templates for messages after the 24-hour window.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
-- **Production hardening:** Postgres with Alembic migrations, a real queue and database-level locking, SSO for recruiters, rate limiting on login and chat, a CSRF token on dashboard forms (today: SameSite cookies), and retention jobs.
+- **Production hardening:** a real queue and database-level locking (Postgres and migrations are in place), SSO for recruiters, rate limiting on login and chat, a CSRF token on dashboard forms (today: SameSite cookies), and retention jobs.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
 - **Smarter re-engagement:** reminder timing by time of day and channel, and A/B tests on reminder wording, measured with the drop-off analytics.
 

@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.git
+.venv
+data/
+evals/results/
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+.coverage
+.claude/
