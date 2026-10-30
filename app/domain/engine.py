@@ -213,7 +213,7 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
     actions: list[Action] = []
     base = state.last_inbound_at or state.started_at or now
     sent = state.reminders_sent
-    hours = config.reminder_hours
+    hours = config.reminders_for(state.channel)
     if sent < len(hours):
         state.reminders_sent = sent + 1
         actions.append(Say(template=f"reminder_{sent + 1}"))
@@ -358,12 +358,13 @@ def _ask_current(state: ConversationState, config: ClientConfig) -> list[Action]
 def _schedule_reminder(
     state: ConversationState, config: ClientConfig, actions: list[Action]
 ) -> None:
-    if state.status != Status.IN_PROGRESS or not config.reminder_hours:
+    hours = config.reminders_for(state.channel)
+    if state.status != Status.IN_PROGRESS or not hours:
         return
     base = state.last_inbound_at or state.started_at
     if base is None:
         return
-    state.next_reminder_at = base + timedelta(hours=config.reminder_hours[0])
+    state.next_reminder_at = base + timedelta(hours=hours[0])
     actions.append(ScheduleReminder(at=state.next_reminder_at))
 
 

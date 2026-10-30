@@ -72,7 +72,7 @@ class FieldStatus(StrEnum):
 
 
 Language = Literal["es", "en"]
-Channel = Literal["chat", "voice"]
+Channel = Literal["chat", "voice", "whatsapp"]
 
 
 # --- Candidate record ---------------------------------------------------------------------------
@@ -279,6 +279,19 @@ class StoredMessage(BaseModel):
     direction: Literal["in", "out"]
     text: str
     created_at: datetime
+
+
+class Outbound(BaseModel):
+    """An agent message waiting to be delivered on an external channel (the outbox)."""
+
+    message_id: UUID
+    conversation_id: UUID
+    external_id: str
+    text: str
+    attempts: int
+
+
+EXTERNAL_CHANNELS = frozenset({"whatsapp"})
 
 
 class DomainEvent(BaseModel):

@@ -187,7 +187,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Bonus | Where it plugs in | Effort |
 | --- | --- | --- |
 | Analytics | SQL over the event log (funnel, drop-off, duration, outcomes) | Low |
-| Re-engagement | `next_reminder_at` + scheduler + reminder templates; WhatsApp 24 h rule in the adapter | Low |
+| Re-engagement | Done: scheduler + reminder templates; on WhatsApp the outbox delivers reminders to the phone at 2 h and 23 h (inside the 24 h window) | Low |
 | Multi-language | Extractor returns `language`; templates per language; stored values language-neutral, so code-switching is handled | Low |
 | Sentiment | `sentiment` / `confused` from the extractor; the policy rephrases with options or offers a human. Never used for qualification | Low |
 | Tests and evals | Pure engine + fake adapters; simulated candidates against the real engine | Low–Med |
@@ -197,6 +197,15 @@ Logs are structured and contain IDs, never message text or names (already true i
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
 | Deployment design | Done: "Deployment and monitoring" above | Low |
 | Voice | Done: a `/voice` page on the same engine. Push-to-talk in the browser (Web Speech API, Chrome/Edge) → text → `engine.turn()` → reply spoken by ElevenLabs when `ELEVENLABS_API_KEY` is set, else by the browser. Voice templates (no emoji or "·" lists, options as sentences, spoken dates), a speech-aware prompt note, spoken-number parsing, no debounce. See "Voice channel" below | Done |
+
+## WhatsApp channel
+
+The production channel, built on the WhatsApp Cloud API (Meta). It uses the same engine; only the edges differ.
+
+- **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one.
+- **Outbound, through an outbox:** agent replies on external channels are stored as undelivered messages, and a dispatcher sends them in order every second. Up to 3 options become reply buttons, longer lists a list message. Errors are retried (429 and 5xx) and given up after 5 attempts. Because reminders are just outbound messages, re-engagement now reaches the candidate's phone.
+- **The 24-hour rule:** free-form messages are only allowed within 24 h of the candidate's last message. The client config schedules WhatsApp reminders at 2 h and 23 h; later messages need an approved (paid) template or are skipped and logged.
+- **Demo:** Meta's free test number (up to 5 recipients) and an ngrok tunnel for the webhook. Code: `app/adapters/channels/whatsapp.py`, `app/worker/whatsapp.py`, `app/api/whatsapp.py`.
 
 ## Voice channel
 

@@ -16,9 +16,19 @@ uv run uvicorn --factory app.api.main:create_app --reload
 
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
+- WhatsApp: candidates message your WhatsApp number and get the same screening, with reply buttons, and reminders on their phone. Setup below.
 - Recruiter dashboard: http://127.0.0.1:8000/dashboard. Create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
 
 The database schema is managed with Alembic migrations, which run automatically at startup. A demo database created before migrations existed is refused with a clear message: delete `data/sazon.db` once.
+
+### WhatsApp (free with Meta's test number)
+
+1. Create an app at developers.facebook.com, add the **WhatsApp** product, and use the free test number. Add your own phone as a recipient (up to 5).
+2. In `.env`, set `WHATSAPP_ACCESS_TOKEN` (the temporary token from the WhatsApp setup page, or a system-user token), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` (App settings → Basic) and a `WHATSAPP_VERIFY_TOKEN` of your choice.
+3. Expose the app: `ngrok http 8000`. In WhatsApp → Configuration, set the callback URL to `https://<ngrok-host>/webhooks/whatsapp` with the same verify token, and subscribe to the `messages` field.
+4. Send "hola" to the test number from your phone.
+
+Replies and reminders go out through an outbox (`messages.delivered`), so a reminder created hours later reaches the phone like any reply. WhatsApp allows free-form messages only within 24 h of the candidate's last message, so on WhatsApp the reminders go out at 2 h and 23 h. Anything later needs an approved template (`WHATSAPP_REMINDER_TEMPLATE`, paid) or is skipped and logged.
 
 ### Docker
 
@@ -35,6 +45,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openrouter`, or `anthropic` |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | — | Development and model comparison (synthetic data only) |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-opus-5-5` | The intended production path |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | — | Optional: the WhatsApp channel (all four needed) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
@@ -46,7 +57,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 **Outcomes:** qualified (plus a booked interview), disqualified (kindly, with an offer to keep their details), needs review (with the reason), or abandoned (with the drop-off point). Each comes with a short summary for the recruiter.
 
-**Dashboard** ([spec](docs/recruiter-dashboard.md)): a filterable candidate list (including by channel, chat or voice) with counters, a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
+**Dashboard** ([spec](docs/recruiter-dashboard.md)): a filterable candidate list (including by channel: web chat, voice or WhatsApp) with counters, a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
 
 ## Architecture
 
@@ -93,7 +104,7 @@ The offline result shows the engine and policy behave as designed. It says littl
 ## Potential improvements
 
 - **Run the live evals** on the shortlisted models, pick the provider on accuracy, then latency, then cost, and record the baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set.
-- **WhatsApp channel adapter**, with pre-approved templates for messages after the 24-hour window.
+- **WhatsApp in production:** a permanent system-user token, approved reminder templates, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** a real queue and database-level locking (Postgres and migrations are in place), SSO for recruiters, rate limiting on login and chat, a CSRF token on dashboard forms (today: SameSite cookies), and retention jobs.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).

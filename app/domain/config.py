@@ -69,6 +69,10 @@ class ClientConfig(BaseModel):
     max_abuse_strikes: int = 2
     far_start_days: int = 60
     reminder_hours: list[float] = Field(default_factory=lambda: [2.0, 24.0])
+    channel_reminder_hours: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description="Per-channel override, e.g. WhatsApp keeps reminders inside its 24 h window.",
+    )
     abandon_after_hours: float = 24.0
     max_reply_chars: int = 250
     interview: InterviewConfig = Field(default_factory=InterviewConfig)
@@ -82,6 +86,9 @@ class ClientConfig(BaseModel):
         if channel == "voice" and key in self.voice_templates.get(language, {}):
             return self.voice_templates[language][key]
         return self.templates[language][key]
+
+    def reminders_for(self, channel: Channel) -> list[float]:
+        return self.channel_reminder_hours.get(channel, self.reminder_hours)
 
     def location(self, location_id: str) -> ServiceLocation | None:
         return next((loc for loc in self.locations if loc.id == location_id), None)

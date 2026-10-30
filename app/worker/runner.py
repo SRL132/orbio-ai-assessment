@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from uuid import UUID
 
 from app.worker.service import ScreeningService
@@ -29,6 +30,20 @@ class Runner:
         self._timers: dict[UUID, asyncio.TimerHandle] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         self._reminders: asyncio.Task[None] | None = None
+        self._periodic: list[tuple[str, Callable[[], object], float]] = []
+        self._periodic_tasks: list[asyncio.Task[None]] = []
+
+    def add_periodic(self, name: str, job: Callable[[], object], every_seconds: float) -> None:
+        """Run a blocking job in a worker thread every N seconds (e.g. the WhatsApp outbox)."""
+        self._periodic.append((name, job, every_seconds))
+
+    async def _loop(self, name: str, job: Callable[[], object], every: float) -> None:
+        while True:
+            try:
+                await asyncio.to_thread(job)
+            except Exception:
+                logger.exception("periodic_failed name=%s", name)
+            await asyncio.sleep(every)
 
     def notify(self, conversation_id: UUID) -> None:
         """A message arrived: (re)start this conversation's debounce timer."""
@@ -64,14 +79,18 @@ class Runner:
 
     def start(self) -> None:
         self._reminders = asyncio.create_task(self._reminder_loop())
+        self._periodic_tasks = [
+            asyncio.create_task(self._loop(name, job, every)) for name, job, every in self._periodic
+        ]
 
     async def stop(self) -> None:
         for timer in self._timers.values():
             timer.cancel()
         self._timers.clear()
-        if self._reminders is not None:
-            self._reminders.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._reminders
+        for task in [self._reminders, *self._periodic_tasks]:
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)

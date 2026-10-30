@@ -28,13 +28,20 @@ from sqlalchemy import (
     create_engine,
     func,
     select,
+    true,
     update,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.adapters.storage.migrate import upgrade
-from app.domain.models import ConversationState, DomainEvent, StoredMessage
+from app.domain.models import (
+    EXTERNAL_CHANNELS,
+    ConversationState,
+    DomainEvent,
+    Outbound,
+    StoredMessage,
+)
 from app.domain.ports import Clock
 
 REDACTED = "[redacted]"
@@ -98,6 +105,12 @@ class MessageRow(Base):
     channel_message_id: Mapped[str | None] = mapped_column(String(128))
     processed: Mapped[bool] = mapped_column(Boolean, default=False)
     redacted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Outbox for external channels: outbound messages wait here until the dispatcher sends them.
+    delivered: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), index=True
+    )
+    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    delivery_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
@@ -111,6 +124,20 @@ class EventRow(Base):
     type: Mapped[str] = mapped_column(String(64), index=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+
+
+class ChannelContactRow(Base):
+    """Who a WhatsApp number belongs to: their latest conversation."""
+
+    __tablename__ = "channel_contacts"
+    __table_args__ = (UniqueConstraint("channel", "external_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    channel: Mapped[str] = mapped_column(String(16))
+    external_id: Mapped[str] = mapped_column(String(64))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class InterviewRow(Base):
@@ -238,6 +265,7 @@ class SqlRepository:
                 )
             )
         seq = _next_seq(session, conversation_id)
+        external = state.channel in EXTERNAL_CHANNELS  # web chat and voice poll; others are pushed
         for offset, text in enumerate(replies):
             session.add(
                 MessageRow(
@@ -248,6 +276,7 @@ class SqlRepository:
                     direction="out",
                     text=text,
                     processed=True,
+                    delivered=not external,
                     created_at=now,
                 )
             )
@@ -306,6 +335,85 @@ class SqlRepository:
                 .order_by(EventRow.created_at, EventRow.seq)
             ).all()
             return [(r.created_at, DomainEvent(type=r.type, data=r.data)) for r in rows]
+
+    # --- External channels -------------------------------------------------------------------
+
+    def undelivered(self, channel: str, limit: int = 50) -> list[Outbound]:
+        query = (
+            select(MessageRow, ChannelContactRow.external_id)
+            .join(ConversationRow, ConversationRow.id == MessageRow.conversation_id)
+            .join(
+                ChannelContactRow,
+                (ChannelContactRow.conversation_id == MessageRow.conversation_id)
+                & (ChannelContactRow.channel == channel),
+            )
+            .where(
+                MessageRow.direction == "out",
+                MessageRow.delivered.is_(False),
+                ConversationRow.channel == channel,
+            )
+            .order_by(MessageRow.created_at, MessageRow.seq)
+            .limit(limit)
+        )
+        with self._sessions() as session:
+            return [
+                Outbound(
+                    message_id=UUID(row.id),
+                    conversation_id=UUID(row.conversation_id),
+                    external_id=external_id,
+                    text=row.text,
+                    attempts=row.delivery_attempts,
+                )
+                for row, external_id in session.execute(query)
+            ]
+
+    def mark_delivery(self, message_id: UUID, delivered: bool, error: str | None = None) -> None:
+        with self._sessions.begin() as session:
+            session.execute(
+                update(MessageRow)
+                .where(MessageRow.id == str(message_id))
+                .values(
+                    delivered=delivered,
+                    delivery_attempts=MessageRow.delivery_attempts + 1,
+                    delivery_error=error[:300] if error else None,
+                )
+            )
+
+    def conversation_for(self, channel: str, external_id: str) -> UUID | None:
+        with self._sessions() as session:
+            found = session.scalar(
+                select(ChannelContactRow.conversation_id).where(
+                    ChannelContactRow.channel == channel,
+                    ChannelContactRow.external_id == external_id,
+                )
+            )
+            return UUID(found) if found else None
+
+    def link_contact(
+        self, channel: str, external_id: str, conversation_id: UUID, client_id: str
+    ) -> None:
+        now = self._clock.now()
+        with self._sessions.begin() as session:
+            row = session.scalar(
+                select(ChannelContactRow).where(
+                    ChannelContactRow.channel == channel,
+                    ChannelContactRow.external_id == external_id,
+                )
+            )
+            if row is None:
+                session.add(
+                    ChannelContactRow(
+                        id=str(uuid4()),
+                        client_id=client_id,
+                        channel=channel,
+                        external_id=external_id,
+                        conversation_id=str(conversation_id),
+                        updated_at=now,
+                    )
+                )
+            else:
+                row.conversation_id = str(conversation_id)
+                row.updated_at = now
 
 
 def _next_seq(session: Session, conversation_id: str) -> int:

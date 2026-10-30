@@ -62,7 +62,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 
 | Case | What the agent does |
 | --- | --- |
-| **Stops responding** | Reminder at 2 h, last one at 24 h, then `abandoned` with the stage reached. A later reply resumes at the missing fields. |
+| **Stops responding** | Reminder at 2 h, last one at 24 h (23 h on WhatsApp, to stay inside its free 24 h window), then `abandoned` with the stage reached. A later reply resumes at the missing fields. |
 | **Invalid answer** | Acknowledge, rephrase with examples ("e.g. tomorrow, next Monday, 1 March"). Two tries, then `needs_review`. |
 | **Ambiguous answer** ("evenings, maybe weekends") | Store what is certain, confirm the rest with a yes/no. |
 | **Several answers at once** | Fill every field found; never ask for something already given. |

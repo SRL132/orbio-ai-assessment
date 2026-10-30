@@ -5,6 +5,7 @@
 ## Before you start
 
 - [ ] `.env` with the chosen provider and key, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
+- [ ] WhatsApp: app running with the `WHATSAPP_*` settings, an ngrok tunnel up, and the webhook verified in Meta's dashboard. Your phone is a verified test recipient.
 - [ ] Two browser windows: the candidate chat on a phone-sized window (`/chat`), the dashboard on the other (`/dashboard`).
 - [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice).
 - [ ] Terminal ready with `uv run python -m evals` and `uv run pytest -q`.
@@ -19,8 +20,9 @@
    - Switch to English mid-conversation: it follows.
    - "Quiero hablar con una persona": immediate hand-off.
    - Go silent: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
-4. **Voice call (2 min).** Open `/voice` in Chrome, press "Start call", and answer by voice: say the postal code out loud, then book the interview by saying "la segunda". Point out that it's the same engine and the same dashboard (filter by channel).
-5. **Recruiter side (4 min).** Counters → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
+4. **WhatsApp (2 min).** From your phone, send "hola" to the test number: the same screening with reply buttons. Press "+2 h" in the chat page's demo bar: the reminder arrives on the phone.
+5. **Voice call (2 min).** Open `/voice` in Chrome, press "Start call", and answer by voice: say the postal code out loud, then book the interview by saying "la segunda". Point out that it's the same engine and the same dashboard (filter by channel).
+6. **Recruiter side (4 min).** Counters → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
 
 Why this beats the status quo: no missed calls, recruiters only see qualified candidates and real edge cases, structured data ready for the ATS, and the interview is booked without a callback.
 

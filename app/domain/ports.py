@@ -16,6 +16,7 @@ from app.domain.models import (
     ConversationState,
     DomainEvent,
     ExtractionResult,
+    Outbound,
     ReAsk,
     StoredMessage,
 )
@@ -95,6 +96,20 @@ class Repository(Protocol):
     def messages(self, conversation_id: UUID, after_seq: int = 0) -> list[StoredMessage]: ...
 
     def due_reminders(self, now: datetime) -> list[UUID]: ...
+
+    # --- External channels (outbox + contacts) ---
+
+    def undelivered(self, channel: str, limit: int = 50) -> list[Outbound]: ...
+
+    def mark_delivery(self, message_id: UUID, delivered: bool, error: str | None = None) -> None:
+        """Record a send attempt; `delivered=False` with an error leaves it for a retry."""
+        ...
+
+    def conversation_for(self, channel: str, external_id: str) -> UUID | None: ...
+
+    def link_contact(
+        self, channel: str, external_id: str, conversation_id: UUID, client_id: str
+    ) -> None: ...
 
 
 @dataclass(frozen=True)

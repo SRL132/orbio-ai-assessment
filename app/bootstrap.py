@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
+from app.adapters.channels.whatsapp import WhatsAppClient
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.fake import TemplateResponder
@@ -20,6 +21,7 @@ from app.domain.ports import Clock, Extractor, Ports, Responder
 from app.settings import Settings
 from app.worker.runner import Runner
 from app.worker.service import ScreeningService
+from app.worker.whatsapp import WhatsAppChannel
 
 
 @dataclass
@@ -32,6 +34,7 @@ class Container:
     queries: DashboardQueries
     db: Engine
     tts: ElevenLabsTTS | None = None
+    whatsapp: WhatsAppChannel | None = None
 
     def close(self) -> None:
         self.db.dispose()
@@ -85,4 +88,22 @@ def build(settings: Settings | None = None) -> Container:
             settings.elevenlabs_voice_id,
             settings.elevenlabs_model,
         )
-    return Container(settings, config, clock, service, runner, queries, db, tts)
+    whatsapp = make_whatsapp(settings, service)
+    if whatsapp is not None:
+        runner.add_periodic(
+            "whatsapp_outbox", whatsapp.dispatch_once, settings.whatsapp_dispatch_seconds
+        )
+    return Container(settings, config, clock, service, runner, queries, db, tts, whatsapp)
+
+
+def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChannel | None:
+    if settings.whatsapp_access_token is None:
+        return None
+    if settings.whatsapp_verify_token is None or settings.whatsapp_app_secret is None:
+        raise ValueError("WhatsApp needs WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET too")
+    client = WhatsAppClient(
+        settings.whatsapp_access_token.get_secret_value(),
+        settings.whatsapp_phone_number_id,
+        settings.whatsapp_api_version,
+    )
+    return WhatsAppChannel(service, client, settings.whatsapp_reminder_template)

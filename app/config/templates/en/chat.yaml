@@ -81,3 +81,4 @@ value_evening: evening
 value_flexible: flexible
 experience_value: "{years} years · {platforms}"
 experience_value_one: "{years} year · {platforms}"
+text_only: For now I can only read text messages. Could you type it?

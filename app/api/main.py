@@ -21,6 +21,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
+from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
 from app.domain.models import Channel
 from app.worker.service import MAX_MESSAGE_CHARS
@@ -70,6 +71,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         https_only=not c.settings.demo_mode,
     )
     app.include_router(dashboard_router)
+    app.include_router(whatsapp_router)
 
     def get(request: Request) -> Container:
         c: Container = request.app.state.container

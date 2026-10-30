@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = ""
     elevenlabs_model: str = "eleven_multilingual_v2"
 
+    # Optional: WhatsApp Cloud API (Meta). Set the access token to turn the channel on.
+    whatsapp_access_token: SecretStr | None = None
+    whatsapp_phone_number_id: str = ""
+    whatsapp_verify_token: SecretStr | None = None
+    whatsapp_app_secret: SecretStr | None = None
+    whatsapp_api_version: str = "v26.0"
+    whatsapp_reminder_template: str = ""  # approved template for messages after 24 h (paid)
+    whatsapp_dispatch_seconds: float = 1.0
+
     database_url: str = "sqlite:///./data/sazon.db"
     client_id: str = "grupo_sazon"
 
@@ -38,6 +47,9 @@ class Settings(BaseSettings):
         "openrouter_api_key",
         "anthropic_api_key",
         "elevenlabs_api_key",
+        "whatsapp_access_token",
+        "whatsapp_verify_token",
+        "whatsapp_app_secret",
         "recruiter_users",
         "session_secret",
         mode="before",
