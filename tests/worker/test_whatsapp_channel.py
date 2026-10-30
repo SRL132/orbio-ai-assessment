@@ -175,3 +175,17 @@ def test_window_clock(setup) -> None:
     start = clock.now()
     clock.advance(hours=1)
     assert clock.now() - start == timedelta(hours=1)
+
+
+def test_only_one_process_dispatches_the_outbox(setup) -> None:
+    service, channel, fake, clock = setup
+    other_process = WhatsAppChannel(service, fake)  # type: ignore[arg-type]
+    channel.handle(incoming("hola"))
+    assert channel.dispatch_once() == 1  # this process holds the dispatcher lease
+    channel.handle(incoming("hola", phone="34600000002"))
+    assert other_process.dispatch_once() == 0  # so the other one doesn't send anything
+    assert channel.dispatch_once() == 1
+    clock.advance(seconds=31)  # the first process stopped renewing (it died)
+    channel.handle(incoming("hola", phone="34600000003"))
+    assert other_process.dispatch_once() == 1
+    assert len(fake.sent) == 3  # each greeting sent once

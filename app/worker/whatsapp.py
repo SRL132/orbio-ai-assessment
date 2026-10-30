@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -28,6 +28,10 @@ RETRY_STATUSES = frozenset({408, 429})
 SERVER_ERROR = 500
 RESTART_WORDS = frozenset({"hola", "hi", "hello", "start", "/start", "empezar", "empezamos"})
 TEMPLATE_LANGUAGE = {"es": "es", "en": "en_US"}
+# One dispatcher sends at a time, across processes, so nothing is sent twice and each
+# conversation's messages keep their order. It renews its lease every run; if its process
+# dies, another takes over after this long.
+DISPATCH_LEASE = timedelta(seconds=30)
 
 
 class WhatsAppChannel:
@@ -40,6 +44,7 @@ class WhatsAppChannel:
         self.service = service
         self.client = client
         self.reminder_template = reminder_template or None
+        self._dispatcher_id = uuid4().hex
 
     # --- Inbound --------------------------------------------------------------------------------
 
@@ -71,9 +76,12 @@ class WhatsAppChannel:
     # --- Outbound -------------------------------------------------------------------------------
 
     def dispatch_once(self) -> int:
-        """Send pending agent messages in order. Returns how many were sent."""
+        """Send pending agent messages in order. Returns how many were sent (0 when another
+        process is the dispatcher)."""
         repo = self.service.repo
         now = self.service.ports.clock.now()
+        if not repo.try_job_lease("whatsapp_outbox", self._dispatcher_id, now + DISPATCH_LEASE):
+            return 0
         sent = 0
         blocked: set[UUID] = set()  # keep per-conversation order: stop at the first failure
         for item in repo.undelivered(CHANNEL):

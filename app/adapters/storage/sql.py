@@ -34,6 +34,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.engine import Dialect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.adapters.storage.migrate import upgrade
@@ -153,6 +154,17 @@ class ChannelContactRow(Base):
     external_id: Mapped[str] = mapped_column(String(64))
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class JobLeaseRow(Base):
+    """Background jobs that must run in one process at a time (e.g. the WhatsApp outbox)."""
+
+    __tablename__ = "job_leases"
+
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32))
+    until: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class InterviewRow(Base):
@@ -291,6 +303,26 @@ class SqlRepository:
                 .where(row.id == str(conversation_id), row.lease_owner == owner)
                 .values(lease_owner=None, lease_until=None)
             )
+
+    def try_job_lease(self, name: str, owner: str, until: datetime) -> bool:
+        """Like `try_lease`, for a background job: the first caller creates the row (the
+        primary key rejects a second), later ones take it over once it has expired."""
+        job = JobLeaseRow
+        mine = (job.client_id == self._client_id) & (job.name == name)
+        try:
+            with self._sessions.begin() as session:
+                if session.get(job, (self._client_id, name)) is None:
+                    session.add(job(client_id=self._client_id, name=name, owner=owner, until=until))
+                    return True
+                taken = session.scalar(
+                    update(job)
+                    .where(mine, (job.owner == owner) | (job.until < self._clock.now()))
+                    .values(owner=owner, until=until)
+                    .returning(job.name)
+                )
+                return taken is not None
+        except IntegrityError:  # another process created the row first
+            return False
 
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         self._check_client(state)

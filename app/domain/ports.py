@@ -99,6 +99,11 @@ class Repository(Protocol):
 
     def release_lease(self, conversation_id: UUID, owner: str) -> None: ...
 
+    def try_job_lease(self, name: str, owner: str, until: datetime) -> bool:
+        """A lease for a background job that must run in one process at a time. The owner can
+        renew it; anyone can take it once it expires."""
+        ...
+
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         """Audit events that don't change the state (a recruiter viewed it, added a note)."""
         ...
