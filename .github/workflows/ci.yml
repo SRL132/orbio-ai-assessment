@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      LLM_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: Lint and format
+        run: uv run ruff format --check . && uv run ruff check .
+      - name: Types
+        run: uv run mypy app
+      - name: Architecture boundaries
+        run: uv run lint-imports
+      - name: Tests and coverage ratchet
+        run: uv run pytest --cov
+      - name: Dependency hygiene
+        run: uv run deptry . && uv run pip-audit
+      - name: Secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

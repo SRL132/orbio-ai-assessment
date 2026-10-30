@@ -1,0 +1,208 @@
+"""Field validators: pure functions that turn proposed values into an outcome.
+
+Rules come from `docs/process-design.md` (fields table) and are parameterised by the client
+config. The LLM proposes values; these functions decide whether they are acceptable.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Literal
+
+from app.domain.config import ClientConfig, ServiceLocation
+from app.domain.models import Availability, Candidate, Schedule, Vehicle
+
+OutcomeKind = Literal["valid", "invalid", "knockout", "review"]
+
+MAX_EXPERIENCE_YEARS = 60
+
+
+@dataclass(frozen=True)
+class Outcome:
+    kind: OutcomeKind
+    reason: str | None = None
+    updates: dict[str, object] = field(default_factory=dict)
+    note: str | None = None
+
+    @staticmethod
+    def valid(note: str | None = None, **updates: object) -> Outcome:
+        return Outcome("valid", updates=updates, note=note)
+
+    @staticmethod
+    def invalid(reason: str, **partial: object) -> Outcome:
+        return Outcome("invalid", reason=reason, updates=partial)
+
+    @staticmethod
+    def knockout(reason: str) -> Outcome:
+        return Outcome("knockout", reason=reason)
+
+    @staticmethod
+    def review(reason: str, **updates: object) -> Outcome:
+        return Outcome("review", reason=reason, updates=updates)
+
+
+def normalize(text: str) -> str:
+    """Lowercase, strip accents and collapse whitespace: 'Álvaro  Obregón' -> 'alvaro obregon'."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return " ".join(stripped.lower().split())
+
+
+_NAME_TOKEN = re.compile(r"[^\W\d_]+(?:[-'][^\W\d_]+)*", re.UNICODE)
+
+
+def validate_full_name(full_name: str | None) -> Outcome:
+    if not full_name or not full_name.strip():
+        return Outcome.invalid("missing")
+    tokens = _NAME_TOKEN.findall(full_name)
+    if not tokens:
+        return Outcome.invalid("not_a_name")
+    cleaned = " ".join(tokens)
+    if len(tokens) < 2:
+        return Outcome.invalid("surname_missing", full_name=cleaned)
+    return Outcome.valid(full_name=cleaned)
+
+
+def validate_license(has_license: bool | None, vehicle: Vehicle | None) -> Outcome:
+    if has_license is None:
+        return Outcome.invalid("missing")
+    if not has_license:
+        return Outcome.knockout("no_license")
+    if vehicle is None:
+        return Outcome.invalid("vehicle_missing", has_license=True)
+    return Outcome.valid(has_license=True, vehicle=vehicle)
+
+
+def _match_city(city: str, locations: list[ServiceLocation]) -> ServiceLocation | None:
+    wanted = normalize(city)
+    for loc in locations:
+        names = [loc.city, *loc.aliases]
+        if any(normalize(name) == wanted for name in names):
+            return loc
+    return None
+
+
+def _is_nearby(place: str, locations: list[ServiceLocation]) -> ServiceLocation | None:
+    wanted = normalize(place)
+    for loc in locations:
+        if any(normalize(name) == wanted for name in loc.nearby):
+            return loc
+    return None
+
+
+def _digits(text: str) -> str:
+    return "".join(ch for ch in text if ch.isdigit())
+
+
+def validate_location(
+    city: str | None, zone: str | None, postal_code: str | None, config: ClientConfig
+) -> Outcome:
+    # The city comes first: Spanish and Mexican postal codes overlap (e.g. 06xxx is Badajoz and
+    # also Mexico City), so a postal code alone never decides the location.
+    pc = _digits(postal_code) if postal_code else ""
+    if city:
+        served_city = _match_city(city, config.locations)
+        if served_city is not None:
+            if pc and any(pc.startswith(p) for p in served_city.postal_prefixes):
+                return Outcome.valid(
+                    location_id=served_city.id, city=served_city.city, postal_code=pc, zone=zone
+                )
+            if not served_city.zones:
+                return Outcome.valid(location_id=served_city.id, city=served_city.city, zone=zone)
+            if zone:
+                served = {normalize(z) for z in served_city.zones}
+                if normalize(zone) in served:
+                    return Outcome.valid(
+                        location_id=served_city.id, city=served_city.city, zone=zone
+                    )
+                if _is_nearby(zone, [served_city]):
+                    return Outcome.review("borderline_zone", city=served_city.city, zone=zone)
+                return Outcome.review("zone_not_listed", city=served_city.city, zone=zone)
+            if pc:
+                return Outcome.review(
+                    "postal_code_not_listed", city=served_city.city, postal_code=pc
+                )
+            return Outcome.invalid("zone_missing", city=served_city.city)
+        nearby = _is_nearby(city, config.locations)
+        if nearby is not None:
+            return Outcome.review("borderline_zone", city=city, zone=zone)
+        return Outcome.knockout("outside_area")
+
+    if pc:
+        return Outcome.invalid("city_missing", postal_code=pc)
+    return Outcome.invalid("missing")
+
+
+def validate_availability(availability: list[Availability]) -> Outcome:
+    if not availability:
+        return Outcome.invalid("missing")
+    return Outcome.valid(availability=sorted(set(availability)))
+
+
+def validate_schedule(schedule: list[Schedule]) -> Outcome:
+    if not schedule:
+        return Outcome.invalid("missing")
+    return Outcome.valid(schedule=sorted(set(schedule)))
+
+
+def normalize_platforms(platforms: list[str], known: list[str]) -> list[str]:
+    result: list[str] = []
+    for raw in platforms:
+        name = normalize(raw)
+        match = next((k for k in known if normalize(k) in name or name in normalize(k)), None)
+        value = match if match is not None else "other"
+        if name and value not in result:
+            result.append(value)
+    return result
+
+
+def validate_experience(
+    experience_years: float | None, platforms: list[str], config: ClientConfig
+) -> Outcome:
+    if experience_years is None:
+        return Outcome.invalid("missing")
+    if experience_years < 0 or experience_years > MAX_EXPERIENCE_YEARS:
+        return Outcome.invalid("out_of_range")
+    return Outcome.valid(
+        experience_years=experience_years,
+        platforms=normalize_platforms(platforms, config.known_platforms),
+    )
+
+
+def validate_start_date(start_date: date | None, today: date, config: ClientConfig) -> Outcome:
+    if start_date is None:
+        return Outcome.invalid("missing")
+    if start_date < today:
+        return Outcome.invalid("in_past")
+    if (start_date - today).days > config.far_start_days:
+        return Outcome.valid(note="start_date_far", start_date=start_date)
+    return Outcome.valid(start_date=start_date)
+
+
+def final_review_reasons(candidate: Candidate, config: ClientConfig) -> list[str]:
+    """Checks that need several fields at once, run before qualifying (e.g. license by country)."""
+    reasons: list[str] = []
+    loc = config.location(candidate.location_id) if candidate.location_id else None
+    rules = config.license_rules.get(loc.country) if loc else None
+    rides_moto = candidate.vehicle in (Vehicle.MOTO, Vehicle.BOTH)
+    # A country with no moto rules (e.g. Mexico, where categories vary by state) gets no check.
+    if rules is None or not (rules.accepted_for_moto or rules.conditional):
+        return reasons
+    if rides_moto and candidate.license_type:
+        license_type = candidate.license_type.strip().upper()
+        if license_type not in {t.upper() for t in rules.accepted_for_moto}:
+            conditional = next(
+                (
+                    r
+                    for r in rules.conditional
+                    if r.vehicle == Vehicle.MOTO and r.license_type.upper() == license_type
+                ),
+                None,
+            )
+            years = candidate.license_years
+            if conditional is None or years is None or years < conditional.min_years:
+                reasons.append("license_unclear")
+    return reasons

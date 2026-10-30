@@ -1,0 +1,31 @@
+# Same commands as CI (see docs/quality.md). Install with: uv run pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy app
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: lint-imports
+        name: import-linter (architecture boundaries)
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: gitleaks
+        name: gitleaks (secrets)
+        entry: gitleaks protect --staged --redact --no-banner
+        language: system
+        pass_filenames: false

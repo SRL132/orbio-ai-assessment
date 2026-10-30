@@ -1,0 +1,74 @@
+# Spanish chat templates. Fixed texts (consent, disqualification, recap) and fallbacks used when
+# the LLM's reply fails the output check. Placeholders: {name} {persona} {company}
+# {missing_count} {summary}. Tone rules: docs/process-design.md, "Message tone and length".
+
+greeting_consent: >-
+  ¡Hola! Soy {persona}, la asistente virtual de {company} 👋 Te hago 7 preguntas rápidas sobre
+  el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso:
+  [aviso de privacidad]. ¿Empezamos?
+consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos? (sí / no)
+consent_declined: Entendido, no guardaremos nada. Si cambias de opinión, escríbenos cuando quieras.
+
+ask_full_name: ¿Cómo te llamas? Nombre y apellido, por favor.
+ask_license: "¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo"
+ask_location: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.
+ask_availability: "¿Qué disponibilidad tienes? Jornada completa · Media jornada · Fines de semana"
+ask_schedule: "¿Qué horario prefieres? Mañana · Tarde · Noche · Flexible"
+ask_experience: ¿Has repartido antes? Dime cuántos años y en qué plataformas (Glovo, Uber Eats...).
+ask_start_date: ¿Qué día podrías empezar?
+
+reask_full_name: Perdona, ¿me dices también tu apellido?
+reask_license: No me quedó claro, ¿tienes carnet o licencia para moto, coche, ambos o no tienes?
+reask_location: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo, Madrid, Chamberí.
+reask_availability: Elige una o varias, ¿jornada completa, media jornada o fines de semana?
+reask_schedule: ¿Mañana, tarde, noche o flexible? Puedes elegir varias.
+reask_experience: ¿Cuánto tiempo has repartido? Si nunca lo has hecho, dime «ninguno», no pasa nada.
+reask_start_date: No me quedó claro, ¿qué día podrías empezar? Por ejemplo, mañana, el lunes o el 1 de marzo.
+
+disqualified_no_license: >-
+  Gracias, {name}. Para este puesto necesitamos carnet o licencia de conducir, así que ahora no
+  podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?
+disqualified_outside_area: >-
+  Gracias, {name}. Por ahora no repartimos en tu zona, así que no podemos seguir. ¿Quieres que
+  guardemos tus datos por si abrimos cerca de ti?
+keep_on_file_reask: ¿Guardamos tus datos para futuras ofertas? (sí / no)
+keep_on_file_yes: Hecho, te escribiremos si sale algo que encaje. ¡Gracias!
+keep_on_file_no: Entendido, no guardaremos tus datos. ¡Gracias por tu tiempo!
+
+recap: |-
+  Repasemos:
+  {summary}
+  ¿Es todo correcto?
+ask_change: Claro, ¿qué quieres cambiar?
+qualified: ¡Genial, {name}! Cumples los requisitos 🎉 En breve te propondré horarios para la entrevista aquí mismo.
+needs_review: ¡Gracias, {name}! Un reclutador revisará tu candidatura y te escribirá en 2 días laborables.
+handoff_human: Claro, aviso a una persona del equipo. Te escribirá en 1 día laborable.
+
+abuse_warning: Estoy aquí para ayudarte con tu candidatura. Sigamos con respeto, por favor.
+abuse_end: Vamos a dejarlo aquí. Un reclutador revisará tu caso.
+sensitive_data: No necesitamos ese dato ahora, así que no lo guardaremos.
+offer_human: Si lo prefieres, puedo pasarte con una persona del equipo. Solo dímelo.
+reminder_1: ¡Hola de nuevo! Solo nos faltan {missing_count} preguntas para tu candidatura. ¿Seguimos?
+reminder_2: Te guardamos el sitio un poco más, quedan {missing_count} preguntas. ¿Las terminamos?
+closed: Tu candidatura ya está registrada. Si necesitas algo, un reclutador se pondrá en contacto.
+technical_retry: Perdona, no te he entendido bien. ¿Me lo repites?
+answer_unknown: Buena pregunta, un reclutador te lo confirmará.
+
+label_full_name: Nombre
+label_license: Carnet
+label_location: Zona
+label_availability: Disponibilidad
+label_schedule: Horario
+label_experience: Experiencia
+label_start_date: Inicio
+value_moto: moto
+value_car: coche
+value_both: moto y coche
+value_full_time: jornada completa
+value_part_time: media jornada
+value_weekends: fines de semana
+value_morning: mañana
+value_afternoon: tarde
+value_evening: noche
+value_flexible: flexible
+experience_value: "{years} años · {platforms}"

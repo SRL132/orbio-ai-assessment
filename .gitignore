@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.import_linter_cache/
+
+# Local config and data
+.env
+*.db
+*.sqlite3
+data/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

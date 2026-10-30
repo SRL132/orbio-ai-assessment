@@ -1,0 +1,103 @@
+# Client configuration for Grupo Sazón.
+# Service areas, license rules and FAQ are invented for the demo: the brief doesn't list the
+# 45 real locations (see docs/process-design-appendix.md, D. Assumptions to confirm).
+
+client_id: grupo_sazon
+
+persona:
+  name: Lucía
+  company: Grupo Sazón
+
+field_priority:
+  - full_name
+  - license
+  - location
+  - availability
+  - schedule
+  - experience
+  - start_date
+
+max_attempts: 2
+max_abuse_strikes: 2
+far_start_days: 60
+reminder_hours: [2, 24]
+abandon_after_hours: 24
+max_reply_chars: 250
+
+known_platforms:
+  - Glovo
+  - Uber Eats
+  - Just Eat
+  - Deliveroo
+  - Rappi
+  - DiDi Food
+  - Amazon Flex
+
+locations:
+  - id: es-madrid
+    country: ES
+    city: Madrid
+    zones: [Centro, Chamberí, Salamanca, Retiro, Arganzuela, Tetuán, Chamartín, Moncloa]
+    postal_prefixes: ["280"]
+    nearby: [Alcobendas, Getafe, Leganés, Pozuelo de Alarcón, Alcorcón]
+  - id: es-barcelona
+    country: ES
+    city: Barcelona
+    zones: [Eixample, Gràcia, Sants, Sant Martí, Ciutat Vella, Les Corts]
+    postal_prefixes: ["080"]
+    nearby: [L'Hospitalet de Llobregat, Badalona, Cornellà de Llobregat]
+  - id: es-valencia
+    country: ES
+    city: Valencia
+    aliases: [València]
+    postal_prefixes: ["460"]
+    nearby: [Burjassot, Paterna, Mislata]
+  - id: es-sevilla
+    country: ES
+    city: Sevilla
+    aliases: [Seville]
+    postal_prefixes: ["410"]
+    nearby: [Dos Hermanas, Mairena del Aljarafe]
+  - id: mx-cdmx
+    country: MX
+    city: Ciudad de México
+    aliases: [CDMX, Mexico City, DF, Ciudad de Mexico]
+    zones: [Roma, Roma Norte, Roma Sur, Condesa, Polanco, Coyoacán, Del Valle, Narvarte, Juárez]
+    postal_prefixes: ["060", "061", "065", "066", "067", "030", "031", "040", "041", "115"]
+    nearby: [Naucalpan, Tlalnepantla, Ciudad Nezahualcóyotl]
+  - id: mx-guadalajara
+    country: MX
+    city: Guadalajara
+    postal_prefixes: ["44"]
+    nearby: [Zapopan, Tlaquepaque, Tonalá]
+  - id: mx-monterrey
+    country: MX
+    city: Monterrey
+    postal_prefixes: ["64"]
+    nearby: [San Pedro Garza García, San Nicolás de los Garza, Guadalupe]
+
+# Detailed license rules (docs/process-design-appendix.md, A). They only ever send a candidate
+# to human review, never to a knockout. Mexico's categories vary by state: no rule by default.
+license_rules:
+  ES:
+    accepted_for_moto: [AM, A1, A2, A]
+    accepted_for_car: [B]
+    conditional:
+      - vehicle: moto
+        license_type: B
+        min_years: 3
+  MX: {}
+
+faq:
+  - question: What is Grupo Sazón?
+    answer:
+      es: Grupo Sazón es una cadena de restaurantes con locales en España y México.
+      en: Grupo Sazón is a restaurant chain with locations in Spain and Mexico.
+  - question: What does the delivery driver job involve?
+    answer:
+      es: Repartir pedidos de nuestros restaurantes a clientes de tu zona.
+      en: Delivering orders from our restaurants to customers in your area.
+  - question: What happens after the questions?
+    answer:
+      es: Si cumples los requisitos, reservas una entrevista aquí mismo en el chat.
+      en: If you meet the requirements, you book an interview right here in the chat.

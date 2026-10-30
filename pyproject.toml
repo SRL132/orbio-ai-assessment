@@ -1,0 +1,103 @@
+[project]
+name = "sazon-screening"
+version = "0.1.0"
+description = "AI candidate screening agent and recruiter dashboard for Grupo Sazón (Orbio FDE assignment)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.3.0",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "pydantic>=2.14.2",
+    "pydantic-settings>=2.16.2",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "sqlalchemy>=2.1.6",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "deptry>=0.25.1",
+    "hypothesis>=6.170.14",
+    "import-linter>=2.15",
+    "mypy>=2.4.1",
+    "pip-audit>=2.10.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.3",
+    "types-pyyaml>=6.0.12.20261030",
+]
+
+[tool.uv]
+package = false
+
+# --- Lint and format -------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "PT", "S", "ANN", "TID"]
+
+[tool.ruff.lint.per-file-ignores]
+# Debt list: entries may shrink, never grow (see docs/quality.md).
+"tests/**" = ["S101", "ANN"]
+"evals/**" = ["S101"]
+
+# --- Types -----------------------------------------------------------------
+[tool.mypy]
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# Ratchet: modules may be added to the strict list, never removed.
+[[tool.mypy.overrides]]
+module = ["app.domain", "app.domain.*"]
+strict = true
+
+# --- Architecture boundaries -----------------------------------------------
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain is pure"
+type = "forbidden"
+source_modules = ["app.domain"]
+forbidden_modules = [
+    "app.adapters",
+    "app.api",
+    "app.worker",
+    "app.bootstrap",
+    "sqlalchemy",
+    "fastapi",
+    "httpx",
+    "anthropic",
+]
+
+# --- Tests and coverage ----------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+# Ratchet: raise with every change that increases coverage, never lower.
+fail_under = 94
+show_missing = true
+skip_covered = true
+
+# --- Dependency hygiene ----------------------------------------------------
+[tool.deptry.per_rule_ignores]
+# Used at runtime but never imported directly: the ASGI server, FastAPI's form parser, and the
+# template engine behind fastapi.templating.
+DEP002 = ["uvicorn", "python-multipart", "jinja2"]

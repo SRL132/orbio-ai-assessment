@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ company }} · Candidaturas</title>
+  <style>
+    :root { --bg:#ece5dd; --me:#dcf8c6; --bot:#fff; --brand:#c2410c; --ink:#1f2937; --muted:#6b7280; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--ink);
+           background:#f3f4f6; display:flex; justify-content:center; }
+    .phone { width:100%; max-width:420px; height:100vh; display:flex; flex-direction:column; background:var(--bg); }
+    header { background:var(--brand); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px; }
+    header .avatar { width:36px; height:36px; border-radius:50%; background:#fff3; display:grid; place-items:center; font-weight:700; }
+    header .who { flex:1; line-height:1.2; }
+    header small { opacity:.85; }
+    .status { font-size:11px; background:#fff3; padding:3px 8px; border-radius:10px; }
+    #log { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:6px; }
+    .msg { max-width:82%; padding:8px 10px; border-radius:8px; white-space:pre-wrap; font-size:15px;
+           box-shadow:0 1px 1px #0001; line-height:1.35; }
+    .out { align-self:flex-start; background:var(--bot); border-top-left-radius:2px; }
+    .in  { align-self:flex-end; background:var(--me); border-top-right-radius:2px; }
+    .typing { align-self:flex-start; color:var(--muted); font-size:13px; padding:4px 8px; }
+    #quick { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 8px; }
+    #quick button { border:1px solid var(--brand); color:var(--brand); background:#fff; border-radius:16px;
+                    padding:6px 12px; font-size:14px; cursor:pointer; }
+    form { display:flex; gap:8px; padding:8px; background:#f0f0f0; }
+    input { flex:1; border:none; border-radius:20px; padding:10px 14px; font-size:15px; }
+    form button { border:none; background:var(--brand); color:#fff; border-radius:20px; padding:0 16px; font-size:15px; cursor:pointer; }
+    .demo { display:flex; gap:6px; padding:6px 8px; background:#111827; color:#e5e7eb; font-size:12px; align-items:center; }
+    .demo button { background:#374151; color:#fff; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; }
+    .demo span { flex:1; }
+  </style>
+</head>
+<body>
+<div class="phone">
+  {% if demo_mode %}
+  <div class="demo">
+    <span>Demo</span>
+    <button id="new">New chat</button>
+    <button data-hours="2">+2 h</button>
+    <button data-hours="24">+24 h</button>
+  </div>
+  {% endif %}
+  <header>
+    <div class="avatar">L</div>
+    <div class="who"><strong>{{ company }}</strong><br><small>Asistente virtual · Virtual assistant</small></div>
+    <span class="status" id="status">…</span>
+  </header>
+  <div id="log" aria-live="polite"></div>
+  <div id="quick"></div>
+  <form id="form" autocomplete="off">
+    <input id="text" placeholder="Escribe un mensaje…" maxlength="2000">
+    <button type="submit">Enviar</button>
+  </form>
+</div>
+<script>
+const log = document.getElementById("log");
+const quick = document.getElementById("quick");
+const statusEl = document.getElementById("status");
+let conversationId = localStorage.getItem("conversationId");
+let lastSeq = 0;
+let waiting = false;
+
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+
+async function newConversation() {
+  const { id } = await api("/api/conversations", { method: "POST" });
+  conversationId = id;
+  localStorage.setItem("conversationId", id);
+  lastSeq = 0;
+  log.innerHTML = "";
+  quick.innerHTML = "";
+}
+
+function bubble(direction, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + direction;
+  div.textContent = text;
+  log.appendChild(div);
+}
+
+function setTyping(on) {
+  let el = document.getElementById("typing");
+  if (on && !el) {
+    el = document.createElement("div");
+    el.id = "typing"; el.className = "typing"; el.textContent = "escribiendo…";
+    log.appendChild(el);
+  } else if (!on && el) { el.remove(); }
+}
+
+function quickReplies(text) {
+  const options = [];
+  const listed = text.match(/:\s*([^:?]+·[^:?]+)$/);
+  if (listed) options.push(...listed[1].split("·").map(s => s.trim()).filter(Boolean));
+  if (/\((sí|si) \/ no\)|¿Empezamos\?|¿Es todo correcto\?|futuras ofertas\?|cerca de ti\?/i.test(text)) options.push("Sí", "No");
+  if (/\(yes \/ no\)|Shall we start\?|Is everything correct\?|future openings\?|near you\?/i.test(text)) options.push("Yes", "No");
+  quick.innerHTML = "";
+  for (const option of options) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = option;
+    b.onclick = () => send(option);
+    quick.appendChild(b);
+  }
+}
+
+async function poll() {
+  if (!conversationId) return;
+  try {
+    const data = await api(`/api/conversations/${conversationId}/messages?after=${lastSeq}`);
+    statusEl.textContent = data.status.replace("_", " ");
+    for (const m of data.messages) {
+      setTyping(false);
+      bubble(m.direction, m.text);
+      lastSeq = m.seq;
+      if (m.direction === "out") { waiting = false; quickReplies(m.text); }
+    }
+    setTyping(waiting);
+    if (data.messages.length) log.scrollTop = log.scrollHeight;
+  } catch (e) {
+    if (String(e.message) === "404") { localStorage.removeItem("conversationId"); await newConversation(); }
+  }
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || !conversationId) return;
+  quick.innerHTML = "";
+  waiting = true;
+  await api(`/api/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+  await poll();
+}
+
+document.getElementById("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.getElementById("text");
+  const text = input.value;
+  input.value = "";
+  await send(text);
+});
+
+document.getElementById("new")?.addEventListener("click", newConversation);
+document.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", async () => {
+  await api("/api/demo/advance", { method: "POST", body: JSON.stringify({ hours: Number(b.dataset.hours) }) });
+  await poll();
+}));
+
+(async () => {
+  if (!conversationId) await newConversation();
+  await poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>
