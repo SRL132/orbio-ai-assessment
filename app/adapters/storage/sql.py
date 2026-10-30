@@ -2,7 +2,9 @@
 
 SQLite for the demo, Postgres in production (same code). The `conversations` table keeps the
 full state as JSON plus a few projected columns the dashboard filters on. Every table carries
-`client_id` and uses random UUIDs (docs/process-design-appendix.md, B).
+`client_id` and uses random UUIDs (docs/process-design-appendix.md, B). A repository serves one
+client: every read filters on its `client_id`, so a conversation id alone never reaches another
+client's data.
 """
 
 from __future__ import annotations
@@ -138,7 +140,9 @@ class ChannelContactRow(Base):
     """Who a WhatsApp number belongs to: their latest conversation."""
 
     __tablename__ = "channel_contacts"
-    __table_args__ = (UniqueConstraint("channel", "external_id"),)
+    __table_args__ = (
+        UniqueConstraint("client_id", "channel", "external_id", name="uq_channel_contacts_contact"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     client_id: Mapped[str] = mapped_column(String(64))
@@ -150,7 +154,9 @@ class ChannelContactRow(Base):
 
 class InterviewRow(Base):
     __tablename__ = "interviews"
-    __table_args__ = (UniqueConstraint("location_id", "starts_at"),)  # no double booking
+    __table_args__ = (  # no double booking
+        UniqueConstraint("client_id", "location_id", "starts_at", name="uq_interviews_slot"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     client_id: Mapped[str] = mapped_column(String(64))
@@ -176,15 +182,25 @@ def make_engine(url: str) -> Engine:
 
 
 class SqlRepository:
-    def __init__(self, engine: Engine, clock: Clock) -> None:
+    def __init__(self, engine: Engine, clock: Clock, client_id: str) -> None:
         self._sessions = sessionmaker(engine, expire_on_commit=False)
         self._clock = clock
+        self._client_id = client_id
+
+    def _conversation(self, session: Session, conversation_id: UUID) -> ConversationRow | None:
+        row = session.get(ConversationRow, str(conversation_id))
+        return row if row is not None and row.client_id == self._client_id else None
+
+    def _check_client(self, state: ConversationState) -> None:
+        if state.client_id != self._client_id:
+            raise ValueError(f"this repository serves {self._client_id}, not {state.client_id}")
 
     # --- writes -----------------------------------------------------------------------------------
 
     def create(
         self, state: ConversationState, events: list[DomainEvent], replies: list[str]
     ) -> None:
+        self._check_client(state)
         now = self._clock.now()
         with self._sessions.begin() as session:
             row = ConversationRow(id=str(state.conversation_id), created_at=now)
@@ -198,7 +214,7 @@ class SqlRepository:
     ) -> bool:
         now = self._clock.now()
         with self._sessions.begin() as session:
-            row = session.get(ConversationRow, str(conversation_id))
+            row = self._conversation(session, conversation_id)
             if row is None:
                 raise KeyError(conversation_id)
             if channel_message_id is not None:
@@ -233,9 +249,10 @@ class SqlRepository:
         processed: list[StoredMessage],
         redact: bool = False,
     ) -> None:
+        self._check_client(state)
         now = self._clock.now()
         with self._sessions.begin() as session:
-            row = session.get(ConversationRow, str(state.conversation_id))
+            row = self._conversation(session, state.conversation_id)
             if row is None:
                 raise KeyError(state.conversation_id)
             _project(row, state, now)
@@ -248,6 +265,7 @@ class SqlRepository:
             self._append(session, state, events, replies, now)
 
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
+        self._check_client(state)
         with self._sessions.begin() as session:
             self._append(session, state, events, [], self._clock.now())
 
@@ -295,7 +313,7 @@ class SqlRepository:
 
     def get(self, conversation_id: UUID) -> ConversationState | None:
         with self._sessions() as session:
-            row = session.get(ConversationRow, str(conversation_id))
+            row = self._conversation(session, conversation_id)
             return ConversationState.model_validate(row.state) if row else None
 
     def pending_inbound(self, conversation_id: UUID) -> list[StoredMessage]:
@@ -303,6 +321,7 @@ class SqlRepository:
             rows = session.scalars(
                 select(MessageRow)
                 .where(
+                    MessageRow.client_id == self._client_id,
                     MessageRow.conversation_id == str(conversation_id),
                     MessageRow.direction == "in",
                     MessageRow.processed.is_(False),
@@ -316,6 +335,7 @@ class SqlRepository:
             rows = session.scalars(
                 select(MessageRow)
                 .where(
+                    MessageRow.client_id == self._client_id,
                     MessageRow.conversation_id == str(conversation_id),
                     MessageRow.seq > after_seq,
                 )
@@ -327,6 +347,7 @@ class SqlRepository:
         with self._sessions() as session:
             ids = session.scalars(
                 select(ConversationRow.id).where(
+                    ConversationRow.client_id == self._client_id,
                     ConversationRow.status == "in_progress",
                     ConversationRow.next_reminder_at.is_not(None),
                     ConversationRow.next_reminder_at <= now,
@@ -341,7 +362,10 @@ class SqlRepository:
         with self._sessions() as session:
             rows = session.scalars(
                 select(EventRow)
-                .where(EventRow.conversation_id == str(conversation_id))
+                .where(
+                    EventRow.client_id == self._client_id,
+                    EventRow.conversation_id == str(conversation_id),
+                )
                 .order_by(EventRow.created_at, EventRow.seq)
             ).all()
             return [(r.created_at, DomainEvent(type=r.type, data=r.data)) for r in rows]
@@ -358,6 +382,7 @@ class SqlRepository:
                 & (ChannelContactRow.channel == channel),
             )
             .where(
+                MessageRow.client_id == self._client_id,
                 MessageRow.direction == "out",
                 MessageRow.delivered.is_(False),
                 ConversationRow.channel == channel,
@@ -381,7 +406,7 @@ class SqlRepository:
         with self._sessions.begin() as session:
             session.execute(
                 update(MessageRow)
-                .where(MessageRow.id == str(message_id))
+                .where(MessageRow.client_id == self._client_id, MessageRow.id == str(message_id))
                 .values(
                     delivered=delivered,
                     delivery_attempts=MessageRow.delivery_attempts + 1,
@@ -393,19 +418,19 @@ class SqlRepository:
         with self._sessions() as session:
             found = session.scalar(
                 select(ChannelContactRow.conversation_id).where(
+                    ChannelContactRow.client_id == self._client_id,
                     ChannelContactRow.channel == channel,
                     ChannelContactRow.external_id == external_id,
                 )
             )
             return UUID(found) if found else None
 
-    def link_contact(
-        self, channel: str, external_id: str, conversation_id: UUID, client_id: str
-    ) -> None:
+    def link_contact(self, channel: str, external_id: str, conversation_id: UUID) -> None:
         now = self._clock.now()
         with self._sessions.begin() as session:
             row = session.scalar(
                 select(ChannelContactRow).where(
+                    ChannelContactRow.client_id == self._client_id,
                     ChannelContactRow.channel == channel,
                     ChannelContactRow.external_id == external_id,
                 )
@@ -414,7 +439,7 @@ class SqlRepository:
                 session.add(
                     ChannelContactRow(
                         id=str(uuid4()),
-                        client_id=client_id,
+                        client_id=self._client_id,
                         channel=channel,
                         external_id=external_id,
                         conversation_id=str(conversation_id),

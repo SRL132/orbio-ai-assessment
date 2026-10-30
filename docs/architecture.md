@@ -90,7 +90,7 @@ A `next_reminder_at` column, polled by a scheduler that enqueues reminder turns.
 
 ### 7. Clients are configuration
 
-A client config holds locations and service areas, license rules per country, fields and their priority, persona, templates (by language and channel) and FAQ. Grupo Sazón is the first config, not hard-coded logic. `client_id` is a column on every table from the start.
+A client config holds locations and service areas, license rules per country, fields and their priority, persona, templates (by language and channel) and FAQ. Grupo Sazón is the first config (`app/config/grupo_sazon/`), not hard-coded logic. `client_id` is a column on every table from the start, and it is enforced, not just stored: the repository is built for one client and filters every read on it (and refuses to write another client's state), and unique constraints that could collide across clients (interview slots, WhatsApp contacts) include `client_id`.
 
 ### 8. LLM calls are hardened
 
@@ -138,7 +138,7 @@ app/
     calendar/ kb/ clock/
   api/               # FastAPI: webhooks, chat endpoint, dashboard routes
   worker/            # turn processor, reminder scheduler
-  config/            # client configs (grupo_sazon.yaml), templates/<lang>/<channel>/
+  config/            # one directory per client: client.yaml, templates/<lang>/<channel>.yaml
   bootstrap.py       # wires adapters to ports
 tests/               # unit, contract, recorded, smoke
 evals/               # scenarios, simulated candidates, baseline.json
@@ -218,7 +218,7 @@ Voice is a channel, not a second agent: the conversation has `channel: voice`, a
 
 - **Listening:** the browser's speech recognition turns one push-to-talk utterance into text, which goes through the normal message API. Voice messages skip the debounce, since each one is already a complete utterance.
 - **Speaking:** replies are read by ElevenLabs (`POST /api/tts`, server-side, only the agent's text) when configured, otherwise by the browser's `speechSynthesis`.
-- **Wording:** `app/config/templates/<lang>/voice.yaml` overrides only what doesn't work aloud. The responder is told its message will be read aloud, and the output check rejects emoji and "·" lists for voice.
+- **Wording:** `app/config/<client>/templates/<lang>/voice.yaml` overrides only what doesn't work aloud. The responder is told its message will be read aloud, and the output check rejects emoji and "·" lists for voice.
 - **Understanding:** the extractor is told the text is speech-to-text output (no punctuation, spelled-out numbers, misheard names). The offline extractor converts spoken numbers ("veintiocho cero uno cero" → 28010).
 
 Limits and the production path: browser speech recognition only works in Chrome and Edge, and Chrome sends the audio to Google for recognition. That's acceptable for a demo but not for candidates' data under GDPR, so production would use server-side speech-to-text (e.g. ElevenLabs or another provider under the client's data-processing agreement) and the WhatsApp or phone channel instead of a web page. The engine wouldn't change.

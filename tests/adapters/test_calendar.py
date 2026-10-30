@@ -78,5 +78,14 @@ def test_rebooking_the_same_slot_for_the_same_candidate_succeeds(
     assert cal.book("es-madrid", slot, UUID(int=2)) is False
 
 
+def test_clients_do_not_share_slots(config: ClientConfig, clock: FakeClock) -> None:
+    cal = calendar(config, clock)
+    slot = cal.available_slots("es-madrid", clock.now(), 1)[0]
+    assert cal.book("es-madrid", slot, UUID(int=1)) is True
+    other_client = SqlCalendar(cal._engine, config.model_copy(update={"client_id": "c"}), clock)
+    assert slot in other_client.available_slots("es-madrid", clock.now(), 3)
+    assert other_client.book("es-madrid", slot, UUID(int=2)) is True
+
+
 def test_unknown_location_has_no_slots(config: ClientConfig, clock: FakeClock) -> None:
     assert calendar(config, clock).available_slots("nowhere", clock.now(), 3) == []

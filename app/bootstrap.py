@@ -85,7 +85,7 @@ def build(settings: Settings | None = None) -> Container:
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
     ports = Ports(extractor=extractor, responder=responder, clock=clock, calendar=calendar)
-    service = ScreeningService(SqlRepository(db, clock), config, ports)
+    service = ScreeningService(SqlRepository(db, clock, config.client_id), config, ports)
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
     tts = None

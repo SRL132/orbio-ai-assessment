@@ -1,4 +1,5 @@
-"""Load a client configuration from `app/config/<client_id>.yaml` plus its templates."""
+"""Load a client configuration: `app/config/<client_id>/client.yaml` plus the client's own
+`templates/<lang>/<channel>.yaml` (each client words its messages its own way)."""
 
 from pathlib import Path
 
@@ -11,10 +12,13 @@ CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 
 
 def load_client_config(client_id: str, config_dir: Path = CONFIG_DIR) -> ClientConfig:
-    raw = yaml.safe_load((config_dir / f"{client_id}.yaml").read_text(encoding="utf-8"))
+    client_dir = config_dir / client_id
+    raw = yaml.safe_load((client_dir / "client.yaml").read_text(encoding="utf-8"))
+    if raw.get("client_id") != client_id:
+        raise ValueError(f"{client_dir / 'client.yaml'} has client_id {raw.get('client_id')!r}")
     templates: dict[str, dict[str, str]] = {}
     voice: dict[str, dict[str, str]] = {}
-    for lang_dir in sorted((config_dir / "templates").iterdir()):
+    for lang_dir in sorted((client_dir / "templates").iterdir()):
         if lang_dir.is_dir():
             chat_file = lang_dir / "chat.yaml"
             voice_file = lang_dir / "voice.yaml"

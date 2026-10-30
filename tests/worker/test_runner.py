@@ -16,7 +16,8 @@ from tests.conftest import ex
 def runner(config: ClientConfig, ports: Ports, clock: FakeClock, tmp_path):
     engine = make_engine(f"sqlite:///{tmp_path / 'r.db'}")
     yield Runner(
-        ScreeningService(SqlRepository(engine, clock), config, ports), debounce_seconds=0.05
+        ScreeningService(SqlRepository(engine, clock, config.client_id), config, ports),
+        debounce_seconds=0.05,
     )
     engine.dispose()
 

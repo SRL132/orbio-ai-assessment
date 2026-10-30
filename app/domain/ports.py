@@ -58,7 +58,8 @@ class Clock(Protocol):
 
 
 class Repository(Protocol):
-    """Persistence of conversations, messages and the append-only event log."""
+    """Persistence of conversations, messages and the append-only event log, for one client:
+    reads never return another client's data, and writing another client's state is an error."""
 
     def create(
         self, state: ConversationState, events: list[DomainEvent], replies: list[str]
@@ -109,9 +110,7 @@ class Repository(Protocol):
 
     def conversation_for(self, channel: str, external_id: str) -> UUID | None: ...
 
-    def link_contact(
-        self, channel: str, external_id: str, conversation_id: UUID, client_id: str
-    ) -> None: ...
+    def link_contact(self, channel: str, external_id: str, conversation_id: UUID) -> None: ...
 
 
 @dataclass(frozen=True)

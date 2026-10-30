@@ -32,7 +32,7 @@ def engine():
 
 def test_round_trip_and_double_booking(engine, config: ClientConfig) -> None:
     clock = FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC))
-    repo = SqlRepository(engine, clock)
+    repo = SqlRepository(engine, clock, config.client_id)
     state = ConversationState(client_id=config.client_id, channel="voice")
     state.candidate.full_name = "Ana López"
     repo.create(state, [DomainEvent(type="conversation_started", data={"n": 1})], ["Hola"])
@@ -49,7 +49,7 @@ def test_round_trip_and_double_booking(engine, config: ClientConfig) -> None:
 
 
 def test_concurrent_writers_get_distinct_seqs(engine, config: ClientConfig) -> None:
-    repo = SqlRepository(engine, FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC)))
+    repo = SqlRepository(engine, FakeClock(datetime(2026, 11, 2, 10, tzinfo=UTC)), config.client_id)
     state = ConversationState(client_id=config.client_id)
     repo.create(state, [], ["greeting"])
     assert write_concurrently(repo, state) == list(range(1, 162))
@@ -57,7 +57,7 @@ def test_concurrent_writers_get_distinct_seqs(engine, config: ClientConfig) -> N
 
 def test_analytics_aggregate_in_sql(engine, config: ClientConfig) -> None:
     start = datetime(2026, 11, 2, 10, tzinfo=UTC)
-    repo = SqlRepository(engine, FakeClock(start))
+    repo = SqlRepository(engine, FakeClock(start), config.client_id)
     for minutes in (4, 2, 9):
         state = ConversationState(
             client_id=config.client_id,

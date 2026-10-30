@@ -29,7 +29,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 ## Architecture (15 min)
 
 1. **One turn (3 min):** message → extractor (LLM, strict schema) → Python validators and policy (rules from config) → responder (LLM, output check, template fallback). "Code decides, the LLM talks."
-2. **Code tour (5 min):** `app/domain/engine.py` (`turn` and its stage handlers), `render.py`, `policy.py` (slot-filling), `validators.py`, `ports.py`; the import-linter contract that keeps the domain pure; `app/config/grupo_sazon.yaml`.
+2. **Code tour (5 min):** `app/domain/engine.py` (`turn` and its stage handlers), `render.py`, `policy.py` (slot-filling), `validators.py`, `ports.py`; the import-linter contract that keeps the domain pure; `app/config/grupo_sazon/client.yaml`.
 3. **Edge cases in code (3 min):** debounced bursts, per-conversation lock, reminders stored in the database, redaction, double-booking constraint.
 4. **LLM and stack choices (4 min):** the provider scorecard, cost at 10K a week, and why the choice is decided by evals and reversible behind a port. Show `uv run python -m evals` and explain the baseline ratchet.
 

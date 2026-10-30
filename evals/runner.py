@@ -134,7 +134,7 @@ class Harness:
         clock = FakeClock(EVAL_START)
         db = make_engine("sqlite:///:memory:")
         self._engines.append(db)
-        repo = SqlRepository(db, clock)
+        repo = SqlRepository(db, clock, self.config.client_id)
         calendar = SqlCalendar(db, self.config, clock)
         ports = Ports(
             extractor=self.extractor, responder=self.responder, clock=clock, calendar=calendar

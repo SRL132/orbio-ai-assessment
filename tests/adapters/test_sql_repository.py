@@ -5,14 +5,15 @@ import pytest
 
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
+from app.domain.config import ClientConfig
 from app.domain.models import ConversationState, DomainEvent, Status
 from tests.conftest import write_concurrently
 
 
 @pytest.fixture
-def repo(clock: FakeClock):
+def repo(clock: FakeClock, config: ClientConfig):
     engine = make_engine("sqlite:///:memory:")
-    yield SqlRepository(engine, clock)
+    yield SqlRepository(engine, clock, config.client_id)
     engine.dispose()
 
 
@@ -40,10 +41,10 @@ def test_messages_are_ordered_and_pending_until_processed(
 
 
 def test_concurrent_writers_get_distinct_seqs(
-    tmp_path: Path, clock: FakeClock, state: ConversationState
+    tmp_path: Path, clock: FakeClock, config: ClientConfig, state: ConversationState
 ) -> None:
     engine = make_engine(f"sqlite:///{tmp_path / 'race.db'}")  # a file: threads share it for real
-    repo = SqlRepository(engine, clock)
+    repo = SqlRepository(engine, clock, config.client_id)
     repo.create(state, [], ["greeting"])
     seqs = write_concurrently(repo, state)
     engine.dispose()
@@ -87,3 +88,19 @@ def test_due_reminders(repo: SqlRepository, state: ConversationState, clock: Fak
 def test_datetimes_come_back_timezone_aware(repo: SqlRepository, state: ConversationState) -> None:
     repo.create(state, [], ["hola"])
     assert repo.messages(state.conversation_id)[0].created_at.tzinfo is not None
+
+
+def test_another_clients_conversation_is_invisible(
+    clock: FakeClock, config: ClientConfig, state: ConversationState
+) -> None:
+    engine = make_engine("sqlite:///:memory:")
+    SqlRepository(engine, clock, config.client_id).create(state, [], ["Hola"])
+    other = SqlRepository(engine, clock, "another_client")
+    assert other.get(state.conversation_id) is None
+    assert other.messages(state.conversation_id) == []
+    assert other.timeline(state.conversation_id) == []
+    with pytest.raises(KeyError):
+        other.add_inbound(state.conversation_id, "hola")
+    with pytest.raises(ValueError, match="serves another_client"):
+        other.save_turn(state, [], [], [])
+    engine.dispose()

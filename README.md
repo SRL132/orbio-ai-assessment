@@ -80,7 +80,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 - **Code decides, the LLM talks.** The LLM only extracts answers into a strict schema and words the messages. Qualification, knockouts and every status change are plain Python, tested and logged. A prompt-injection eval checks that a candidate can't talk their way into "qualified".
 - **Slot-filling, not a script.** The next question is the highest-priority field still missing, which is what lets candidates answer in any order.
-- **Rules in config, one engine for many clients.** Service areas, license rules, persona, templates and FAQ live in `app/config/grupo_sazon.yaml`, and every table carries `client_id`.
+- **Rules in config, one engine for many clients.** Service areas, license rules, persona, templates and FAQ live in `app/config/grupo_sazon/` (`client.yaml` and per-language templates), and every table carries `client_id`.
 - **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length), or the template is used instead.
 - **No callback at the end.** Qualified candidates book the interview in the chat, because a callback would bring back the 60% no-answer problem at the last step.
 - **Built to scale without a rewrite:** webhooks only store and acknowledge, one conversation is processed at a time, reminders live in the database, and the event log is the source of truth. See the "Demo vs production" and "Deployment and monitoring" sections of the architecture doc.

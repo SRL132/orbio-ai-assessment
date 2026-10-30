@@ -51,11 +51,11 @@ def _state(
 
 def _analytics(config: ClientConfig, states: list[ConversationState]) -> Analytics:
     engine = make_engine("sqlite:///:memory:")
-    repo = SqlRepository(engine, FakeClock(START))
+    repo = SqlRepository(engine, FakeClock(START), config.client_id)
     for state in states:
         repo.create(state, [], [])
     other_client = ConversationState(client_id="someone_else", status=Status.QUALIFIED)
-    repo.create(other_client, [], [])  # never counted
+    SqlRepository(engine, FakeClock(START), "someone_else").create(other_client, [], [])
     analytics = DashboardQueries(engine, config.client_id).analytics(config.field_priority)
     engine.dispose()
     return analytics

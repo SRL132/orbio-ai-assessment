@@ -70,6 +70,23 @@ def test_unknown_conversation_is_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_only_the_browser_that_started_a_conversation_can_read_it(client: TestClient) -> None:
+    cid = client.post("/api/conversations").json()["id"]
+    assert client.get(f"/api/conversations/{cid}/messages").status_code == 200
+    stranger = TestClient(client.app)  # knows the id (e.g. from a log line), not the cookie
+    assert stranger.get(f"/api/conversations/{cid}/messages").status_code == 404
+    reply = stranger.post(f"/api/conversations/{cid}/messages", json={"text": "hola"})
+    assert reply.status_code == 404
+    stranger.cookies.set("sazon_chat", client.cookies["sazon_chat"] + "x")  # tampered
+    assert stranger.get(f"/api/conversations/{cid}/messages").status_code == 404
+
+
+def test_a_new_conversation_replaces_the_old_one(client: TestClient) -> None:
+    first = client.post("/api/conversations").json()["id"]
+    client.post("/api/conversations")
+    assert client.get(f"/api/conversations/{first}/messages").status_code == 404
+
+
 def test_empty_message_is_rejected(client: TestClient) -> None:
     cid = client.post("/api/conversations").json()["id"]
     assert client.post(f"/api/conversations/{cid}/messages", json={"text": ""}).status_code == 422

@@ -40,7 +40,7 @@ def test_missing_template_stops_the_config_from_loading(tmp_path, config: Client
     from app.adapters.config.yaml_loader import CONFIG_DIR
 
     shutil.copytree(CONFIG_DIR, tmp_path, dirs_exist_ok=True)
-    chat = tmp_path / "templates" / "en" / "chat.yaml"
+    chat = tmp_path / config.client_id / "templates" / "en" / "chat.yaml"
     chat.write_text(
         "\n".join(line for line in chat.read_text().splitlines() if not line.startswith("closed:"))
     )

@@ -25,6 +25,7 @@ The agent collects only what screening needs, and every decision can be traced.
 - **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file.
 - **Access:** the recruiter dashboard is behind a login with one account per recruiter. No default or shared passwords. Secrets live in environment variables.
 - **IDs:** random UUIDs, never sequential numbers, so one record can't be guessed from another.
+- **Web chat access:** a conversation id isn't a password (it appears in logs and URLs). The browser that starts a conversation gets a signed, HttpOnly cookie naming it, and the chat API serves only that conversation; anyone else gets a 404.
 - **Logs:** personal data is masked in application logs. An audit log records who viewed or changed each candidate, and every status decision with its reason.
 
 ## C. Regulatory and platform context

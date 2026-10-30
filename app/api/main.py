@@ -15,6 +15,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -28,6 +29,12 @@ from app.worker.service import MAX_MESSAGE_CHARS
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 logger = logging.getLogger("app.api")
+
+# The browser that starts a conversation gets a signed cookie naming it; the message endpoints
+# serve only that conversation. Conversation ids appear in logs and URLs, so the id alone must
+# not be enough to read a transcript. Longer than a screening can last (reminders, abandonment).
+CHAT_COOKIE = "sazon_chat"
+CHAT_COOKIE_MAX_AGE = 7 * 24 * 3600
 
 
 class MessageIn(BaseModel):
@@ -62,9 +69,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     secret = c.settings.session_secret
     if secret is None:
         logger.warning("SESSION_SECRET not set: using a random one, logins reset on restart")
+    secret_key = secret.get_secret_value() if secret else secrets.token_urlsafe(32)
+    chat_signer = URLSafeTimedSerializer(secret_key, salt="chat-conversation")
     app.add_middleware(
         SessionMiddleware,
-        secret_key=secret.get_secret_value() if secret else secrets.token_urlsafe(32),
+        secret_key=secret_key,
         session_cookie="sazon_session",
         max_age=8 * 3600,
         same_site="lax",
@@ -76,6 +85,17 @@ def create_app(container: Container | None = None) -> FastAPI:
     def get(request: Request) -> Container:
         c: Container = request.app.state.container
         return c
+
+    def require_owner(request: Request, conversation_id: UUID) -> None:
+        """404, not 403, for someone else's conversation: don't confirm that it exists."""
+        try:
+            owned = chat_signer.loads(
+                request.cookies.get(CHAT_COOKIE, ""), max_age=CHAT_COOKIE_MAX_AGE
+            )
+        except BadSignature:
+            owned = None
+        if owned != str(conversation_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "conversation not found")
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -95,15 +115,26 @@ def create_app(container: Container | None = None) -> FastAPI:
         )
 
     @app.post("/api/conversations", status_code=status.HTTP_201_CREATED)
-    async def start_conversation(request: Request, body: StartIn | None = None) -> dict[str, str]:
+    async def start_conversation(
+        request: Request, response: Response, body: StartIn | None = None
+    ) -> dict[str, str]:
         channel = body.channel if body else "chat"
         conversation_id = await asyncio.to_thread(get(request).service.start_conversation, channel)
+        response.set_cookie(
+            CHAT_COOKIE,
+            chat_signer.dumps(str(conversation_id)),
+            max_age=CHAT_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            secure=not c.settings.demo_mode,
+        )
         return {"id": str(conversation_id)}
 
     @app.get("/api/conversations/{conversation_id}/messages")
     def list_messages(
         request: Request, conversation_id: UUID, after: Annotated[int, Query(ge=0)] = 0
     ) -> dict[str, object]:
+        require_owner(request, conversation_id)
         service = get(request).service
         state = service.get(conversation_id)
         if state is None:
@@ -129,6 +160,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     async def post_message(
         request: Request, conversation_id: UUID, body: MessageIn
     ) -> dict[str, bool]:
+        require_owner(request, conversation_id)
         c = get(request)
         try:
             await asyncio.to_thread(c.service.receive, conversation_id, body.text)

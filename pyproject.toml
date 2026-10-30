@@ -103,6 +103,6 @@ skip_covered = true
 # --- Dependency hygiene ----------------------------------------------------
 [tool.deptry.per_rule_ignores]
 # Used at runtime but never imported directly: the ASGI server, FastAPI's form parser, the
-# template engine behind fastapi.templating, the signer behind Starlette's sessions, and the
-# Postgres driver SQLAlchemy loads from a postgresql+psycopg:// URL.
-DEP002 = ["uvicorn", "python-multipart", "jinja2", "itsdangerous", "psycopg"]
+# template engine behind fastapi.templating, and the Postgres driver SQLAlchemy loads from a
+# postgresql+psycopg:// URL.
+DEP002 = ["uvicorn", "python-multipart", "jinja2", "psycopg"]

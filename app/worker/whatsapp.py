@@ -58,7 +58,7 @@ class WhatsAppChannel:
                 # A new candidate (or a returning one saying hello): open a conversation.
                 # The greeting asks for consent, so this first message isn't an answer.
                 new_id = self.service.start_conversation(CHANNEL)
-                repo.link_contact(CHANNEL, message.wa_id, new_id, self.service.config.client_id)
+                repo.link_contact(CHANNEL, message.wa_id, new_id)
                 logger.info("whatsapp_conversation_started id=%s", new_id)
                 continue
             if message.text is None:

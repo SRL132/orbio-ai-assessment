@@ -40,7 +40,9 @@ class SqlCalendar:
             booked = set(
                 session.scalars(
                     select(InterviewRow.starts_at).where(
-                        InterviewRow.location_id == location_id, InterviewRow.starts_at >= after
+                        InterviewRow.client_id == self._config.client_id,
+                        InterviewRow.location_id == location_id,
+                        InterviewRow.starts_at >= after,
                     )
                 )
             )
@@ -63,7 +65,9 @@ class SqlCalendar:
         with Session(self._engine) as session:
             holder = session.scalar(
                 select(InterviewRow.conversation_id).where(
-                    InterviewRow.location_id == location_id, InterviewRow.starts_at == starts_at
+                    InterviewRow.client_id == self._config.client_id,
+                    InterviewRow.location_id == location_id,
+                    InterviewRow.starts_at == starts_at,
                 )
             )
         if holder is not None:

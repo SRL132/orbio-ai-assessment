@@ -49,7 +49,7 @@ def setup(config: ClientConfig, clock: FakeClock):
     ports = Ports(
         KeywordExtractor(), TemplateResponder(), clock, SqlCalendar(engine, config, clock)
     )
-    service = ScreeningService(SqlRepository(engine, clock), config, ports)
+    service = ScreeningService(SqlRepository(engine, clock, config.client_id), config, ports)
     fake = FakeWhatsApp()
     channel = WhatsAppChannel(service, fake)  # type: ignore[arg-type]
     yield service, channel, fake, clock

@@ -1,4 +1,4 @@
-# Client configuration for Grupo Sazón.
+# Client configuration for Grupo Sazón (templates: ./templates/<lang>/<channel>.yaml).
 # Service areas, license rules and FAQ are invented for the demo: the brief doesn't list the
 # 45 real locations (see docs/process-design-appendix.md, D. Assumptions to confirm).
 

@@ -32,7 +32,7 @@ def _dispose_engines():
 def make_service(config: ClientConfig, ports: Ports, clock: FakeClock) -> ScreeningService:
     engine = make_engine("sqlite:///:memory:")
     _ENGINES.append(engine)
-    return ScreeningService(SqlRepository(engine, clock), config, ports)
+    return ScreeningService(SqlRepository(engine, clock, config.client_id), config, ports)
 
 
 def test_burst_of_messages_is_one_turn(
@@ -98,7 +98,7 @@ def test_booking_survives_a_failed_save(
     _ENGINES.append(engine)
     calendar = SqlCalendar(engine, config, clock)
     ports = Ports(extractor, TemplateResponder(), clock, calendar)
-    repo = FlakyRepository(engine, clock)
+    repo = FlakyRepository(engine, clock, config.client_id)
     service = ScreeningService(repo, config, ports)
     slot = calendar.available_slots("es-madrid", clock.now(), 1)[0]
     state = ConversationState(
