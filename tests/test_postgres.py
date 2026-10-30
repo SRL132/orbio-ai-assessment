@@ -46,6 +46,8 @@ def test_round_trip_and_double_booking(engine, config: ClientConfig) -> None:
     assert calendar.book("es-madrid", slot, state.conversation_id) is True
     # A real second candidate: the unique constraint (not a foreign key) must reject it.
     assert calendar.book("es-madrid", slot, other.conversation_id) is False
+    clock.advance(minutes=11)
+    assert calendar.release_orphans() == 1  # the conversation never recorded the interview
 
 
 def test_concurrent_writers_get_distinct_seqs(engine, config: ClientConfig) -> None:

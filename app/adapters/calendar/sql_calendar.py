@@ -12,16 +12,18 @@ from datetime import UTC, datetime, time, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.storage.sql import InterviewRow
+from app.adapters.storage.sql import ConversationRow, InterviewRow
 from app.domain.config import ClientConfig
 from app.domain.ports import Clock
 
 SEARCH_DAYS = 21
 SATURDAY = 5
+# A booking whose turn never saved (the conversation doesn't show it) is released after this.
+ORPHAN_GRACE = timedelta(minutes=10)
 
 
 class SqlCalendar:
@@ -86,3 +88,23 @@ class SqlCalendar:
         except IntegrityError:
             return False
         return True
+
+    def release_orphans(self) -> int:
+        """Free slots booked by a turn that then failed to save and was never retried: the
+        conversation doesn't record the interview. Returns how many were released."""
+        cutoff = self._clock.now() - ORPHAN_GRACE
+        recorded = select(ConversationRow.id).where(
+            ConversationRow.id == InterviewRow.conversation_id,
+            ConversationRow.interview_at == InterviewRow.starts_at,
+        )
+        with Session(self._engine) as session, session.begin():
+            released = session.scalars(
+                delete(InterviewRow)
+                .where(
+                    InterviewRow.client_id == self._config.client_id,
+                    InterviewRow.created_at < cutoff,
+                    ~recorded.exists(),
+                )
+                .returning(InterviewRow.id)
+            ).all()
+        return len(released)

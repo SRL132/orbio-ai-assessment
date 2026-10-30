@@ -95,6 +95,7 @@ def build(settings: Settings | None = None) -> Container:
             settings.elevenlabs_voice_id,
             settings.elevenlabs_model,
         )
+    runner.add_periodic("release_orphan_bookings", calendar.release_orphans, 300)
     whatsapp = make_whatsapp(settings, service)
     if whatsapp is not None:
         runner.add_periodic(

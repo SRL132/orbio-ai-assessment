@@ -91,25 +91,31 @@ class FlakyRepository(SqlRepository):
         super().save_turn(state, events, replies, processed, redact)
 
 
-def test_booking_survives_a_failed_save(
+def at_scheduling(
     config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
-) -> None:
+) -> tuple[ScreeningService, FlakyRepository, SqlCalendar, ConversationState]:
+    """A qualified candidate who has been offered one slot and has just answered "la 1"."""
     engine = make_engine("sqlite:///:memory:")
     _ENGINES.append(engine)
     calendar = SqlCalendar(engine, config, clock)
-    ports = Ports(extractor, TemplateResponder(), clock, calendar)
     repo = FlakyRepository(engine, clock, config.client_id)
-    service = ScreeningService(repo, config, ports)
-    slot = calendar.available_slots("es-madrid", clock.now(), 1)[0]
+    service = ScreeningService(repo, config, Ports(extractor, TemplateResponder(), clock, calendar))
     state = ConversationState(
         client_id=config.client_id,
         status=Status.QUALIFIED,
         stage=Stage.SCHEDULING,
-        offered_slots=[slot],
+        offered_slots=calendar.available_slots("es-madrid", clock.now(), 1),
     )
     state.candidate.location_id = "es-madrid"
     repo.create(state, [], [])
     service.receive(state.conversation_id, "la 1")
+    return service, repo, calendar, state
+
+
+def test_booking_survives_a_failed_save(
+    config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service, repo, _, state = at_scheduling(config, clock, extractor)
     extractor.push(ExtractionResult(slot_choice=1), ExtractionResult(slot_choice=1))
 
     repo.fail_next_save = True
@@ -118,5 +124,32 @@ def test_booking_survives_a_failed_save(
     result = service.process_pending(state.conversation_id)  # the pending message is retried
 
     assert result is not None
-    assert result.state.interview_at == slot
+    assert result.state.interview_at == state.offered_slots[0]
     assert "slot_taken" not in [e.type for e in result.events]
+
+
+def test_orphaned_booking_is_released_if_the_turn_never_retries(
+    config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service, repo, calendar, state = at_scheduling(config, clock, extractor)
+    slot = state.offered_slots[0]
+    extractor.push(ExtractionResult(slot_choice=1))
+    repo.fail_next_save = True
+    with pytest.raises(RuntimeError):
+        service.process_pending(state.conversation_id)
+    assert slot not in calendar.available_slots("es-madrid", clock.now(), 3)
+
+    assert calendar.release_orphans() == 0  # within the grace period: a retry may still come
+    clock.advance(minutes=11)
+    assert calendar.release_orphans() == 1
+    assert slot in calendar.available_slots("es-madrid", clock.now(), 3)
+
+
+def test_a_saved_booking_is_never_released(
+    config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service, _, calendar, state = at_scheduling(config, clock, extractor)
+    extractor.push(ExtractionResult(slot_choice=1))
+    service.process_pending(state.conversation_id)
+    clock.advance(hours=1)
+    assert calendar.release_orphans() == 0
