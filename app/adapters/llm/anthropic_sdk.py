@@ -90,6 +90,21 @@ class AnthropicLLM:
             raise RefusalError("refusal")
         return "".join(block.text for block in response.content if block.type == "text").strip()
 
+    def complete(self, system: str, user: str, max_tokens: int = 4000) -> str:
+        """Free-text completion (used by the eval candidate simulator)."""
+        started = time.monotonic()
+        response = self._client.beta.messages.create(
+            model=self._model,
+            max_tokens=max_tokens,
+            system=_cached_system(system),
+            messages=[{"role": "user", "content": user}],
+            output_config=self._output_config,
+            betas=[FALLBACK_BETA],
+            fallbacks="default",
+        )
+        self._log("complete", response, started)
+        return "".join(block.text for block in response.content if block.type == "text").strip()
+
     def _log(self, kind: str, response: BetaMessage, started: float) -> None:
         usage = response.usage
         logger.info(

@@ -112,3 +112,13 @@ def test_signals(state: ConversationState, config: ClientConfig) -> None:
     assert extract(state, config, "¿cuánto se cobra?", None).intent == "question"
     assert extract(state, config, "mi DNI es 12345678Z", None).sensitive_data is True
     assert extract(state, config, "yes, my name is Ana", None).language == "en"
+
+
+def test_name_stops_at_the_next_clause(collecting: ConversationState, config: ClientConfig) -> None:
+    text = "Soy Ana López, tengo moto y vivo en Barcelona, Gràcia"
+    fields = extract(collecting, config, text, FieldName.FULL_NAME).fields
+    assert fields.full_name is not None
+    assert fields.full_name.value == "Ana López"
+    assert fields.vehicle is not None
+    assert fields.city is not None
+    assert fields.city.value == "Barcelona"

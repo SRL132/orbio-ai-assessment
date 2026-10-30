@@ -24,6 +24,8 @@ jobs:
         run: uv run lint-imports
       - name: Tests and coverage ratchet
         run: uv run pytest --cov
+      - name: Offline evals vs baseline
+        run: uv run python -m evals --check
       - name: Dependency hygiene
         run: uv run deptry . && uv run pip-audit
       - name: Secrets

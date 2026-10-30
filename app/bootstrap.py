@@ -34,7 +34,7 @@ class Container:
         self.db.dispose()
 
 
-def _llm(settings: Settings) -> tuple[Extractor, Responder]:
+def make_llm(settings: Settings) -> tuple[Extractor, Responder]:
     match settings.llm_provider:
         case "fake":
             return KeywordExtractor(), TemplateResponder()
@@ -68,7 +68,7 @@ def build(settings: Settings | None = None) -> Container:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
     config = load_client_config(settings.client_id)
-    extractor, responder = _llm(settings)
+    extractor, responder = make_llm(settings)
     ports = Ports(extractor=extractor, responder=responder, clock=clock)
     db = make_engine(settings.database_url)
     service = ScreeningService(SqlRepository(db, clock), config, ports)

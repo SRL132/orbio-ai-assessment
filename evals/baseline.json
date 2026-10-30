@@ -1,0 +1,107 @@
+{
+  "fake/keyword/scripted": {
+    "field_accuracy": 1.0,
+    "pass_rate": 1.0,
+    "passed": 16,
+    "scenarios": {
+      "abusive": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "asks_for_human": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "borderline_zone": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "code_switching": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "cooperative_en": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "cooperative_es": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "goes_silent": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 2
+      },
+      "invalid_date_then_valid": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "job_question": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "language_switch": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "no_license": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 4
+      },
+      "outside_area": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
+      "prompt_injection": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 2
+      },
+      "several_answers_at_once": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 7
+      },
+      "shares_id_number": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 2
+      },
+      "vague_location": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      }
+    },
+    "seconds": 0.2,
+    "total": 16
+  }
+}

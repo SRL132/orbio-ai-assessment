@@ -38,8 +38,23 @@
 
 Two rules:
 
-- **Prompts are code.** They live as versioned files in `app/adapters/llm/prompts/`. Changing one means re-running the evals; CI enforces this with a path filter.
+- **Prompts are code.** They live as versioned files in `app/adapters/llm/prompts/`. Changing one means re-running the live evals before merging. CI has no API key, so this is a review rule, not a CI gate; CI runs the offline suite on every push.
 - **Templates are snapshot-tested.** Consent, disqualification and recap texts are legal-ish, so any change shows up as a visible diff.
+
+## Running evals
+
+The suite lives in `evals/scenarios.yaml`: 16 synthetic candidates covering the edge cases in the process design. Each scenario has scripted messages, a persona for LLM-simulated runs, and the expected outcome.
+
+```bash
+uv run python -m evals                       # offline: keyword extractor, scripted (free, in CI)
+uv run python -m evals --provider openrouter --model <slug>      # live, scripted messages
+uv run python -m evals --provider anthropic --simulate           # an LLM plays each candidate
+uv run python -m evals --check               # exit 1 on regression vs evals/baseline.json
+uv run python -m evals --write-baseline      # record this run (an explicit, reviewed change)
+uv run python -m evals -v --scenario abusive # show the transcript of failures
+```
+
+Scores per scenario: outcome correct, field accuracy against the expected record, number of turns, and the output check on every agent message. `evals/baseline.json` holds one entry per provider/model/mode. The offline entry passing says the engine and policy are right; it says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. Live entries are the real measure and are added when a key is available.
 
 ## Claude Code hooks
 

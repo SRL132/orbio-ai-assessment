@@ -83,6 +83,10 @@ class OpenRouterLLM:
             max_tokens=400,
         ).strip()
 
+    def complete(self, system: str, user: str, max_tokens: int = 400) -> str:
+        """Free-text completion (used by the eval candidate simulator)."""
+        return self._chat(kind="complete", system=system, user=user, max_tokens=max_tokens)
+
     def _chat(
         self,
         kind: str,

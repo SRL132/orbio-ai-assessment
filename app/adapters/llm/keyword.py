@@ -184,7 +184,11 @@ class KeywordExtractor:
         elif t in _NO or (words and words[0] == "no" and len(words) <= 3 and awaiting is None):
             yes_no = False
 
-        name = re.search(r"(?:me llamo|mi nombre es|soy|my name is|i am|i'm)\s+(.+)", text, re.I)
+        name = re.search(
+            r"(?:me llamo|mi nombre es|soy|my name is|i am|i'm)\s+(.+?)(?:,|\.|;| y | and |$)",
+            text,
+            re.I,
+        )
         if name:
             put("full_name", name.group(1).strip(" .!"))
         elif awaiting == FieldName.FULL_NAME and re.fullmatch(
