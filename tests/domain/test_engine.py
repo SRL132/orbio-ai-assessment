@@ -239,6 +239,14 @@ def test_changing_an_answer_at_recap_shows_recap_again(chat: Chat) -> None:
     assert "16/11/2026" in chat.result.replies[-1]
 
 
+def test_confirming_the_recap_qualifies_even_if_known_answers_are_repeated(chat: Chat) -> None:
+    # "Sí, soy Ana López y todo está bien": the extractor sees the name again. Nothing changed,
+    # so this is a confirmation, not a correction (found by tests/domain/test_properties.py).
+    answer_everything(chat)
+    chat.say(ex(yes_no=True, full_name="Ana López", city="Madrid", zone="Chamberí"))
+    assert chat.state.status == Status.QUALIFIED
+
+
 def test_closed_conversation_gets_closing_message(chat: Chat) -> None:
     chat.say(ex(yes_no=False))
     chat.say(ex(full_name="Ana López"))

@@ -10,7 +10,7 @@
 | Lint and format | **ruff** | Replaces flake8, isort and black |
 | Types | **mypy** | `--strict` on `app/domain/`, looser elsewhere; Pydantic plugin |
 | Architecture boundaries | **import-linter** | `domain/` imports nothing from adapters, api, worker or SDKs |
-| Unit tests | **pytest** + **hypothesis** | Property tests for parsers and validators (dates, zones, enums) |
+| Unit tests | **pytest** + **hypothesis** | Property tests for parsers and validators, and for the engine: Hypothesis plays an arbitrary (even adversarial) extractor for whole conversations and checks the code-owned rules after every turn (only complete, unflagged candidates qualify; a final status never reopens; every message gets an answer) |
 | Coverage | **pytest-cov** | Ratcheted; ~90% target on `domain/`, no target on adapters |
 | LLM-dependent tests | Fake adapters + recorded responses | Deterministic and free in CI |
 | Evals | Own harness + `evals/baseline.json` | Live LLM; run on demand and required for prompt or policy changes |

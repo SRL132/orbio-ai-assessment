@@ -210,7 +210,7 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
 
 
 def _on_recap_reply(t: _Turn, extraction: ExtractionResult, applied: ApplyResult) -> None:
-    if applied.progressed or applied.changed:
+    if applied.added or applied.changed:
         t.actions.append(Recap())  # they corrected something: confirm the new version
     elif extraction.yes_no is True:
         _finalize(t)

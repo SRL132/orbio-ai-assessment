@@ -51,8 +51,9 @@ class ApplyResult:
     events: list[DomainEvent] = field(default_factory=list)
     knockout: Reason | None = None
     rejected: dict[FieldName, InvalidReason] = field(default_factory=dict)
-    progressed: set[FieldName] = field(default_factory=set)
-    changed: set[FieldName] = field(default_factory=set)
+    progressed: set[FieldName] = field(default_factory=set)  # accepted, even if already known
+    added: set[FieldName] = field(default_factory=set)  # had no answer before
+    changed: set[FieldName] = field(default_factory=set)  # had a different answer before
 
 
 def next_missing_field(candidate: Candidate, config: ClientConfig) -> FieldName | None:
@@ -178,6 +179,8 @@ def apply_extraction(
         else:
             meta.status = FieldStatus.VALID
         result.progressed.add(name)
+        if not was_set:
+            result.added.add(name)
         if was_set and _snapshot(candidate, name) != before:
             result.changed.add(name)
             result.events.append(
