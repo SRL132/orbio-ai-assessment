@@ -30,6 +30,7 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     create_engine,
+    delete,
     func,
     select,
     true,
@@ -51,6 +52,8 @@ from app.domain.models import (
 from app.domain.ports import Clock, LeaseLost
 
 REDACTED = "[redacted]"
+# Meta retries a webhook for up to 36 h; delivery ids are kept a while longer, then pruned.
+DELIVERY_ID_TTL = timedelta(days=7)
 
 
 class UTCDateTime(TypeDecorator[datetime]):
@@ -169,6 +172,19 @@ class ChannelContactRow(Base):
     external_id: Mapped[str] = mapped_column(String(64))
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ChannelDeliveryRow(Base):
+    """A webhook delivery already handled, by the channel's own message id, so a retried
+    delivery is dropped before it does anything. Holds no personal data: just Meta's id."""
+
+    __tablename__ = "channel_deliveries"
+    __table_args__ = (Index("ix_channel_deliveries_received", "client_id", "received_at"),)
+
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(16), primary_key=True)
+    message_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class JobLeaseRow(Base):
@@ -546,6 +562,40 @@ class SqlRepository:
                     delivered=delivered,
                     delivery_attempts=MessageRow.delivery_attempts + 1,
                     delivery_error=error[:300] if error else None,
+                )
+            )
+
+    def claim_delivery(self, channel: str, message_id: str) -> bool:
+        now = self._clock.now()
+        row = ChannelDeliveryRow
+        try:
+            with self._sessions.begin() as session:
+                session.execute(  # housekeeping: retries stop long before this
+                    delete(row).where(
+                        row.client_id == self._client_id,
+                        row.received_at < now - DELIVERY_ID_TTL,
+                    )
+                )
+                session.add(
+                    row(
+                        client_id=self._client_id,
+                        channel=channel,
+                        message_id=message_id,
+                        received_at=now,
+                    )
+                )
+        except IntegrityError:  # the primary key: this delivery was claimed already
+            return False
+        return True
+
+    def release_delivery(self, channel: str, message_id: str) -> None:
+        row = ChannelDeliveryRow
+        with self._sessions.begin() as session:
+            session.execute(
+                delete(row).where(
+                    row.client_id == self._client_id,
+                    row.channel == channel,
+                    row.message_id == message_id,
                 )
             )
 

@@ -16,7 +16,7 @@ import httpx
 
 from app import metrics
 from app.adapters.channels.quick_replies import quick_replies
-from app.adapters.channels.whatsapp import WhatsAppClient, parse_webhook
+from app.adapters.channels.whatsapp import WhatsAppClient, WhatsAppInbound, parse_webhook
 from app.domain.models import TERMINAL_STATUSES, Channel, Stage
 from app.worker.service import ScreeningService
 
@@ -50,29 +50,47 @@ class WhatsAppChannel:
     # --- Inbound --------------------------------------------------------------------------------
 
     def handle(self, payload: dict[str, Any]) -> list[UUID]:
-        """Store incoming messages. Returns the conversations that now have work to do."""
+        """Store incoming messages. Returns the conversations that now have work to do.
+
+        Idempotent per message: Meta retries deliveries (for up to 36 h, sometimes two copies
+        at once), so each message id is claimed before anything else and a retry is dropped,
+        whatever kind of message it is. If handling fails the claim is given back, so the
+        retry that follows the error response is handled instead of lost."""
         repo = self.service.repo
         to_process: list[UUID] = []
         for message in parse_webhook(payload):
-            cid = repo.conversation_for(CHANNEL, message.wa_id)
-            state = repo.get(cid) if cid else None
-            ended = state is None or (
-                state.stage == Stage.CLOSED and state.status in TERMINAL_STATUSES
-            )
-            wants_restart = (message.text or "").strip().lower() in RESTART_WORDS
-            if cid is None or state is None or (ended and wants_restart):
-                # A new candidate (or a returning one saying hello): open a conversation.
-                # The greeting asks for consent, so this first message isn't an answer.
-                new_id = self.service.start_conversation(CHANNEL)
-                repo.link_contact(CHANNEL, message.wa_id, new_id)
-                logger.info("whatsapp_conversation_started id=%s", new_id)
+            if not repo.claim_delivery(CHANNEL, message.message_id):
+                metrics.WHATSAPP_DUPLICATES.inc()
                 continue
-            if message.text is None:
-                self.service.reply_text_only(cid)
-                continue
-            if self.service.receive(cid, message.text, channel_message_id=message.message_id):
+            try:
+                cid = self._handle_message(message)
+            except Exception:
+                repo.release_delivery(CHANNEL, message.message_id)
+                raise
+            if cid is not None:
                 to_process.append(cid)
         return list(dict.fromkeys(to_process))
+
+    def _handle_message(self, message: WhatsAppInbound) -> UUID | None:
+        """One new (not retried) message. Returns its conversation if it needs a turn."""
+        repo = self.service.repo
+        cid = repo.conversation_for(CHANNEL, message.wa_id)
+        state = repo.get(cid) if cid else None
+        ended = state is None or (state.stage == Stage.CLOSED and state.status in TERMINAL_STATUSES)
+        wants_restart = (message.text or "").strip().lower() in RESTART_WORDS
+        if cid is None or state is None or (ended and wants_restart):
+            # A new candidate (or a returning one saying hello): open a conversation.
+            # The greeting asks for consent, so this first message isn't an answer.
+            new_id = self.service.start_conversation(CHANNEL)
+            repo.link_contact(CHANNEL, message.wa_id, new_id)
+            logger.info("whatsapp_conversation_started id=%s", new_id)
+            return None
+        if message.text is None:
+            self.service.reply_text_only(cid)
+            return None
+        if self.service.receive(cid, message.text, channel_message_id=message.message_id):
+            return cid
+        return None
 
     # --- Outbound -------------------------------------------------------------------------------
 

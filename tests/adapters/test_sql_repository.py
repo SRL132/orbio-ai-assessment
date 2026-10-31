@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from app.adapters.clock.clocks import FakeClock
-from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
+from app.adapters.storage.sql import DELIVERY_ID_TTL, REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import ConversationState, DomainEvent, Status
-from tests.conftest import write_concurrently
+from tests.conftest import claim_concurrently, write_concurrently
 
 
 @pytest.fixture
@@ -58,6 +58,38 @@ def test_duplicate_channel_message_is_ignored(
     assert repo.add_inbound(state.conversation_id, "hola", channel_message_id="wamid.1") is True
     assert repo.add_inbound(state.conversation_id, "hola", channel_message_id="wamid.1") is False
     assert len(repo.pending_inbound(state.conversation_id)) == 1
+
+
+def test_a_delivery_is_claimed_once_per_client(clock: FakeClock, config: ClientConfig) -> None:
+    engine = make_engine("sqlite:///:memory:")
+    repo = SqlRepository(engine, clock, config.client_id)
+    assert repo.claim_delivery("whatsapp", "wamid.1") is True
+    assert repo.claim_delivery("whatsapp", "wamid.1") is False  # Meta retried it
+    assert repo.claim_delivery("whatsapp", "wamid.2") is True
+    assert SqlRepository(engine, clock, "another_client").claim_delivery("whatsapp", "wamid.1")
+    engine.dispose()
+
+
+def test_a_released_delivery_can_be_claimed_again(repo: SqlRepository) -> None:
+    assert repo.claim_delivery("whatsapp", "wamid.1") is True
+    repo.release_delivery("whatsapp", "wamid.1")
+    assert repo.claim_delivery("whatsapp", "wamid.1") is True
+
+
+def test_old_delivery_ids_are_pruned(repo: SqlRepository, clock: FakeClock) -> None:
+    repo.claim_delivery("whatsapp", "wamid.1")
+    clock.advance(days=DELIVERY_ID_TTL.days, minutes=1)
+    repo.claim_delivery("whatsapp", "wamid.2")  # prunes on the way in
+    assert repo.claim_delivery("whatsapp", "wamid.1") is True
+
+
+def test_exactly_one_concurrent_copy_of_a_delivery_wins(
+    tmp_path: Path, clock: FakeClock, config: ClientConfig
+) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'race.db'}")  # a file: threads share it for real
+    wins = claim_concurrently(SqlRepository(engine, clock, config.client_id))
+    engine.dispose()
+    assert wins == 1
 
 
 def test_sensitive_messages_are_redacted(repo: SqlRepository, state: ConversationState) -> None:

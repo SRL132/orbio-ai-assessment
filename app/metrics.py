@@ -45,6 +45,9 @@ LLM_COST = Counter(
 )
 RATE_LIMITED = Counter("sazon_rate_limited_total", "Requests refused with 429.", ["endpoint"])
 WHATSAPP_SENT = Counter("sazon_whatsapp_messages_total", "WhatsApp outbox results.", ["result"])
+WHATSAPP_DUPLICATES = Counter(
+    "sazon_whatsapp_duplicate_deliveries_total", "WhatsApp webhook retries dropped."
+)
 
 
 def record_events(events: list[DomainEvent]) -> None:

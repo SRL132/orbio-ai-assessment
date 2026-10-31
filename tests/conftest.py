@@ -78,6 +78,29 @@ def ex(
     )
 
 
+def claim_concurrently(repo: Any, threads: int = 16) -> int:
+    """The same webhook delivery claimed from many threads at once, as when Meta sends two
+    copies of a message in parallel. Returns how many claims succeeded."""
+    barrier = threading.Barrier(threads)
+    wins: list[bool] = []
+    errors: list[str] = []
+
+    def claim() -> None:
+        barrier.wait()
+        try:
+            wins.append(repo.claim_delivery("whatsapp", "wamid.same"))
+        except Exception as exc:  # a loser must get False, not an error
+            errors.append(type(exc).__name__)
+
+    workers = [threading.Thread(target=claim) for _ in range(threads)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert errors == []
+    return sum(wins)
+
+
 def write_concurrently(repo: Any, state: ConversationState, threads: int = 16) -> list[int]:
     """Inbound messages and agent replies for one conversation from many threads at once, as
     when a WhatsApp webhook arrives while the worker saves a turn. Returns the message seqs."""

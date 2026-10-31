@@ -104,6 +104,67 @@ def test_duplicate_deliveries_are_ignored(setup) -> None:
     assert channel.handle(payload) == []  # Meta retried the same message
 
 
+def test_a_retried_first_message_is_not_taken_as_an_answer(setup) -> None:
+    service, channel, _, _ = setup
+    first = incoming("hola")
+    channel.handle(first)
+    assert channel.handle(first) == []  # without the claim, "hola" would answer the consent
+    cid = service.repo.conversation_for("whatsapp", PHONE)
+    assert service.repo.pending_inbound(cid) == []
+    assert channel.dispatch_once() == 1  # one greeting, not two
+
+
+def test_a_retried_restart_opens_one_conversation(setup) -> None:
+    service, channel, _, _ = setup
+    channel.handle(incoming("hola"))
+    say(service, channel, "No")  # declines consent: the conversation ends
+    old = service.repo.conversation_for("whatsapp", PHONE)
+    restart = incoming("hola")
+    channel.handle(restart)
+    new = service.repo.conversation_for("whatsapp", PHONE)
+    channel.handle(restart)
+    assert old != new
+    assert service.repo.conversation_for("whatsapp", PHONE) == new
+
+
+def test_a_retried_photo_gets_one_text_only_notice(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.handle(incoming("hola"))
+    say(service, channel, "Sí")
+    before = len(fake.sent)
+    photo = incoming(None)
+    channel.handle(photo)
+    channel.handle(photo)
+    channel.dispatch_once()
+    assert len(fake.sent) == before + 1
+
+
+def test_a_failed_delivery_is_handled_on_the_retry(setup, monkeypatch) -> None:
+    service, channel, _, _ = setup
+    first = incoming("hola")
+
+    def broken(channel_name: str) -> None:
+        raise RuntimeError("database down")
+
+    monkeypatch.setattr(service, "start_conversation", broken)
+    with pytest.raises(RuntimeError):
+        channel.handle(first)  # the webhook answers 500, so Meta retries
+    monkeypatch.undo()
+    channel.handle(first)
+    assert service.repo.conversation_for("whatsapp", PHONE) is not None
+    assert channel.dispatch_once() == 1
+
+
+def test_a_message_stored_before_claims_existed_is_still_deduplicated(setup) -> None:
+    service, channel, _, _ = setup
+    channel.handle(incoming("hola"))
+    answer = incoming("Sí")
+    channel.handle(answer)
+    message_id = answer["entry"][0]["changes"][0]["value"]["messages"][0]["id"]
+    service.repo.release_delivery("whatsapp", message_id)  # as if stored before the upgrade
+    assert channel.handle(answer) == []  # the messages table still catches it
+
+
 def test_reminders_reach_the_phone_inside_the_window(setup) -> None:
     service, channel, fake, clock = setup
     channel.handle(incoming("hola"))

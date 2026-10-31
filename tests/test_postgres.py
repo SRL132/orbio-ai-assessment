@@ -14,7 +14,7 @@ from app.adapters.storage.rate_limit import SqlRateLimiter
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import Availability, ConversationState, DomainEvent, Stage, Status
-from tests.conftest import write_concurrently
+from tests.conftest import claim_concurrently, write_concurrently
 
 URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="TEST_DATABASE_URL not set")
@@ -143,3 +143,8 @@ def test_rate_limit_is_exact_under_concurrency(engine) -> None:
     for thread in threads:
         thread.join()
     assert len(allowed) == 5
+
+
+def test_exactly_one_concurrent_copy_of_a_delivery_wins(engine, config: ClientConfig) -> None:
+    repo = SqlRepository(engine, FakeClock(datetime(2026, 11, 2, tzinfo=UTC)), config.client_id)
+    assert claim_concurrently(repo) == 1

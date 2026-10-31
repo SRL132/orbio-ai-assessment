@@ -74,6 +74,10 @@ The extractor schema includes `language`, `intent`, `sentiment` and `confused` *
 
 The API normalizes input to `InboundMessage`, drops duplicates by channel message ID, persists, enqueues and returns 200 in milliseconds. All LLM work happens in workers.
 
+Inbound is idempotent per message: before doing anything, the webhook claims the channel's message ID in `channel_deliveries` (a primary-key insert, so of two concurrent copies exactly one wins). A retry is dropped whatever it is: a first message that opens a conversation, a photo that gets the "text only" notice, or a normal answer. If handling fails, the claim is given back, the webhook answers 500, and Meta's retry is handled instead of lost. IDs are pruned after 7 days; Meta stops retrying after 36 h.
+
+Outbound is at-least-once: the dispatcher sends, then marks the message delivered, so a crash between the two re-sends that one message. Making it exactly-once would need an idempotency key that WhatsApp's send API doesn't offer.
+
 ### 4. One conversation at a time
 
 A lease on the conversation row, plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
