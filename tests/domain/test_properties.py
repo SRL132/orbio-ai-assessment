@@ -33,6 +33,7 @@ from app.domain.models import (
 )
 from app.domain.ports import Ports
 from app.domain.validators import normalize
+from tests.conftest import said
 
 CONFIG = load_client_config("grupo_sazon")  # module-level: Hypothesis reruns the test body
 START = datetime(2026, 11, 2, 10, tzinfo=UTC)
@@ -55,7 +56,11 @@ class _Calendar:
 
 def _extracted(value: st.SearchStrategy[Any]) -> st.SearchStrategy[dict[str, Any] | None]:
     item = st.fixed_dictionaries(
-        {"value": value, "quote": st.just("…"), "confidence": st.floats(0, 1)}
+        {
+            "value": value,
+            "quote": st.sampled_from(["…", "", "sí", "Madrid", "tengo carnet"]),
+            "confidence": st.floats(0, 1),
+        }
     )
     return st.none() | item
 
@@ -95,7 +100,7 @@ def _mostly(good: object, *noise: object) -> st.SearchStrategy[dict[str, Any] | 
     """Usually the right answer, sometimes nothing, sometimes a wrong one."""
     choices = [*[good] * 8, None, *noise]
     return st.sampled_from(choices).map(
-        lambda v: None if v is None else {"value": v, "quote": "…", "confidence": 0.9}
+        lambda v: None if v is None else {"value": v, "quote": str(v), "confidence": 0.9}
     )
 
 
@@ -130,8 +135,12 @@ cooperative = st.builds(
     script=st.lists(extractions | cooperative, min_size=1, max_size=25)
     | st.lists(cooperative, min_size=8, max_size=25),
     channel=st.sampled_from(["chat", "voice"]),
+    # Half the runs quote only what the candidate wrote; the rest invent some values.
+    honest=st.just([True] * 25) | st.lists(st.booleans(), min_size=25, max_size=25),
 )
-def test_no_extraction_can_break_the_rules(script: list[ExtractionResult], channel: str) -> None:
+def test_no_extraction_can_break_the_rules(
+    script: list[ExtractionResult], channel: str, honest: list[bool]
+) -> None:
     clock = FakeClock(START)
     extractor = ScriptedExtractor(script)
     ports = Ports(extractor, TemplateResponder(), clock, _Calendar())
@@ -139,10 +148,12 @@ def test_no_extraction_can_break_the_rules(script: list[ExtractionResult], chann
         ConversationState(client_id=CONFIG.client_id, channel=channel), CONFIG, ports
     ).state
     was_terminal = False
-    for _ in script:
+    for extraction, grounded in zip(script, honest, strict=False):
         clock.advance(minutes=1)
+        # Either the candidate wrote what the extractor quotes, or the extractor made it up.
+        text = said(extraction.fields) if grounded else "…"
         message = InboundMessage(
-            conversation_id=state.conversation_id, text="…", received_at=clock.now()
+            conversation_id=state.conversation_id, text=text, received_at=clock.now()
         )
         before = state
         result = engine.turn(state, message, CONFIG, ports)  # never raises
@@ -151,6 +162,16 @@ def test_no_extraction_can_break_the_rules(script: list[ExtractionResult], chann
         assert result.replies, "every candidate message gets an answer"
         assert all(reply.strip() for reply in result.replies)
         assert state.progress >= before.progress, "an answered field never becomes unanswered"
+        if text == "…":
+            # Nothing in the message backs any value: none is accepted, nobody is knocked out.
+            assert not [
+                name
+                for name, meta in state.candidate.meta.items()
+                if meta.status == FieldStatus.VALID
+                and before.candidate.meta[name].status != FieldStatus.VALID
+            ], "a value the candidate never wrote is not accepted"
+            if before.status != Status.DISQUALIFIED:
+                assert state.status != Status.DISQUALIFIED
         if was_terminal:
             assert state.status in TERMINAL_STATUSES, "a final status is never reopened"
         was_terminal = state.status in TERMINAL_STATUSES

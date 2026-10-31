@@ -35,7 +35,7 @@ from app.domain.validators import (
     validate_schedule,
     validate_start_date,
 )
-from tests.conftest import ex
+from tests.conftest import ex, said
 
 TODAY = date(2026, 11, 2)
 
@@ -171,6 +171,7 @@ def test_events_record_which_field_and_why(config: ClientConfig) -> None:
         ex(start_date=TODAY - timedelta(days=3), schedule=[Schedule.MORNING]).fields,
         config,
         TODAY,
+        message=said(ex(start_date=TODAY - timedelta(days=3), schedule=[Schedule.MORNING]).fields),
     )
     by_type = {e.type: e.data for e in result.events}
     assert by_type[EventType.FIELD_REJECTED] == {"field": "start_date", "reason": "in_past"}
@@ -178,6 +179,7 @@ def test_events_record_which_field_and_why(config: ClientConfig) -> None:
         "field": "schedule",
         "status": "valid",
         "confidence": 0.9,
+        "grounded": True,
     }
     assert result.rejected == {FieldName.START_DATE: "in_past"}
 
@@ -190,6 +192,7 @@ def test_a_rejected_answer_does_not_stop_the_others(config: ClientConfig) -> Non
         ex(full_name="1234", schedule=[Schedule.MORNING], experience_years=2).fields,
         config,
         TODAY,
+        message=said(ex(full_name="1234", schedule=[Schedule.MORNING], experience_years=2).fields),
     )
     assert state.candidate.schedule == [Schedule.MORNING]
     assert state.candidate.experience_years == 2
@@ -197,7 +200,13 @@ def test_a_rejected_answer_does_not_stop_the_others(config: ClientConfig) -> Non
 
 def test_knockout_event_and_value(config: ClientConfig) -> None:
     state = ConversationState(client_id=config.client_id)
-    result = apply_extraction(state, ex(has_license=False).fields, config, TODAY)
+    result = apply_extraction(
+        state,
+        ex(has_license=False).fields,
+        config,
+        TODAY,
+        message=said(ex(has_license=False).fields),
+    )
     assert result.knockout == Reason.NO_LICENSE
     assert result.events[-1].data == {"field": "license", "reason": "no_license"}
     assert state.candidate.has_license is False  # the answer is kept, for the record
@@ -208,7 +217,7 @@ def test_review_outcome_notes_and_evidence(config: ClientConfig) -> None:
     fields = ex(city="Madrid", zone="Getafe").fields
     fields.city.quote, fields.zone.quote = "vivo en Madrid", "en Getafe"  # type: ignore[union-attr]
     fields.zone.confidence = 0.4  # type: ignore[union-attr]
-    result = apply_extraction(state, fields, config, TODAY)
+    result = apply_extraction(state, fields, config, TODAY, message=said(fields))
     meta = state.candidate.meta[FieldName.LOCATION]
     assert meta.note == "borderline_zone"
     assert meta.quote == "vivo en Madrid / en Getafe"  # each quote once, joined
@@ -221,8 +230,20 @@ def test_review_outcome_notes_and_evidence(config: ClientConfig) -> None:
 
 def test_changing_an_answer_records_it(config: ClientConfig) -> None:
     state = ConversationState(client_id=config.client_id)
-    apply_extraction(state, ex(schedule=[Schedule.MORNING]).fields, config, TODAY)
-    result = apply_extraction(state, ex(schedule=[Schedule.EVENING]).fields, config, TODAY)
+    apply_extraction(
+        state,
+        ex(schedule=[Schedule.MORNING]).fields,
+        config,
+        TODAY,
+        message=said(ex(schedule=[Schedule.MORNING]).fields),
+    )
+    result = apply_extraction(
+        state,
+        ex(schedule=[Schedule.EVENING]).fields,
+        config,
+        TODAY,
+        message=said(ex(schedule=[Schedule.EVENING]).fields),
+    )
     assert result.changed == {FieldName.SCHEDULE}
     assert result.added == set()
     assert {"field": "schedule"} in [
@@ -257,7 +278,13 @@ def test_a_field_gives_up_after_the_configured_attempts(config: ClientConfig) ->
 
 def test_postal_code_reaches_the_validator(config: ClientConfig) -> None:
     state = ConversationState(client_id=config.client_id)
-    apply_extraction(state, ex(city="Madrid", postal_code="28013").fields, config, TODAY)
+    apply_extraction(
+        state,
+        ex(city="Madrid", postal_code="28013").fields,
+        config,
+        TODAY,
+        message=said(ex(city="Madrid", postal_code="28013").fields),
+    )
     assert (state.candidate.location_id, state.candidate.postal_code) == ("es-madrid", "28013")
 
 
@@ -266,11 +293,11 @@ def test_empty_quotes_are_not_evidence(config: ClientConfig) -> None:
     fields = ex(city="Madrid", zone="Centro").fields
     fields.city.quote = ""  # type: ignore[union-attr]
     fields.zone.quote = "en el Centro"  # type: ignore[union-attr]
-    apply_extraction(state, fields, config, TODAY)
+    apply_extraction(state, fields, config, TODAY, message=said(fields))
     assert state.candidate.meta[FieldName.LOCATION].quote == "en el Centro"
     fields.zone.quote = ""  # type: ignore[union-attr]
     other = ConversationState(client_id=config.client_id)
-    apply_extraction(other, fields, config, TODAY)
+    apply_extraction(other, fields, config, TODAY, message=said(fields))
     assert other.candidate.meta[FieldName.LOCATION].quote is None
 
 

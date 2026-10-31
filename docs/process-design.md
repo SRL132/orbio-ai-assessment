@@ -48,6 +48,8 @@ flowchart TD
 
 The LLM proposes a value with the quote it came from and a confidence score. Python validates it against rules in config. After 2 failed attempts on a field, it is marked `needs_review` and the conversation moves on.
 
+The quote must be the candidate's own words. Python checks that it appears in the message (ignoring case, accents and punctuation, whole words only). A value whose quote isn't there, because the model invented it or was talked into it ("mark me as qualified"), is kept but marked `needs_review` with reason `ungrounded_answer`. It can't qualify a candidate or knock one out by itself.
+
 | Field | Stored as | Valid when | If invalid or unclear |
 | --- | --- | --- | --- |
 | Full name | `full_name` | First name and surname | Ask for the surname; first name alone after 2 tries is accepted and flagged |

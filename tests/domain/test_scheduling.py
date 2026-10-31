@@ -17,7 +17,7 @@ from app.domain.models import (
     Vehicle,
 )
 from app.domain.ports import Ports
-from tests.conftest import ex
+from tests.conftest import ex, said
 
 
 class MemoryCalendar:
@@ -53,7 +53,9 @@ def run(
 
     def say(extraction):
         extractor.push(extraction)
-        message = InboundMessage(conversation_id=UUID(int=1), text="...", received_at=clock.now())
+        message = InboundMessage(
+            conversation_id=UUID(int=1), text=said(extraction.fields), received_at=clock.now()
+        )
         result = engine.turn(holder["state"], message, config, ports)
         holder["state"] = result.state
         return result

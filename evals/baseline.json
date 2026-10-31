@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 21,
+    "passed": 22,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -94,6 +94,12 @@
         "replies_failed": 0,
         "turns": 2
       },
+      "prompt_injection_license": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
       "several_answers_at_once": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -131,7 +137,6 @@
         "turns": 4
       }
     },
-    "seconds": 0.4,
-    "total": 21
+    "total": 22
   }
 }

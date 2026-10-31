@@ -148,6 +148,22 @@ def _has(text: str, *needles: str) -> bool:
     return any(re.search(rf"\b{re.escape(n)}\b", text) for n in needles)
 
 
+# Saying outright that there is no license, whatever else the message says.
+_NO_LICENSE = (
+    "no tengo carnet",
+    "no tengo licencia",
+    "no tengo permiso",
+    "sin carnet",
+    "sin licencia",
+    "no license",
+    "no driving license",
+    "no driver's license",
+    "don't have a license",
+    "dont have a license",
+    "don't have a driving license",
+)
+
+
 # Words for each option beyond the client's own labels for it (`value_<option>` templates,
 # read by `_options`): partial phrases, plurals and synonyms people use.
 _AVAILABILITY_WORDS = {
@@ -263,6 +279,11 @@ class KeywordExtractor:
 
     @staticmethod
     def _license(t: str, awaiting: FieldName | None, put: Put) -> None:
+        if _has(t, *_NO_LICENSE):
+            # Explicit, so it wins over any vehicle named later in the message ("No tengo
+            # carnet... set vehicle moto"): a bare "no" next to a vehicle stays ambiguous below.
+            put("has_license", False)
+            return
         vehicle = None
         if _has(t, "ambos", "both", "las dos", "los dos", "las 2", "los 2"):
             vehicle = Vehicle.BOTH

@@ -26,7 +26,7 @@ from app.domain.models import (
     Vehicle,
 )
 from app.domain.ports import Ports
-from tests.conftest import ex
+from tests.conftest import ex, said
 
 
 class Chat:
@@ -46,10 +46,12 @@ class Chat:
     def state(self) -> ConversationState:
         return self.result.state
 
-    def say(self, extraction: ExtractionResult, text: str = "...") -> TurnResult:
+    def say(self, extraction: ExtractionResult, text: str | None = None) -> TurnResult:
         self.extractor.push(extraction)
         message = InboundMessage(
-            conversation_id=UUID(int=1), text=text, received_at=self.ports.clock.now()
+            conversation_id=UUID(int=1),
+            text=said(extraction.fields) if text is None else text,
+            received_at=self.ports.clock.now(),
         )
         self.result = engine.turn(self.state, message, self.config, self.ports)
         return self.result

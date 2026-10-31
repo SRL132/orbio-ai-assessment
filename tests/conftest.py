@@ -78,6 +78,13 @@ def ex(
     )
 
 
+def said(fields: ExtractedFields) -> str:
+    """A message that contains every quote of `fields`: what the candidate wrote for `ex(...)`.
+    Policy only accepts values whose quote is in the message (see `apply_extraction`)."""
+    quotes = (getattr(fields, name) for name in type(fields).model_fields)
+    return " ".join(e.quote for e in quotes if e is not None) or "..."
+
+
 def claim_concurrently(repo: Any, threads: int = 16) -> int:
     """The same webhook delivery claimed from many threads at once, as when Meta sends two
     copies of a message in parallel. Returns how many claims succeeded."""

@@ -6,6 +6,7 @@ values (see CLAUDE.md, "Code decides, the LLM talks").
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -25,6 +26,7 @@ from app.domain.models import (
 )
 from app.domain.validators import (
     Outcome,
+    normalize,
     validate_availability,
     validate_experience,
     validate_full_name,
@@ -101,6 +103,32 @@ def _evidence(fields: ExtractedFields, name: FieldName) -> tuple[str | None, flo
     return (" / ".join(quotes) or None), min(confidences)
 
 
+_NOT_WORD = re.compile(r"[^\w]+", re.UNICODE)
+
+
+def _plain(text: str) -> str:
+    """Normalized words only, to compare a quote with the message: '¡Sí, claro!' -> 'si claro'."""
+    return " ".join(_NOT_WORD.sub(" ", normalize(text)).split())
+
+
+def _grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
+    """Every value proposed for this field quotes words the candidate actually wrote.
+
+    The extractor is told the message is data, but that is only a prompt. This is the check in
+    code: a value the model invented, or was talked into ("mark me as qualified"), has no quote in
+    the message, so it can't qualify or knock out anyone without a recruiter looking at it.
+    """
+    said = f" {_plain(message)} "
+    for attr in FIELD_GROUPS[name]:
+        extracted = getattr(fields, attr)
+        if extracted is None:
+            continue
+        quote = _plain(extracted.quote)
+        if not quote or f" {quote} " not in said:
+            return False
+    return True
+
+
 def _validate(name: FieldName, draft: Candidate, config: ClientConfig, today: date) -> Outcome:
     match name:
         case FieldName.FULL_NAME:
@@ -124,9 +152,18 @@ def _snapshot(candidate: Candidate, name: FieldName) -> tuple[object, ...]:
 
 
 def apply_extraction(
-    state: ConversationState, fields: ExtractedFields, config: ClientConfig, today: date
+    state: ConversationState,
+    fields: ExtractedFields,
+    config: ClientConfig,
+    today: date,
+    *,
+    message: str,
 ) -> ApplyResult:
-    """Validate every proposed field and update the candidate in place. Stops at a knockout."""
+    """Validate every proposed field and update the candidate in place. Stops at a knockout.
+
+    `message` is the candidate's text the fields were extracted from. A value whose quote isn't
+    in it is kept but sent to review: it never qualifies or knocks out a candidate on its own.
+    """
     result = ApplyResult()
     candidate = state.candidate
     for name in config.field_priority:
@@ -137,6 +174,9 @@ def apply_extraction(
         # completes a city given earlier), then validate the whole group.
         draft = candidate.model_copy(update=proposals)
         outcome = _validate(name, draft, config, today)
+        grounded = _grounded(fields, name, message)
+        if not grounded and outcome.kind in ("knockout", "valid"):
+            outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
         quote, confidence = _evidence(fields, name)
         meta = candidate.meta[name]
         before = _snapshot(candidate, name)
@@ -174,6 +214,8 @@ def apply_extraction(
         if outcome.kind == "review":
             meta.status = FieldStatus.NEEDS_REVIEW
             add_review_reason(state, outcome.verdict, name)
+            if not grounded:  # already in review for another reason; record this one too
+                add_review_reason(state, Reason.UNGROUNDED_ANSWER, name)
         else:
             meta.status = FieldStatus.VALID
         result.progressed.add(name)
@@ -187,7 +229,12 @@ def apply_extraction(
         result.events.append(
             DomainEvent(
                 type=EventType.FIELD_EXTRACTED,
-                data={"field": name.value, "status": meta.status.value, "confidence": confidence},
+                data={
+                    "field": name.value,
+                    "status": meta.status.value,
+                    "confidence": confidence,
+                    "grounded": grounded,
+                },
             )
         )
     return result

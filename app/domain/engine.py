@@ -73,6 +73,7 @@ class _Turn:
     actions: list[Action] = field(default_factory=list)
     events: list[DomainEvent] = field(default_factory=list)
     redact: bool = False
+    message: str = ""  # the candidate's words this turn: extracted values must quote them
 
     @classmethod
     def begin(cls, state: ConversationState, config: ClientConfig, ports: Ports) -> _Turn:
@@ -107,6 +108,7 @@ def turn(
         t.say("closed")
         return _finish(t)
 
+    t.message = message.text
     t.state.last_inbound_at = t.now
     t.state.reminders_sent = 0
     try:
@@ -222,7 +224,9 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
     """Collecting and recap: apply the extracted fields, then ask, recap or finish."""
     if extraction.intent == "question" and extraction.question:
         t.actions.append(AnswerQuestion(question=extraction.question))
-    applied = apply_extraction(t.state, extraction.fields, t.config, t.now.date())
+    applied = apply_extraction(
+        t.state, extraction.fields, t.config, t.now.date(), message=t.message
+    )
     t.events.extend(applied.events)
     if applied.knockout:
         _disqualify(t, applied.knockout)

@@ -83,6 +83,7 @@ class Reason(StrEnum):
     ZONE_NOT_LISTED = "zone_not_listed"
     POSTAL_CODE_NOT_LISTED = "postal_code_not_listed"
     FIELD_FAILED_TWICE = "field_failed_twice"
+    UNGROUNDED_ANSWER = "ungrounded_answer"
 
 
 # Knockouts end the screening; each needs a `disqualified_<reason>` template.
