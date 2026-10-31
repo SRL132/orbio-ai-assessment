@@ -32,9 +32,10 @@ from app.domain.ports import Ports, Repository
 logger = logging.getLogger("app.service")
 
 MAX_MESSAGE_CHARS = 2000
-# Longer than any turn can take (two LLM calls with their timeouts and a retry). A worker that
-# dies holding a lease blocks its conversation for at most this long.
-LEASE = timedelta(minutes=2)
+# Longer than any turn can take: two LLM calls, each up to a timeout and a retry on the primary
+# plus a timeout on the fallback (2 x 60 s with the default 20 s timeout). A worker that dies
+# holding a lease blocks its conversation for at most this long.
+LEASE = timedelta(minutes=3)
 LEASE_POLL_SECONDS = 0.05
 
 
@@ -119,6 +120,8 @@ class ScreeningService:
         pending = self.repo.pending_inbound(conversation_id)
         if state is None or not pending:
             return None
+        if state.retry_turn_at is not None and self.ports.clock.now() < state.retry_turn_at:
+            return None  # held while no LLM answered: wait for the retry time
         message = InboundMessage(
             conversation_id=conversation_id,
             text="\n".join(m.text for m in pending),
@@ -127,12 +130,20 @@ class ScreeningService:
         started = time.monotonic()
         attributes = {"conversation.id": str(conversation_id), "channel": state.channel}
         with tracing.tracer.start_as_current_span("turn", attributes=attributes) as span:
-            result = engine.turn(state, message, self.config, self.ports)
+            with metrics.turn_cost() as cost:
+                result = engine.turn(state, message, self.config, self.ports)
+            result.state.llm_cost_usd += cost.usd
+            if result.hold_inbound:
+                metrics.TURNS_HELD.labels("held").inc()
+            else:
+                result.state.turns += 1
+            if any(e.data.get("gave_up") for e in result.events):
+                metrics.TURNS_HELD.labels("gave_up").inc()
             self.repo.save_turn(
                 result.state,
                 result.events,
                 result.replies,
-                pending,
+                [] if result.hold_inbound else pending,  # held: retried at retry_turn_at
                 redact=result.redact_inbound,
                 lease_owner=owner,
             )
@@ -141,6 +152,7 @@ class ScreeningService:
             span.set_attribute("stage", result.state.stage.value)
         metrics.TURN_SECONDS.labels(state.channel).observe(time.monotonic() - started)
         metrics.record_events(result.events)
+        metrics.record_finished(state, result.state)
         logger.info(
             "turn id=%s messages=%d status=%s stage=%s",
             conversation_id,
@@ -149,6 +161,10 @@ class ScreeningService:
             result.state.stage.value,
         )
         return result
+
+    def waiting(self, debounce: timedelta) -> list[UUID]:
+        """Conversations whose messages have waited out the debounce (the worker's queue)."""
+        return self.repo.waiting_conversations(self.ports.clock.now() - debounce)
 
     def process_waiting(self, debounce: timedelta) -> int:
         """Pick up every conversation whose messages have waited out the debounce: how a
@@ -169,12 +185,13 @@ class ScreeningService:
                     continue
                 state = self.repo.get(conversation_id)
                 result = engine.on_silence(state, self.config, self.ports) if state else None
-                if result is None:
+                if state is None or result is None:
                     continue
                 self.repo.save_turn(
                     result.state, result.events, result.replies, [], lease_owner=owner
                 )
                 metrics.record_events(result.events)
+                metrics.record_finished(state, result.state)
                 changed += 1
                 logger.info(
                     "silence id=%s status=%s reminders=%d",
@@ -212,6 +229,7 @@ class ScreeningService:
             )
             self.repo.save_turn(new_state, events, [], [], lease_owner=owner)
             metrics.record_events(events)
+            metrics.record_finished(state, new_state)
             logger.info("override id=%s to=%s", conversation_id, status.value)
 
     # Notes, views and exports only append audit events, which never conflict with a turn.

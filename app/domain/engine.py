@@ -51,7 +51,7 @@ from app.domain.policy import (
     progress,
     register_failed_attempt,
 )
-from app.domain.ports import Ports
+from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
 from app.domain.validators import final_review_reasons
@@ -111,10 +111,14 @@ def turn(
     t.state.reminders_sent = 0
     try:
         extraction = ports.extractor.extract(t.state, message.text, config, t.now.date())
+    except LLMUnavailable as exc:
+        return _hold_for_retry(t, exc)
     except Exception as exc:  # graceful failure: ask again, never count it against the candidate
         t.event(EventType.EXTRACTOR_FAILED, error=type(exc).__name__)
+        t.state.llm_failures, t.state.retry_turn_at = 0, None
         t.say("technical_retry")
         return _finish(t)
+    t.state.llm_failures, t.state.retry_turn_at = 0, None
 
     t.state.language = extraction.language
     if extraction.sensitive_data:
@@ -162,6 +166,25 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
         t.event(EventType.ABANDONED, drop_off=drop)
         _close(t, Status.ABANDONED)
     return _finish(t, schedule_reminder=False)
+
+
+def _hold_for_retry(t: _Turn, exc: LLMUnavailable) -> TurnResult:
+    """No LLM answered. Keep the candidate's message and retry it later, telling them once
+    that we're on it, so an outage never loses what they wrote. When the retries run out, ask
+    them to write it again: reminders still follow, so the conversation is never dropped."""
+    attempt = t.state.llm_failures + 1
+    delays = t.config.llm_retry_seconds
+    gave_up = attempt > len(delays)
+    t.event(EventType.EXTRACTOR_FAILED, error=type(exc).__name__, attempt=attempt, gave_up=gave_up)
+    if gave_up:
+        t.state.llm_failures, t.state.retry_turn_at = 0, None
+        t.say("technical_unavailable")
+        return _finish(t)
+    if attempt == 1:
+        t.say("technical_hold")
+    t.state.llm_failures = attempt
+    t.state.retry_turn_at = t.now + timedelta(seconds=delays[attempt - 1])
+    return _finish(t, hold=True)
 
 
 # --- Stage handlers -------------------------------------------------------------------------------
@@ -380,7 +403,7 @@ def _ask_current(t: _Turn) -> None:
 # --- Finishing ------------------------------------------------------------------------------------
 
 
-def _finish(t: _Turn, schedule_reminder: bool = True) -> TurnResult:
+def _finish(t: _Turn, schedule_reminder: bool = True, hold: bool = False) -> TurnResult:
     if schedule_reminder:
         _schedule_reminder(t)
     t.state.progress = progress(t.state.candidate, t.config)
@@ -393,6 +416,7 @@ def _finish(t: _Turn, schedule_reminder: bool = True) -> TurnResult:
         replies=replies,
         events=[*t.events, *render_events],
         redact_inbound=t.redact,
+        hold_inbound=hold,
     )
 
 

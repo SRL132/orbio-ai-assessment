@@ -8,6 +8,9 @@ by the scheduler reaches the candidate's phone the same way as an immediate repl
 from __future__ import annotations
 
 import logging
+import time
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,7 +20,7 @@ import httpx
 from app import metrics
 from app.adapters.channels.quick_replies import quick_replies
 from app.adapters.channels.whatsapp import WhatsAppClient, WhatsAppInbound, parse_webhook
-from app.domain.models import TERMINAL_STATUSES, Channel, Stage
+from app.domain.models import TERMINAL_STATUSES, Channel, Outbound, Stage
 from app.worker.service import ScreeningService
 
 logger = logging.getLogger("app.whatsapp")
@@ -29,9 +32,9 @@ RETRY_STATUSES = frozenset({408, 429})
 SERVER_ERROR = 500
 RESTART_WORDS = frozenset({"hola", "hi", "hello", "start", "/start", "empezar", "empezamos"})
 TEMPLATE_LANGUAGE = {"es": "es", "en": "en_US"}
-# One dispatcher sends at a time, across processes, so nothing is sent twice and each
-# conversation's messages keep their order. It renews its lease every run; if its process
-# dies, another takes over after this long.
+# One dispatcher at a time, across processes, so nothing is sent twice and each
+# conversation's messages keep their order; it sends to several conversations in parallel.
+# It renews its lease every run; if its process dies, another takes over after this long.
 DISPATCH_LEASE = timedelta(seconds=30)
 
 
@@ -41,10 +44,14 @@ class WhatsAppChannel:
         service: ScreeningService,
         client: WhatsAppClient,
         reminder_template: str | None = None,
+        concurrency: int = 1,
+        batch: int = 200,
     ) -> None:
         self.service = service
         self.client = client
         self.reminder_template = reminder_template or None
+        self.concurrency = concurrency  # conversations sent at once (see dispatch_once)
+        self.batch = batch  # messages read from the outbox per run
         self._dispatcher_id = uuid4().hex
 
     # --- Inbound --------------------------------------------------------------------------------
@@ -95,20 +102,38 @@ class WhatsAppChannel:
     # --- Outbound -------------------------------------------------------------------------------
 
     def dispatch_once(self) -> int:
-        """Send pending agent messages in order. Returns how many were sent (0 when another
-        process is the dispatcher)."""
+        """Send pending agent messages. Returns how many were sent (0 when another process is
+        the dispatcher).
+
+        Conversations are sent in parallel (up to `concurrency` at once); each one's messages
+        go in order, one at a time, stopping at its first failure. So a slow or failing
+        recipient holds up only its own conversation, and one dispatcher can send several
+        messages a second while still being the only sender (no message goes out twice)."""
         repo = self.service.repo
-        now = self.service.ports.clock.now()
         if not repo.try_job_lease("whatsapp_outbox", self._dispatcher_id, DISPATCH_LEASE):
             return 0
+        by_conversation: dict[UUID, list[Outbound]] = defaultdict(list)
+        for item in repo.undelivered(CHANNEL, limit=self.batch):
+            by_conversation[item.conversation_id].append(item)
+        # Stop starting sends well before the lease runs out, so it's still ours while we send.
+        deadline = time.monotonic() + DISPATCH_LEASE.total_seconds() / 2
+        groups = list(by_conversation.values())
+        if self.concurrency == 1 or len(groups) <= 1:
+            return sum(self._send_conversation(items, deadline) for items in groups)
+        with ThreadPoolExecutor(min(self.concurrency, len(groups))) as pool:
+            return sum(pool.map(lambda items: self._send_conversation(items, deadline), groups))
+
+    def _send_conversation(self, items: list[Outbound], deadline: float) -> int:
+        """One conversation's messages, in order. Returns how many were sent."""
+        repo = self.service.repo
+        now = self.service.ports.clock.now()
+        state = repo.get(items[0].conversation_id)
+        last_inbound = state.last_inbound_at or state.started_at if state else None
+        outside_window = last_inbound is None or now - last_inbound > SERVICE_WINDOW
         sent = 0
-        blocked: set[UUID] = set()  # keep per-conversation order: stop at the first failure
-        for item in repo.undelivered(CHANNEL):
-            if item.conversation_id in blocked:
-                continue
-            state = repo.get(item.conversation_id)
-            last_inbound = state.last_inbound_at or state.started_at if state else None
-            outside_window = last_inbound is None or now - last_inbound > SERVICE_WINDOW
+        for item in items:
+            if time.monotonic() > deadline:
+                break  # the rest go out on the next run, still in order
             try:
                 if not outside_window:
                     self.client.send(item.external_id, item.text, quick_replies(item.text))
@@ -122,7 +147,6 @@ class WhatsAppChannel:
                     logger.info("whatsapp_skipped_outside_window id=%s", item.conversation_id)
                     continue
             except httpx.HTTPError as exc:
-                blocked.add(item.conversation_id)
                 retryable = not isinstance(exc, httpx.HTTPStatusError) or (
                     exc.response.status_code in RETRY_STATUSES
                     or exc.response.status_code >= SERVER_ERROR
@@ -136,7 +160,7 @@ class WhatsAppChannel:
                     item.attempts + 1,
                     give_up,
                 )
-                continue
+                break  # keep this conversation's order: the rest wait for the retry
             repo.mark_delivery(item.message_id, True)
             metrics.WHATSAPP_SENT.labels("sent").inc()
             sent += 1

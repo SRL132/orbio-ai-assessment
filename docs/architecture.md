@@ -76,14 +76,14 @@ The API normalizes input to `InboundMessage`, drops duplicates by channel messag
 
 Inbound is idempotent per message: before doing anything, the webhook claims the channel's message ID in `channel_deliveries` (a primary-key insert, so of two concurrent copies exactly one wins). A retry is dropped whatever it is: a first message that opens a conversation, a photo that gets the "text only" notice, or a normal answer. If handling fails, the claim is given back, the webhook answers 500, and Meta's retry is handled instead of lost. IDs are pruned after 7 days; Meta stops retrying after 36 h.
 
-Outbound is at-least-once: the dispatcher sends, then marks the message delivered, so a crash between the two re-sends that one message. Making it exactly-once would need an idempotency key that WhatsApp's send API doesn't offer.
+Outbound is at-least-once: the dispatcher sends, then marks the message delivered, so a crash between the two re-sends that one message. Making it exactly-once would need an idempotency key that WhatsApp's send API doesn't offer. There is one dispatcher at a time (a job lease), but it sends to up to `WHATSAPP_DISPATCH_CONCURRENCY` conversations in parallel; each conversation's messages go one at a time, in order, and stop at its first failure. A slow or failing recipient holds up only their own conversation, and the dispatcher stops starting sends at half its lease so the lease is still its own while it sends.
 
 ### 4. One conversation at a time
 
 A lease on the conversation row, plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
 
 - **Taking it:** one atomic `UPDATE conversations SET lease_owner, lease_until WHERE id = … AND lease is free or expired`. Of any number of workers, in any number of processes, exactly one matches. It works the same on SQLite and Postgres, and holds no database connection while the LLM is thinking.
-- **Expiry:** a lease lasts 2 minutes, longer than any turn. A worker that dies holding one blocks its conversation for at most that long. Leases are timed by the system clock, not the demo's fast-forwardable one.
+- **Expiry:** a lease lasts 3 minutes, longer than any turn (two LLM calls, each with a retry and the fallback provider). A worker that dies holding one blocks its conversation for at most that long. Leases are timed by the system clock, not the demo's fast-forwardable one.
 - **Fencing:** `save_turn` checks the caller still owns the lease, so a worker whose lease expired mid-turn gets `LeaseLost` instead of overwriting the new holder's state.
 - **No lost messages:** a worker that finds the lease taken returns at once; the holder checks for messages that arrived meanwhile after releasing it (messages are stored before anyone asks for the lease).
 - **Who waits:** reminders skip a busy conversation until the next tick; a recruiter override waits up to 10 s, then gets "try again" (409).
@@ -104,7 +104,13 @@ A client config holds locations and service areas, license rules per country, fi
 
 ### 8. LLM calls are hardened
 
-Timeouts and retries with backoff; a templated fallback message so a failed call never looks like a crash; prompt caching for the system prompt and config; token usage and cost logged per turn. A smaller model can take over extraction if the evals show it's accurate enough.
+Prompt caching for the system prompt and config; token usage and cost logged per call and added up per conversation. A smaller model can take over extraction if the evals show it's accurate enough. For a provider that is slow, rate-limited or down (`app/adapters/llm/resilient.py`, wired in `bootstrap.make_resilient_llm`):
+
+- **Retry with backoff.** Each call is retried `LLM_MAX_RETRIES` times on rate limits, server errors and failed connections, with full-jitter exponential backoff (so workers that failed together don't retry together) and the provider's `Retry-After` when it sends one. A read timeout isn't retried on the same provider: it already cost the whole timeout.
+- **Fallback provider behind the same interface.** `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL` (e.g. another vendor's model through OpenRouter). When the primary fails, the same call goes to the fallback, and a circuit breaker sends calls straight to the fallback for 30 s before trying the primary again. The engine sees one `Extractor` and one `Responder` either way. Only synthetic data has been evaluated on a fallback model; pick one that passes the same evals.
+- **Concurrency cap.** At most `LLM_MAX_CONCURRENCY` calls in flight per process, so a peak queues in our process instead of turning into a burst of 429s. Fleet-wide the cap is replicas × that number: size it to the provider's rate limit. A call that can't get a slot in time counts as unavailable.
+- **Hold, don't drop.** If no provider answers, the adapter raises `LLMUnavailable` and the engine keeps the candidate's message instead of consuming it: one holding message ("give me a moment…", template `technical_hold`), then retries after 20 s, 1, 3 and 10 minutes (`llm_retry_seconds` in the client config). Messages the candidate sends meanwhile join the retry. When the retries run out, the candidate is told there's a technical problem and asked to write again (`technical_unavailable`), and the usual reminders follow, so a conversation is never dropped silently. Every attempt is an `extractor_failed` event with its attempt number.
+- **A bad answer isn't an outage.** Unparseable output or a refusal is not retried later (it would likely fail the same way): the candidate is asked again at once (`technical_retry`), as before. A failed reply (the responder) falls back to the fixed template for that action.
 
 ## Hexagonal, but lightweight
 
@@ -176,7 +182,7 @@ Design only; the demo runs as one process.
 **Deploy**
 
 - **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
-- **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
+- **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless: all state is in the database, so any worker can take any conversation. Each worker runs `WORKER_CONCURRENCY` turns at once; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
 - **Chat delivery:** replies are pushed to the browser over server-sent events (`/api/conversations/{id}/stream`), with polling as the fallback. Each open stream checks the database every 0.5 s; past a few thousand concurrent chats, Postgres `LISTEN/NOTIFY` (or Redis pub/sub) would replace that check.
 - **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
 - **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
@@ -192,6 +198,7 @@ Design only; the demo runs as one process.
 | Completion rate, drop-off by stage | The product's core bet (see VISION) | completion drops > 20 % week on week |
 | Review-queue size and age | Recruiters falling behind | oldest item > 2 working days |
 | Cost per conversation (tokens × price) | Budget at 10K/week | > 2× the baseline |
+| Provider outage: fallback calls, held turns | The primary is down or rate-limited; candidates are waiting on a retry | any `held` for 5 min, or any `gave_up` |
 | Outbox backlog | ATS sync stuck | undelivered > 1 h |
 
 Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token). Each signal above maps to a metric:
@@ -203,6 +210,9 @@ Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token
 | LLM latency, tokens, cost | `sazon_llm_call_seconds`, `sazon_llm_tokens_total`, `sazon_llm_cost_usd_total` (by provider) |
 | Queue depth and age | `sazon_pending_messages`, `sazon_pending_messages_oldest_seconds` (read from the database at scrape time) |
 | Outcomes | `sazon_outcomes_total{status}` (completion and drop-off in detail: the analytics page) |
+| Drop-off by stage | `sazon_drop_offs_total{stage}` |
+| Cost and turns per conversation | `sazon_conversation_cost_usd`, `sazon_conversation_turns` (histograms by outcome, observed when a conversation first reaches one) |
+| Provider outage | `sazon_llm_failures_total{which="primary" \| "fallback" \| "busy"}`, `sazon_llm_fallbacks_total`, `sazon_turns_held_total{outcome="held" \| "gave_up"}` |
 | Review-queue size and age | `sazon_review_queue`, `sazon_review_queue_oldest_seconds` |
 | Outbox backlog | `sazon_whatsapp_outbox`, `sazon_whatsapp_outbox_oldest_seconds`, `sazon_whatsapp_messages_total{result}` |
 | Abuse | `sazon_rate_limited_total{endpoint}` |
@@ -213,7 +223,7 @@ Tracing (OpenTelemetry): FastAPI's request spans, tagged with a `request.id`, co
 
 Logs are structured and contain IDs, never message text or names (already true in the code). Traces follow one turn across API → queue → worker → LLM. A nightly job runs the live eval suite against production config and posts the scores.
 
-**10K candidates a week:** ~15K messages a day, a few per second at peak. Two to four worker replicas cover LLM latency comfortably; Postgres load is trivial. The real limits are LLM rate limits and cost, so the provider choice and prompt caching matter more than infrastructure.
+**10K candidates a week:** ~12 turns each is 120K turns a week, ~0.2 a second on average and ~2 a second at a 10× peak. A turn is mostly waiting for two LLM calls (~4–6 s), so by Little's law the peak needs ~10–12 turns in flight. Each worker process runs up to `WORKER_CONCURRENCY` turns at once in a thread pool (`app/worker/pool.py`, default 16; the conversation lease keeps them apart), so two worker replicas cover the peak with room for one to fail; scale on `sazon_pending_messages_oldest_seconds`. At peak that's ~4 LLM requests a second, which most provider tiers allow; input tokens per minute matter more than requests, so prompt caching matters. Postgres load is trivial. The real limits are the provider's rate limits and cost, and WhatsApp's rules: business-initiated (template) messages are capped per day by the number's messaging tier, which starts low and rises with volume and quality, so warm up the number and keep reminders inside the 24 h window where possible (free-form, no template). Check Meta's current limits before launch.
 
 ## How the bonus features plug in
 

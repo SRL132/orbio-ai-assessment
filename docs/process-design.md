@@ -72,6 +72,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed. |
 | **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. |
 | **Changes an earlier answer** | Take the latest value, re-validate, log the change. |
+| **The AI provider is down** | Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate. |
 
 ## Outcomes
 

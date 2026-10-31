@@ -6,8 +6,11 @@ exists because one key reaches many models, which makes model comparison cheap.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import random
 import time
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -34,6 +37,9 @@ logger = logging.getLogger("app.llm")
 
 BASE_URL = "https://openrouter.ai/api/v1"
 _RETRYABLE = {408, 409, 429, 500, 502, 503, 504}
+BASE_BACKOFF_SECONDS = 0.5
+MAX_BACKOFF_SECONDS = 8.0
+_jitter = random.SystemRandom()
 
 
 class OpenRouterLLM:
@@ -45,6 +51,8 @@ class OpenRouterLLM:
         transport: httpx.BaseTransport | None = None,
         meter: UsageMeter | None = None,
         reasoning_effort: str | None = "low",
+        max_retries: int = 1,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not model:
             raise ValueError("OPENROUTER_MODEL is not set (see .env.example)")
@@ -53,6 +61,8 @@ class OpenRouterLLM:
         # Screening turns are simple: little or no hidden reasoning keeps latency and cost down,
         # and avoids reasoning eating the whole max_tokens budget (empty completion).
         self.reasoning_effort = reasoning_effort
+        self._max_retries = max_retries
+        self._sleep = sleep
         self._client = httpx.Client(
             base_url=BASE_URL,
             timeout=timeout,
@@ -143,19 +153,36 @@ class OpenRouterLLM:
         return str(content)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
-        for attempt in range(2):
+        """Retry rate limits, server errors and failed connections with jittered exponential
+        backoff (honouring Retry-After). A read timeout is not retried: it already cost the
+        full timeout, so the fallback provider gets the call instead (see resilient.py)."""
+        for attempt in range(self._max_retries + 1):
+            last = attempt == self._max_retries
             try:
                 response = self._client.post("/chat/completions", json=body)
+            except httpx.ReadTimeout:
+                raise
             except httpx.TransportError:
-                if attempt == 1:
+                if last:
                     raise
+                self._sleep(_backoff(attempt))
                 continue
-            if response.status_code in _RETRYABLE and attempt == 0:
-                time.sleep(0.5)
+            if response.status_code in _RETRYABLE and not last:
+                self._sleep(_backoff(attempt, response.headers.get("retry-after")))
                 continue
             response.raise_for_status()
             return response
         raise RuntimeError("unreachable")
+
+
+def _backoff(attempt: int, retry_after: str | None = None) -> float:
+    """Full jitter (so workers that failed together don't retry together), capped at
+    MAX_BACKOFF_SECONDS; a numeric Retry-After from the provider wins, within the same cap."""
+    if retry_after is not None:
+        with contextlib.suppress(ValueError):
+            return min(max(float(retry_after), 0.0), MAX_BACKOFF_SECONDS)
+    ceiling = min(BASE_BACKOFF_SECONDS * 2**attempt, MAX_BACKOFF_SECONDS)
+    return _jitter.uniform(0, ceiling)
 
 
 def _strip_code_fence(text: str) -> str:

@@ -74,6 +74,12 @@ class ClientConfig(BaseModel):
         description="Per-channel override, e.g. WhatsApp keeps reminders inside its 24 h window.",
     )
     abandon_after_hours: float = 24.0
+    llm_retry_seconds: list[float] = Field(
+        default_factory=lambda: [20.0, 60.0, 180.0, 600.0],
+        description="When no LLM answers, the candidate's message is held and retried after "
+        "each delay in turn (one holding message first). After the last, they're asked to "
+        "write it again; reminders still follow, so nobody is dropped silently.",
+    )
     retention_days: int = Field(
         default=183,
         description="Disqualified and abandoned candidates are erased this long after their last "

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime
 
 from prometheus_client import Counter, Histogram
@@ -17,7 +20,7 @@ from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
 from app import tracing
-from app.domain.models import DomainEvent, EventType
+from app.domain.models import TERMINAL_STATUSES, ConversationState, DomainEvent, EventType
 
 TURN_SECONDS = Histogram(
     "sazon_turn_seconds",
@@ -43,6 +46,36 @@ LLM_TOKENS = Counter("sazon_llm_tokens_total", "LLM tokens.", ["provider", "dire
 LLM_COST = Counter(
     "sazon_llm_cost_usd_total", "LLM spend (where the price is known).", ["provider"]
 )
+# Provider outages (app/adapters/llm/resilient.py). `which` is primary, fallback or busy (no
+# free concurrency slot). A rising fallback count means the primary is down.
+LLM_FAILURES = Counter("sazon_llm_failures_total", "LLM calls that failed.", ["which", "kind"])
+LLM_FALLBACKS = Counter(
+    "sazon_llm_fallbacks_total", "LLM calls served by the fallback provider.", ["kind"]
+)
+TURNS_HELD = Counter(
+    "sazon_turns_held_total",
+    "Turns whose messages were kept for a retry because no LLM answered (outcome: held, "
+    "or gave_up once the retries ran out).",
+    ["outcome"],
+)
+
+# The funnel, as product signals (the analytics page has the same numbers per period). A
+# product metric falling is often the first sign of a bug.
+DROP_OFFS = Counter(
+    "sazon_drop_offs_total", "Abandoned candidates, by where they stopped.", ["stage"]
+)
+CONVERSATION_COST = Histogram(
+    "sazon_conversation_cost_usd",
+    "LLM spend per finished conversation (where the price is known).",
+    ["status"],
+    buckets=(0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25),
+)
+CONVERSATION_TURNS = Histogram(
+    "sazon_conversation_turns",
+    "Candidate turns per finished conversation.",
+    ["status"],
+    buckets=(2, 4, 6, 8, 12, 16, 24, 32),
+)
 RATE_LIMITED = Counter("sazon_rate_limited_total", "Requests refused with 429.", ["endpoint"])
 WHATSAPP_SENT = Counter("sazon_whatsapp_messages_total", "WhatsApp outbox results.", ["result"])
 WHATSAPP_DUPLICATES = Counter(
@@ -55,6 +88,35 @@ def record_events(events: list[DomainEvent]) -> None:
         EVENTS.labels(event.type.value).inc()
         if event.type == EventType.STATUS_CHANGED and isinstance(event.data.get("to"), str):
             OUTCOMES.labels(event.data["to"]).inc()
+        if event.type == EventType.ABANDONED and isinstance(event.data.get("drop_off"), str):
+            DROP_OFFS.labels(event.data["drop_off"]).inc()
+
+
+def record_finished(before: ConversationState, after: ConversationState) -> None:
+    """Cost and turns per conversation, once, when it reaches its first outcome."""
+    if before.status in TERMINAL_STATUSES or after.status not in TERMINAL_STATUSES:
+        return
+    CONVERSATION_COST.labels(after.status.value).observe(after.llm_cost_usd)
+    CONVERSATION_TURNS.labels(after.status.value).observe(after.turns)
+
+
+@dataclass
+class TurnCost:
+    usd: float = 0.0
+
+
+_turn_cost: ContextVar[TurnCost | None] = ContextVar("turn_cost", default=None)
+
+
+@contextmanager
+def turn_cost() -> Iterator[TurnCost]:
+    """Add up the LLM spend of the calls made inside the block (one turn, on this thread)."""
+    cost = TurnCost()
+    token = _turn_cost.set(cost)
+    try:
+        yield cost
+    finally:
+        _turn_cost.reset(token)
 
 
 def record_llm_call(
@@ -84,6 +146,8 @@ def record_llm_call(
     LLM_TOKENS.labels(provider, "completion").inc(completion_tokens)
     if cost_usd:
         LLM_COST.labels(provider).inc(cost_usd)
+        if (turn := _turn_cost.get()) is not None:
+            turn.usd += cost_usd
 
 
 # (count, oldest timestamp or None) per backlog, from the read model.

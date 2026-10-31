@@ -6,7 +6,8 @@ from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.llm.anthropic_sdk import AnthropicLLM
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.openrouter import OpenRouterLLM
-from app.bootstrap import build
+from app.adapters.llm.resilient import Pair, ResilientLLM
+from app.bootstrap import Container, build
 from app.settings import Settings
 
 
@@ -14,9 +15,18 @@ def settings(tmp_path: Path, **overrides: object) -> Settings:
     return Settings(_env_file=None, database_url=f"sqlite:///{tmp_path / 'b.db'}", **overrides)  # type: ignore[arg-type]
 
 
+def primary(container: Container) -> Pair:
+    llm = container.service.ports.extractor
+    assert isinstance(llm, ResilientLLM)
+    assert container.service.ports.responder is llm
+    assert isinstance(llm.primary, Pair)
+    return llm.primary
+
+
 def test_fake_provider_runs_offline(tmp_path: Path) -> None:
     container = build(settings(tmp_path))
-    assert isinstance(container.service.ports.extractor, KeywordExtractor)
+    assert isinstance(primary(container).extractor, KeywordExtractor)
+    assert container.service.ports.extractor.fallback is None  # type: ignore[attr-defined]
     assert isinstance(container.clock, OffsetClock)
     container.close()
 
@@ -25,7 +35,27 @@ def test_openrouter_provider(tmp_path: Path) -> None:
     container = build(
         settings(tmp_path, llm_provider="openrouter", openrouter_api_key="k", openrouter_model="m")
     )
-    assert isinstance(container.service.ports.extractor, OpenRouterLLM)
+    assert isinstance(primary(container).extractor, OpenRouterLLM)
+    container.close()
+
+
+def test_fallback_provider_and_model(tmp_path: Path) -> None:
+    container = build(
+        settings(
+            tmp_path,
+            llm_provider="anthropic",
+            anthropic_api_key="k",
+            llm_fallback_provider="openrouter",
+            llm_fallback_model="other/model",
+            openrouter_api_key="k",
+        )
+    )
+    llm = container.service.ports.extractor
+    assert isinstance(llm, ResilientLLM)
+    assert isinstance(primary(container).extractor, AnthropicLLM)
+    assert isinstance(llm.fallback, Pair)
+    assert isinstance(llm.fallback.extractor, OpenRouterLLM)
+    assert llm.fallback.extractor._model == "other/model"
     container.close()
 
 
@@ -38,7 +68,7 @@ def test_anthropic_provider_and_real_clock(tmp_path: Path) -> None:
     container = build(
         settings(tmp_path, llm_provider="anthropic", anthropic_api_key="k", demo_mode=False)
     )
-    assert isinstance(container.service.ports.responder, AnthropicLLM)
+    assert isinstance(primary(container).responder, AnthropicLLM)
     assert isinstance(container.clock, SystemClock)
     container.close()
 

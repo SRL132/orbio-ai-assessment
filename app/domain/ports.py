@@ -22,6 +22,11 @@ from app.domain.models import (
 )
 
 
+class LLMUnavailable(RuntimeError):
+    """No LLM provider answered (outage, rate limit, timeout, or no free slot). Unlike a bad
+    answer, retrying later can help: the engine keeps the candidate's message for a retry."""
+
+
 class Extractor(Protocol):
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date

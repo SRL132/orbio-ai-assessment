@@ -14,6 +14,7 @@ from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.llm.resilient import Pair, ResilientLLM
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.dashboard import DashboardQueries
 from app.adapters.storage.rate_limit import SqlRateLimiter
@@ -23,6 +24,7 @@ from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
 from app.domain.ports import Clock, Extractor, Ports, Responder
 from app.settings import Settings
+from app.worker.pool import TurnPool
 from app.worker.runner import Runner
 from app.worker.service import ScreeningService
 from app.worker.whatsapp import WhatsAppChannel
@@ -38,15 +40,24 @@ class Container:
     queries: DashboardQueries
     db: Engine
     limiter: SqlRateLimiter
+    pool: TurnPool
     tts: ElevenLabsTTS | None = None
     whatsapp: WhatsAppChannel | None = None
 
     def close(self) -> None:
+        self.pool.shutdown()  # running turns hold leases: let them finish first
         self.db.dispose()
 
 
-def make_llm(settings: Settings, meter: UsageMeter | None = None) -> tuple[Extractor, Responder]:
-    match settings.llm_provider:
+def make_llm(
+    settings: Settings,
+    meter: UsageMeter | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> tuple[Extractor, Responder]:
+    """One provider's adapters: `settings.llm_provider` unless `provider` is given (the
+    fallback), with `model` overriding that provider's model setting."""
+    match provider or settings.llm_provider:
         case "fake":
             return KeywordExtractor(), TemplateResponder()
         case "openrouter":
@@ -56,9 +67,10 @@ def make_llm(settings: Settings, meter: UsageMeter | None = None) -> tuple[Extra
                 raise ValueError("OPENROUTER_API_KEY is not set")
             llm = OpenRouterLLM(
                 settings.openrouter_api_key.get_secret_value(),
-                settings.openrouter_model,
+                model or settings.openrouter_model,
                 timeout=settings.llm_timeout_seconds,
                 meter=meter,
+                max_retries=settings.llm_max_retries,
             )
             return llm, llm
         case "anthropic":
@@ -70,14 +82,37 @@ def make_llm(settings: Settings, meter: UsageMeter | None = None) -> tuple[Extra
             client = anthropic.Anthropic(
                 api_key=key.get_secret_value() if key else None,
                 timeout=settings.llm_timeout_seconds,
+                max_retries=settings.llm_max_retries,  # jittered, honours Retry-After
             )
             usd_in = settings.anthropic_input_usd_per_mtok
             usd_out = settings.anthropic_output_usd_per_mtok
             prices = (usd_in, usd_out) if usd_in is not None and usd_out is not None else None
             claude = AnthropicLLM(
-                client, settings.anthropic_model, meter=meter, usd_per_mtok=prices
+                client, model or settings.anthropic_model, meter=meter, usd_per_mtok=prices
             )
             return claude, claude
+        case other:
+            raise ValueError(f"unknown LLM provider: {other!r}")
+
+
+def make_resilient_llm(settings: Settings) -> ResilientLLM:
+    """The primary provider behind a concurrency cap, with the fallback (if any) behind the
+    same interface. The engine sees one Extractor and one Responder either way."""
+    fallback = None
+    if settings.llm_fallback_provider:
+        fallback = Pair(
+            *make_llm(
+                settings,
+                provider=settings.llm_fallback_provider,
+                model=settings.llm_fallback_model or None,
+            )
+        )
+    return ResilientLLM(
+        Pair(*make_llm(settings)),
+        fallback,
+        max_concurrency=settings.llm_max_concurrency,
+        acquire_timeout=settings.llm_timeout_seconds,
+    )
 
 
 def build(settings: Settings | None = None) -> Container:
@@ -86,10 +121,10 @@ def build(settings: Settings | None = None) -> Container:
     tracing.configure_tracing(f"sazon-{settings.role}")
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
     config = load_client_config(settings.client_id)
-    extractor, responder = make_llm(settings)
+    llm = make_resilient_llm(settings)
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
-    ports = Ports(extractor=extractor, responder=responder, clock=clock, calendar=calendar)
+    ports = Ports(extractor=llm, responder=llm, clock=clock, calendar=calendar)
     # Leases run on the system clock: fast-forwarding the demo clock mustn't expire them.
     repo = SqlRepository(db, clock, config.client_id, lease_clock=SystemClock())
     service = ScreeningService(repo, config, ports)
@@ -103,9 +138,8 @@ def build(settings: Settings | None = None) -> Container:
             settings.elevenlabs_model,
         )
     debounce = timedelta(seconds=settings.debounce_seconds)
-    runner.add_periodic(
-        "process_waiting", lambda: service.process_waiting(debounce), settings.worker_poll_seconds
-    )
+    pool = TurnPool(service, settings.worker_concurrency, debounce)
+    runner.add_periodic("process_waiting", pool.fill, settings.worker_poll_seconds)
     runner.add_periodic("release_orphan_bookings", calendar.release_orphans, 300)
     runner.add_periodic("retention", SqlRetention(db, config, clock).erase_expired, 3600)
     whatsapp = make_whatsapp(settings, service)
@@ -114,7 +148,9 @@ def build(settings: Settings | None = None) -> Container:
             "whatsapp_outbox", whatsapp.dispatch_once, settings.whatsapp_dispatch_seconds
         )
     limiter = SqlRateLimiter(db, clock, config.client_id)
-    return Container(settings, config, clock, service, runner, queries, db, limiter, tts, whatsapp)
+    return Container(
+        settings, config, clock, service, runner, queries, db, limiter, pool, tts, whatsapp
+    )
 
 
 def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChannel | None:
@@ -127,4 +163,9 @@ def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChan
         settings.whatsapp_phone_number_id,
         settings.whatsapp_api_version,
     )
-    return WhatsAppChannel(service, client, settings.whatsapp_reminder_template)
+    return WhatsAppChannel(
+        service,
+        client,
+        settings.whatsapp_reminder_template,
+        concurrency=settings.whatsapp_dispatch_concurrency,
+    )

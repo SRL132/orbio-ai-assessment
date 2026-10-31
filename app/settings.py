@@ -11,6 +11,15 @@ class Settings(BaseSettings):
 
     llm_provider: Literal["fake", "openrouter", "anthropic"] = "fake"
     llm_timeout_seconds: float = 20.0
+    # Per call, with jittered backoff (and Retry-After); then the fallback provider gets it.
+    llm_max_retries: int = 1
+    # Optional fallback behind the same interface, for when the primary is down (e.g. another
+    # vendor's model through OpenRouter). Empty: no fallback, held messages retry the primary.
+    llm_fallback_provider: Literal["", "fake", "openrouter", "anthropic"] = ""
+    llm_fallback_model: str = ""  # empty: that provider's own model setting
+    # LLM calls in flight per process. Fleet-wide: replicas x this; keep it under the
+    # provider's rate limits (docs/architecture.md, "Scaling").
+    llm_max_concurrency: int = 16
 
     openrouter_api_key: SecretStr | None = None
     openrouter_model: str = ""
@@ -35,12 +44,16 @@ class Settings(BaseSettings):
     whatsapp_api_version: str = "v26.0"
     whatsapp_reminder_template: str = ""  # approved template for messages after 24 h (paid)
     whatsapp_dispatch_seconds: float = 1.0
+    # Conversations the outbox sends to at once (each conversation's messages stay in order).
+    # Meta's default throughput is ~80 messages/s per number: far above what this needs.
+    whatsapp_dispatch_concurrency: int = 8
 
     # What this process runs: "all" (one process, the demo), "web" (HTTP only) or "worker"
     # (turns, reminders, outbox and cleanup, no HTTP: `python -m app.worker`). Run any number
     # of each; leases keep one conversation to one worker at a time.
     role: Literal["all", "web", "worker"] = "all"
     worker_poll_seconds: float = 1.0
+    worker_concurrency: int = 16  # turns at once per process (they mostly wait for the LLM)
     chat_stream_seconds: float = 300.0  # an SSE stream ends after this; the browser reconnects
 
     database_url: str = "sqlite:///./data/sazon.db"

@@ -196,6 +196,17 @@ class ConversationState(BaseModel):
         default=0,
         description="How many fields, in the client's priority order, are answered (funnel).",
     )
+    llm_failures: int = Field(
+        default=0,
+        description="Retries so far of a message no LLM could answer (it's held, not lost).",
+    )
+    retry_turn_at: datetime | None = Field(
+        default=None, description="When to retry the held message, while llm_failures > 0."
+    )
+    turns: int = Field(default=0, description="Candidate turns processed (funnel metrics).")
+    llm_cost_usd: float = Field(
+        default=0.0, description="LLM spend on this conversation, where the price is known."
+    )
 
 
 class InboundMessage(BaseModel):
@@ -298,6 +309,8 @@ SayTemplate = Literal[
     "greeting_consent",
     "closed",
     "technical_retry",
+    "technical_hold",
+    "technical_unavailable",
     "sensitive_data",
     "abuse_warning",
     "abuse_end",
@@ -430,3 +443,8 @@ class TurnResult(BaseModel):
     replies: list[str]
     events: list[DomainEvent]
     redact_inbound: bool = False
+    hold_inbound: bool = Field(
+        default=False,
+        description="Keep the inbound messages unprocessed: no LLM answered, retry them at "
+        "state.retry_turn_at.",
+    )

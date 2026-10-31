@@ -62,6 +62,8 @@ reminder_1: ¡Hola de nuevo! Solo nos faltan {missing_count} preguntas para tu c
 reminder_2: Te guardamos el sitio un poco más, quedan {missing_count} preguntas. ¿Las terminamos?
 closed: Tu candidatura ya está registrada. Si necesitas algo, un reclutador se pondrá en contacto.
 technical_retry: Perdona, no te he entendido bien. ¿Me lo repites?
+technical_hold: Dame un momento, estoy revisando tu respuesta. Te escribo enseguida.
+technical_unavailable: Perdona, estamos teniendo un problema técnico y no he podido leer tu respuesta. ¿Me la vuelves a escribir en un rato?
 answer_unknown: Buena pregunta, un reclutador te lo confirmará.
 
 label_full_name: Nombre

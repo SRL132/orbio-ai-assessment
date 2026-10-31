@@ -60,6 +60,8 @@ reminder_1: Hi again! Only {missing_count} questions left for your application. 
 reminder_2: We're keeping your spot a bit longer, {missing_count} questions left. Shall we finish them?
 closed: Your application is already registered. If you need anything, a recruiter will get in touch.
 technical_retry: Sorry, I didn't catch that. Could you say it again?
+technical_hold: Give me a moment, I'm looking at your answer. I'll be right back.
+technical_unavailable: Sorry, we're having a technical problem and I couldn't read your answer. Could you send it again in a little while?
 answer_unknown: Good question, a recruiter will confirm that for you.
 
 label_full_name: Name
