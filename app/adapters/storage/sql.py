@@ -401,6 +401,15 @@ class SqlRepository:
         except IntegrityError:  # another process created the row first
             return False
 
+    def release_job_lease(self, name: str, owner: str) -> None:
+        job = JobLeaseRow
+        with self._sessions.begin() as session:
+            session.execute(
+                delete(job).where(
+                    job.client_id == self._client_id, job.name == name, job.owner == owner
+                )
+            )
+
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         self._check_client(state)
         with self._sessions.begin() as session:

@@ -92,6 +92,14 @@ def test_exactly_one_concurrent_copy_of_a_delivery_wins(
     assert wins == 1
 
 
+def test_a_released_job_lease_is_free_at_once(repo: SqlRepository) -> None:
+    assert repo.try_job_lease("job", "a", timedelta(minutes=1))
+    repo.release_job_lease("job", "b")  # not the holder: nothing happens
+    assert not repo.try_job_lease("job", "b", timedelta(minutes=1))
+    repo.release_job_lease("job", "a")
+    assert repo.try_job_lease("job", "b", timedelta(minutes=1))
+
+
 def test_sensitive_messages_are_redacted(repo: SqlRepository, state: ConversationState) -> None:
     repo.create(state, [], [])
     repo.add_inbound(state.conversation_id, "mi DNI es 12345678Z")

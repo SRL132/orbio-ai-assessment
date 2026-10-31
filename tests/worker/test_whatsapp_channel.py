@@ -1,9 +1,13 @@
 """WhatsApp channel end to end on a fake client: webhook in, outbox out, reminders, failures."""
 
+import threading
+import time
 from datetime import timedelta
+from uuid import UUID
 
 import httpx
 import pytest
+import sqlalchemy as sa
 from prometheus_client import REGISTRY
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
@@ -12,10 +16,11 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.models import Status
+from app.domain.models import Channel, Status
 from app.domain.ports import Ports
+from app.worker import whatsapp
 from app.worker.service import ScreeningService
-from app.worker.whatsapp import MAX_ATTEMPTS, WhatsAppChannel
+from app.worker.whatsapp import MAX_ATTEMPTS, ContactBusy, WhatsAppChannel, contact_lock_name
 
 PHONE = "34600111222"
 
@@ -163,6 +168,60 @@ def test_a_message_stored_before_claims_existed_is_still_deduplicated(setup) -> 
     message_id = answer["entry"][0]["changes"][0]["value"]["messages"][0]["id"]
     service.repo.release_delivery("whatsapp", message_id)  # as if stored before the upgrade
     assert channel.handle(answer) == []  # the messages table still catches it
+
+
+def test_two_first_messages_at_once_open_one_conversation(
+    tmp_path, config: ClientConfig, clock: FakeClock, monkeypatch
+) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'race.db'}")  # a file: threads share it for real
+    ports = Ports(KeywordExtractor(), TemplateResponder(), clock)
+    service = ScreeningService(SqlRepository(engine, clock, config.client_id), config, ports)
+    channel = WhatsAppChannel(service, FakeWhatsApp())  # type: ignore[arg-type]
+    start = service.start_conversation
+
+    def slow_start(channel_name: Channel) -> UUID:
+        time.sleep(0.2)  # both messages are past the first lookup before either links the number
+        return start(channel_name)
+
+    monkeypatch.setattr(service, "start_conversation", slow_start)
+    barrier = threading.Barrier(2)
+    errors: list[str] = []
+
+    def deliver(text: str) -> None:
+        barrier.wait()
+        try:
+            channel.handle(incoming(text))
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+
+    threads = [threading.Thread(target=deliver, args=(t,)) for t in ("hola", "soy Ana")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    with engine.connect() as connection:
+        conversations = connection.scalar(sa.text("SELECT count(*) FROM conversations"))
+        leases = connection.scalar(sa.text("SELECT count(*) FROM job_leases"))
+    cid = service.repo.conversation_for("whatsapp", PHONE)
+    pending = [m.text for m in service.repo.pending_inbound(cid)] if cid else []
+    engine.dispose()
+    assert errors == []
+    assert conversations == 1
+    assert len(pending) == 1  # the message that lost the race joined the new conversation
+    assert leases == 0  # the lock row is gone once released
+
+
+def test_a_contact_lock_held_too_long_fails_so_meta_retries(setup, monkeypatch) -> None:
+    service, channel, _, _ = setup
+    monkeypatch.setattr(whatsapp, "CONTACT_LOCK_WAIT", timedelta(seconds=0.1))
+    name = contact_lock_name(PHONE)
+    assert service.repo.try_job_lease(name, "other", timedelta(minutes=1))
+    first = incoming("hola")
+    with pytest.raises(ContactBusy):
+        channel.handle(first)
+    service.repo.release_job_lease(name, "other")
+    channel.handle(first)  # the retry: its claim was given back
+    assert service.repo.conversation_for("whatsapp", PHONE) is not None
 
 
 def test_reminders_reach_the_phone_inside_the_window(setup) -> None:

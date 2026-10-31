@@ -7,10 +7,13 @@ by the scheduler reaches the candidate's phone the same way as an immediate repl
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -36,6 +39,21 @@ TEMPLATE_LANGUAGE = {"es": "es", "en": "en_US"}
 # conversation's messages keep their order; it sends to several conversations in parallel.
 # It renews its lease every run; if its process dies, another takes over after this long.
 DISPATCH_LEASE = timedelta(seconds=30)
+# Opening a conversation for a number is done by one message at a time, across processes, so
+# two different first messages arriving together ("hola" / "soy Ana") open one conversation,
+# not two. A message waits this long for the lock, then fails (and Meta retries it).
+CONTACT_LOCK_WAIT = timedelta(seconds=5)
+CONTACT_LEASE = timedelta(seconds=30)  # expires on its own if the holder's process dies
+_CONTACT_LOCK_POLL = 0.05
+
+
+class ContactBusy(RuntimeError):
+    """Another message for the same number held the lock for too long."""
+
+
+def contact_lock_name(wa_id: str) -> str:
+    """The lock's name: a hash, so the number itself isn't stored in `job_leases`."""
+    return "whatsapp_contact:" + hashlib.sha256(wa_id.encode()).hexdigest()[:40]
 
 
 class WhatsAppChannel:
@@ -81,23 +99,48 @@ class WhatsAppChannel:
     def _handle_message(self, message: WhatsAppInbound) -> UUID | None:
         """One new (not retried) message. Returns its conversation if it needs a turn."""
         repo = self.service.repo
-        cid = repo.conversation_for(CHANNEL, message.wa_id)
-        state = repo.get(cid) if cid else None
-        ended = state is None or (state.stage == Stage.CLOSED and state.status in TERMINAL_STATUSES)
-        wants_restart = (message.text or "").strip().lower() in RESTART_WORDS
-        if cid is None or state is None or (ended and wants_restart):
-            # A new candidate (or a returning one saying hello): open a conversation.
-            # The greeting asks for consent, so this first message isn't an answer.
-            new_id = self.service.start_conversation(CHANNEL)
-            repo.link_contact(CHANNEL, message.wa_id, new_id)
-            logger.info("whatsapp_conversation_started id=%s", new_id)
-            return None
+        cid = self._continues(message)
+        if cid is None:
+            with self._contact_lock(message.wa_id):
+                cid = self._continues(message)  # another message may have opened it meanwhile
+                if cid is None:
+                    # A new candidate (or a returning one saying hello): open a conversation.
+                    # The greeting asks for consent, so this first message isn't an answer.
+                    new_id = self.service.start_conversation(CHANNEL)
+                    repo.link_contact(CHANNEL, message.wa_id, new_id)
+                    logger.info("whatsapp_conversation_started id=%s", new_id)
+                    return None
         if message.text is None:
             self.service.reply_text_only(cid)
             return None
         if self.service.receive(cid, message.text, channel_message_id=message.message_id):
             return cid
         return None
+
+    def _continues(self, message: WhatsAppInbound) -> UUID | None:
+        """The conversation this message belongs to, or None if it opens a new one."""
+        repo = self.service.repo
+        cid = repo.conversation_for(CHANNEL, message.wa_id)
+        state = repo.get(cid) if cid else None
+        if cid is None or state is None:
+            return None
+        ended = state.stage == Stage.CLOSED and state.status in TERMINAL_STATUSES
+        wants_restart = (message.text or "").strip().lower() in RESTART_WORDS
+        return None if ended and wants_restart else cid
+
+    @contextmanager
+    def _contact_lock(self, wa_id: str) -> Iterator[None]:
+        repo = self.service.repo
+        name, owner = contact_lock_name(wa_id), uuid4().hex
+        deadline = time.monotonic() + CONTACT_LOCK_WAIT.total_seconds()
+        while not repo.try_job_lease(name, owner, CONTACT_LEASE):
+            if time.monotonic() >= deadline:
+                raise ContactBusy("another message is opening this contact's conversation")
+            time.sleep(_CONTACT_LOCK_POLL)
+        try:
+            yield
+        finally:
+            repo.release_job_lease(name, owner)
 
     # --- Outbound -------------------------------------------------------------------------------
 

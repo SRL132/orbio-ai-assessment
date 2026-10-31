@@ -109,6 +109,10 @@ class Repository(Protocol):
         renew it; anyone can take it once it expires."""
         ...
 
+    def release_job_lease(self, name: str, owner: str) -> None:
+        """Give a job lease up early (and delete its row) if `owner` still holds it."""
+        ...
+
     def append_events(self, state: ConversationState, events: list[DomainEvent]) -> None:
         """Audit events that don't change the state (a recruiter viewed it, added a note)."""
         ...
