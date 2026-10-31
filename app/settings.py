@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     session_secret: SecretStr | None = None
     # When set, /metrics needs "Authorization: Bearer <token>" (else keep it off the internet).
     metrics_token: SecretStr | None = None
+    # The ATS's "Authorization: Bearer <token>" for POST /api/v1/applications (unset: disabled).
+    ats_token: SecretStr | None = None
 
     # Rate limits (shared by every worker: counted in the database).
     login_attempts_per_ip_per_15_min: int = 20
@@ -72,6 +74,7 @@ class Settings(BaseSettings):
         "recruiter_users",
         "session_secret",
         "metrics_token",
+        "ats_token",
         mode="before",
     )
     @classmethod

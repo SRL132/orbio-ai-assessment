@@ -29,6 +29,8 @@ channel_reminder_hours:
   whatsapp: [2, 23]
 abandon_after_hours: 24
 max_reply_chars: 250
+# Pilot success metric: applicants who reach an outcome within this many hours of applying.
+screening_target_hours: 24
 
 # Interview slots offered in the chat, in each location's local time (mocked calendar for the demo).
 interview:

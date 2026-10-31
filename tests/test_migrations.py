@@ -67,3 +67,33 @@ def test_analytics_columns_are_backfilled_from_the_stored_state(tmp_path: Path) 
         ).one()
     engine.dispose()
     assert row == (2, 30.0, "2026-11-03 09:00:00.000000")
+
+
+def test_time_to_screen_is_backfilled_from_the_stored_state(tmp_path: Path) -> None:
+    url = f"sqlite:///{tmp_path / 'm.db'}"
+    command.upgrade(alembic_config(url), "0011")
+    started = {"started_at": "2026-11-02T10:00:00+00:00", "ended_at": "2026-11-02T13:00:00+00:00"}
+    applied = {**started, "applied_at": "2026-11-01T10:00:00+00:00"}
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        for row_id, state in (("c1", started), ("c2", applied), ("c3", {})):
+            connection.execute(
+                text(
+                    "INSERT INTO conversations (id, client_id, status, stage, channel, language, "
+                    "availability, schedule, review_reasons, created_at, updated_at, state) "
+                    "VALUES (:id, 'x', 'qualified', 'closed', 'chat', 'es', '[]', '[]', '[]', "
+                    "'2026-11-02', '2026-11-02', :state)"
+                ),
+                {"id": row_id, "state": json.dumps(state)},
+            )
+    upgrade(url)
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text("SELECT id, applied_at, hours_to_outcome FROM conversations ORDER BY id")
+        ).all()
+    engine.dispose()
+    assert rows == [
+        ("c1", "2026-11-02 10:00:00.000000", 3.0),
+        ("c2", "2026-11-01 10:00:00.000000", 27.0),
+        ("c3", None, None),
+    ]

@@ -59,6 +59,13 @@ const log = document.getElementById("log");
 const quick = document.getElementById("quick");
 const statusEl = document.getElementById("status");
 let conversationId = localStorage.getItem("conversationId");
+// Opened from an ATS invite link: continue that conversation (the server set its cookie).
+const invited = new URLSearchParams(location.search).get("conversation");
+if (invited) {
+  conversationId = invited;
+  localStorage.setItem("conversationId", invited);
+  history.replaceState(null, "", "/chat");
+}
 let lastSeq = 0;
 let waiting = false;
 

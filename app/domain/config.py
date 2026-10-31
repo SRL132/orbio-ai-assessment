@@ -80,6 +80,11 @@ class ClientConfig(BaseModel):
         "activity, unless they agreed to stay on file (docs/process-design-appendix.md).",
     )
     max_reply_chars: int = 250
+    screening_target_hours: float = Field(
+        default=24.0,
+        description="Pilot success metric: share of applicants who reach an outcome this many "
+        "hours after applying (analytics).",
+    )
     interview: InterviewConfig = Field(default_factory=InterviewConfig)
     templates: dict[Language, dict[str, str]]
     voice_templates: dict[Language, dict[str, str]] = Field(

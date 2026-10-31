@@ -169,6 +169,7 @@ def test_analytics_page(logged_in: TestClient, container: Container) -> None:
     chat(container, "sí", "Luis Pérez", "no tengo")
     page = logged_in.get("/dashboard/analytics").text
     assert "Completion rate" in page
+    assert "Screened within 24 h of applying (1 of 1)" in page
     assert "Funnel" in page
 
 

@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import metrics, tracing
@@ -42,6 +42,8 @@ logger = logging.getLogger("app.api")
 # not be enough to read a transcript. Longer than a screening can last (reminders, abandonment).
 CHAT_COOKIE = "sazon_chat"
 CHAT_COOKIE_MAX_AGE = 7 * 24 * 3600
+# How long the chat link the ATS sends to a new applicant stays valid.
+INVITE_MAX_AGE = 7 * 24 * 3600
 
 
 class MessageIn(BaseModel):
@@ -50,6 +52,13 @@ class MessageIn(BaseModel):
 
 class StartIn(BaseModel):
     channel: Channel = "chat"
+
+
+class ApplicationIn(BaseModel):
+    """An application registered by the ATS. Only the time is needed: the screening collects
+    everything else, so no personal data has to cross over."""
+
+    applied_at: AwareDatetime
 
 
 class SpeakIn(BaseModel):
@@ -81,6 +90,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         logger.warning("SESSION_SECRET not set: using a random one, logins reset on restart")
     secret_key = secret.get_secret_value() if secret else secrets.token_urlsafe(32)
     chat_signer = URLSafeTimedSerializer(secret_key, salt="chat-conversation")
+    invite_signer = URLSafeTimedSerializer(secret_key, salt="chat-invite")
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret_key,
@@ -114,6 +124,17 @@ def create_app(container: Container | None = None) -> FastAPI:
         c: Container = request.app.state.container
         return c
 
+    def give_ownership(response: Response, conversation_id: str) -> None:
+        """This browser may now read and write the conversation (see `require_owner`)."""
+        response.set_cookie(
+            CHAT_COOKIE,
+            chat_signer.dumps(conversation_id),
+            max_age=CHAT_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            secure=not c.settings.demo_mode,
+        )
+
     def require_owner(request: Request, conversation_id: UUID) -> None:
         """404, not 403, for someone else's conversation: don't confirm that it exists."""
         try:
@@ -141,6 +162,38 @@ def create_app(container: Container | None = None) -> FastAPI:
         body = generate_latest(REGISTRY) + generate_latest(backlog)
         return Response(body, media_type=CONTENT_TYPE_LATEST)
 
+    @app.post("/api/v1/applications", status_code=status.HTTP_201_CREATED)
+    async def register_application(request: Request, body: ApplicationIn) -> dict[str, str]:
+        """The ATS registers a new application and gets a chat link to send the candidate, so
+        time to screen counts from the application (docs/ats-integration.md)."""
+        c = get(request)
+        token = c.settings.ats_token
+        if token is None:  # not configured: the endpoint doesn't exist
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+        sent = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if not secrets.compare_digest(sent, token.get_secret_value()):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+        if body.applied_at > c.clock.now():
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "applied_at is in the future"
+            )
+        conversation_id = await asyncio.to_thread(
+            c.service.start_conversation, "chat", body.applied_at
+        )
+        invite = invite_signer.dumps(str(conversation_id))
+        return {"id": str(conversation_id), "chat_url": f"/chat/invite/{invite}"}
+
+    @app.get("/chat/invite/{invite}")
+    def accept_invite(invite: str) -> RedirectResponse:
+        """The candidate opens the link from the ATS: this browser now owns the conversation."""
+        try:
+            conversation_id = invite_signer.loads(invite, max_age=INVITE_MAX_AGE)
+        except BadSignature as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found") from exc
+        response = RedirectResponse(f"/chat?conversation={conversation_id}", status_code=303)
+        give_ownership(response, conversation_id)
+        return response
+
     @app.get("/")
     def root() -> RedirectResponse:
         return RedirectResponse("/chat")
@@ -165,14 +218,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         ):
             raise too_many("chat_start", HOUR)
         conversation_id = await asyncio.to_thread(c.service.start_conversation, channel)
-        response.set_cookie(
-            CHAT_COOKIE,
-            chat_signer.dumps(str(conversation_id)),
-            max_age=CHAT_COOKIE_MAX_AGE,
-            httponly=True,
-            samesite="lax",
-            secure=not c.settings.demo_mode,
-        )
+        give_ownership(response, str(conversation_id))
         return {"id": str(conversation_id)}
 
     @app.get("/api/conversations/{conversation_id}/messages")

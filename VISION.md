@@ -28,7 +28,7 @@ These are hypotheses, not results. The analytics view exists to test them.
 
 | Today | Bet | Metric |
 | --- | --- | --- |
-| ~40% of candidates reached | Async chat reaches more candidates than calls do | Completion rate (started → final status) |
+| ~40% of candidates reached | Async chat reaches more candidates than calls do | Share of applicants screened within 24 h of applying; completion rate (started → final status) |
 | Screening takes days, depends on recruiter capacity | Screening starts immediately and takes about 3–5 minutes | Median time to complete |
 | 80% of recruiter time on unqualified candidates | Recruiters only see qualified candidates and real edge cases | Share of candidates that reach a recruiter (qualified + needs review) |
 | Data lives in recruiters' notes | Every candidate has structured, checkable data | Extraction accuracy on the eval set |

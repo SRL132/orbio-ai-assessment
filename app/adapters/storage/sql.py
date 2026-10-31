@@ -101,6 +101,9 @@ class ConversationRow(Base):
     progress: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     dropped_at: Mapped[str | None] = mapped_column(String(32))
     duration_minutes: Mapped[float | None] = mapped_column(Float)
+    # Time-to-screen metric: when they applied (or started the chat), and hours to an outcome.
+    applied_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    hours_to_outcome: Mapped[float | None] = mapped_column(Float)
     interview_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     keep_on_file: Mapped[bool | None] = mapped_column(Boolean)  # retention: kept if True
     next_reminder_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
@@ -613,6 +616,8 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.progress = state.progress
     row.dropped_at = state.dropped_at
     row.duration_minutes = _duration_minutes(state)
+    row.applied_at = state.applied_at or state.started_at
+    row.hours_to_outcome = _hours_to_outcome(state)
     row.interview_at = state.interview_at
     row.keep_on_file = state.keep_on_file
     row.next_reminder_at = state.next_reminder_at
@@ -624,6 +629,14 @@ def _duration_minutes(state: ConversationState) -> float | None:
     if state.started_at is None or state.ended_at is None:
         return None
     return (state.ended_at - state.started_at).total_seconds() / 60
+
+
+def _hours_to_outcome(state: ConversationState) -> float | None:
+    """Hours from applying (or starting the chat) to the end of the conversation."""
+    applied = state.applied_at or state.started_at
+    if applied is None or state.ended_at is None:
+        return None
+    return (state.ended_at - applied).total_seconds() / 3600
 
 
 def _message(row: MessageRow) -> StoredMessage:

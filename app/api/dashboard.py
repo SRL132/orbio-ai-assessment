@@ -181,7 +181,9 @@ def review_queue(request: Request, c: App, user: Recruiter) -> HTMLResponse:
 
 @router.get("/dashboard/analytics", response_class=HTMLResponse)
 def analytics(request: Request, c: App, user: Recruiter) -> HTMLResponse:
-    stats = c.queries.analytics(c.config.field_priority)
+    stats = c.queries.analytics(
+        c.config.field_priority, c.clock.now(), c.config.screening_target_hours
+    )
     return TEMPLATES.TemplateResponse(
         request,
         "dashboard_analytics.html",

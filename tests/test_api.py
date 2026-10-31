@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -144,3 +145,59 @@ def test_a_stream_ends_when_its_conversation_is_erased(tmp_path: Path) -> None:
 def test_root_goes_to_the_chat(client: TestClient) -> None:
     response = client.get("/", follow_redirects=False)
     assert (response.status_code, response.headers["location"]) == (307, "/chat")
+
+
+def _ats_client(tmp_path: Path, token: str | None) -> TestClient:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="fake",
+        database_url=f"sqlite:///{tmp_path / 'ats.db'}",
+        debounce_seconds=0,
+        demo_mode=True,
+        ats_token=token,
+    )
+    return TestClient(create_app(build(settings)))
+
+
+def test_ats_registers_an_application_and_the_candidate_opens_the_link(tmp_path: Path) -> None:
+    with _ats_client(tmp_path, "ats-secret") as client:
+        applied = "2026-10-30T09:00:00+00:00"
+        response = client.post(
+            "/api/v1/applications",
+            json={"applied_at": applied},
+            headers={"Authorization": "Bearer ats-secret"},
+        )
+        assert response.status_code == 201
+        created = response.json()
+        state = client.app.state.container.service.repo.get(UUID(created["id"]))
+        assert state.applied_at.isoformat() == applied
+
+        # A different browser can't read it until it opens the invite link.
+        cid = created["id"]
+        assert client.get(f"/api/conversations/{cid}/messages").status_code == 404
+        opened = client.get(created["chat_url"], follow_redirects=False)
+        assert opened.status_code == 303
+        assert opened.headers["location"] == f"/chat?conversation={cid}"
+        messages = client.get(f"/api/conversations/{cid}/messages").json()["messages"]
+        assert messages[0]["direction"] == "out"  # the greeting is waiting for them
+
+
+@pytest.mark.parametrize(
+    ("token", "header", "body", "code"),
+    [
+        (None, "Bearer x", {"applied_at": "2026-10-30T09:00:00+00:00"}, 404),  # disabled
+        ("ats-secret", "Bearer wrong", {"applied_at": "2026-10-30T09:00:00+00:00"}, 401),
+        ("ats-secret", "Bearer ats-secret", {"applied_at": "2026-10-30T09:00:00"}, 422),  # naive
+        ("ats-secret", "Bearer ats-secret", {"applied_at": "2999-01-01T00:00:00+00:00"}, 422),
+    ],
+)
+def test_application_endpoint_refuses(
+    tmp_path: Path, token: str | None, header: str, body: dict[str, str], code: int
+) -> None:
+    with _ats_client(tmp_path, token) as client:
+        response = client.post("/api/v1/applications", json=body, headers={"Authorization": header})
+        assert response.status_code == code
+
+
+def test_a_forged_invite_is_404(client: TestClient) -> None:
+    assert client.get("/chat/invite/not-a-token", follow_redirects=False).status_code == 404

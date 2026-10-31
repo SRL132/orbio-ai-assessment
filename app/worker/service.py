@@ -71,8 +71,16 @@ class ScreeningService:
         finally:
             self.repo.release_lease(conversation_id, owner)
 
-    def start_conversation(self, channel: Channel = "chat") -> UUID:
-        state = ConversationState(client_id=self.config.client_id, channel=channel)
+    def start_conversation(
+        self, channel: Channel = "chat", applied_at: datetime | None = None
+    ) -> UUID:
+        """Open a conversation. `applied_at` comes from the ATS when it invites the candidate, so
+        time to screen counts from the application, not from the first message."""
+        if applied_at is not None and applied_at > self.ports.clock.now():
+            raise ValueError("applied_at is in the future")
+        state = ConversationState(
+            client_id=self.config.client_id, channel=channel, applied_at=applied_at
+        )
         result = engine.start(state, self.config, self.ports)
         self.repo.create(result.state, result.events, result.replies)
         metrics.record_events(result.events)

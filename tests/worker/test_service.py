@@ -154,3 +154,15 @@ def test_a_saved_booking_is_never_released(
     service.process_pending(state.conversation_id)
     clock.advance(hours=1)
     assert calendar.release_orphans() == 0
+
+
+def test_start_records_when_the_candidate_applied(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = make_service(config, ports, clock)
+    applied = clock.now() - timedelta(hours=5)
+    state = service.repo.get(service.start_conversation(applied_at=applied))
+    assert state is not None
+    assert state.applied_at == applied
+    with pytest.raises(ValueError, match="future"):
+        service.start_conversation(applied_at=clock.now() + timedelta(minutes=1))

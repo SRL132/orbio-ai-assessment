@@ -177,6 +177,11 @@ class ConversationState(BaseModel):
     offered_human: bool = False
     reminders_sent: int = 0
     next_reminder_at: datetime | None = None
+    applied_at: datetime | None = Field(
+        default=None,
+        description="When the candidate applied (from the ATS or job board). None: the chat is "
+        "where they applied, so time to screen counts from started_at.",
+    )
     started_at: datetime | None = None
     last_inbound_at: datetime | None = None
     ended_at: datetime | None = None

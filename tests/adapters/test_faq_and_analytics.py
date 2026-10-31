@@ -56,7 +56,7 @@ def _analytics(config: ClientConfig, states: list[ConversationState]) -> Analyti
         repo.create(state, [], [])
     other_client = ConversationState(client_id="someone_else", status=Status.QUALIFIED)
     SqlRepository(engine, FakeClock(START), "someone_else").create(other_client, [], [])
-    analytics = DashboardQueries(engine, config.client_id).analytics(config.field_priority)
+    analytics = DashboardQueries(engine, config.client_id).analytics(config.field_priority, START)
     engine.dispose()
     return analytics
 
@@ -99,3 +99,49 @@ def test_analytics_empty(config: ClientConfig) -> None:
     a = _analytics(config, [])
     assert a.completion_rate == 0.0
     assert a.median_minutes is None
+
+
+def test_share_screened_within_target_hours(config: ClientConfig) -> None:
+    hour = timedelta(hours=1)
+    now = START + 48 * hour
+    states = [
+        # Applied 2 days ago via the ATS, screened 3 h later: on time.
+        _state(
+            config,
+            Status.QUALIFIED,
+            7,
+            applied_at=START,
+            started_at=START + hour,
+            ended_at=START + 3 * hour,
+        ),
+        # Applied 2 days ago, only started the chat a day later: late, whatever the chat took.
+        _state(
+            config,
+            Status.DISQUALIFIED,
+            2,
+            applied_at=START,
+            started_at=START + 30 * hour,
+            ended_at=START + 30.1 * hour,
+        ),
+        # No application date: counted from the chat's start; never finished, window closed.
+        _state(config, Status.ABANDONED, 1, started_at=START, ended_at=START + 47 * hour),
+        # Started an hour ago, still talking: inside the window, not counted yet.
+        _state(config, Status.IN_PROGRESS, 1, started_at=now - hour),
+        # Started an hour ago and already done: counts, on time.
+        _state(config, Status.NEEDS_REVIEW, 3, started_at=now - hour, ended_at=now),
+    ]
+    engine = make_engine("sqlite:///:memory:")
+    repo = SqlRepository(engine, FakeClock(START), config.client_id)
+    for state in states:
+        repo.create(state, [], [])
+    a = DashboardQueries(engine, config.client_id).analytics(config.field_priority, now, 24.0)
+    engine.dispose()
+    assert (a.screened_on_time, a.screening_due) == (2, 4)
+    assert a.screened_on_time_rate == 0.5
+    assert a.target_hours == 24.0
+
+
+def test_screened_on_time_rate_is_none_without_due_applicants(config: ClientConfig) -> None:
+    a = _analytics(config, [ConversationState(client_id=config.client_id, started_at=START)])
+    assert a.screening_due == 0
+    assert a.screened_on_time_rate is None

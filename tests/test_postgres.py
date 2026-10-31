@@ -73,7 +73,7 @@ def test_analytics_aggregate_in_sql(engine, config: ClientConfig) -> None:
         )
         repo.create(state, [], [])
     repo.create(ConversationState(client_id=config.client_id), [], [])
-    a = DashboardQueries(engine, config.client_id).analytics(config.field_priority)
+    a = DashboardQueries(engine, config.client_id).analytics(config.field_priority, start)
     assert (a.started, a.consented, a.completed, a.median_minutes) == (4, 3, 3, 4.0)
     assert dict(a.funnel)["start_date"] == 3
 

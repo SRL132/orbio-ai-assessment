@@ -6,7 +6,7 @@ Writes such as overrides go through the domain and the service, never through he
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
@@ -140,12 +140,19 @@ class DashboardQueries:
         with Session(self._engine) as session:
             return [_item(row) for row in session.scalars(query)]
 
-    def analytics(self, field_order: list[FieldName]) -> Analytics:
+    def analytics(
+        self, field_order: list[FieldName], now: datetime, target_hours: float = 24.0
+    ) -> Analytics:
         """Conversation metrics (docs/recruiter-dashboard.md, Analytics), aggregated in SQL over
         the projected columns: a handful of small queries, whatever the number of candidates."""
         row = ConversationRow
         mine = row.client_id == self._client_id
         completed = row.status.in_([s.value for s in COMPLETED])
+        # Screened on time: an outcome within the target after applying. Counted against
+        # everyone whose window has closed, so candidates still inside it don't drag it down.
+        on_time = completed & (row.hours_to_outcome <= target_hours)
+        window_closed = row.applied_at <= now - timedelta(hours=target_hours)
+        due = on_time | window_closed
         consented = ~(
             ((row.status == Status.IN_PROGRESS.value) & (row.stage == Stage.CONSENT.value))
             | (func.coalesce(row.dropped_at, "") == "consent")
@@ -161,12 +168,14 @@ class DashboardQueries:
             func.count().filter(completed),
             func.count().filter(row.interview_at.is_not(None)),
             func.count().filter(timed),
+            func.count().filter(on_time),
+            func.count().filter(due),
             *steps,
         ).where(mine)
         with Session(self._engine) as session:
-            started, n_consented, n_completed, booked, n_timed, *reached = session.execute(
-                totals
-            ).one()
+            (started, n_consented, n_completed, booked, n_timed, n_on_time, n_due, *reached) = (
+                session.execute(totals).one()
+            )
             outcomes = dict(
                 session.execute(
                     select(row.status, func.count()).where(mine).group_by(row.status)
@@ -218,6 +227,10 @@ class DashboardQueries:
             by_channel=by_channel,
             by_location=by_location,
             interviews_booked=booked,
+            target_hours=target_hours,
+            screened_on_time=n_on_time,
+            screening_due=n_due,
+            screened_on_time_rate=round(n_on_time / n_due, 3) if n_due else None,
         )
 
     def backlog(self) -> dict[str, tuple[int, datetime | None]]:
@@ -280,6 +293,10 @@ class Analytics(BaseModel):
     by_channel: dict[str, tuple[int, int]]
     by_location: dict[str, tuple[int, int]]
     interviews_booked: int
+    target_hours: float
+    screened_on_time: int
+    screening_due: int  # applicants whose window has closed, or who were already screened
+    screened_on_time_rate: float | None
 
 
 # Reached a final outcome through the conversation (not dropped off).
