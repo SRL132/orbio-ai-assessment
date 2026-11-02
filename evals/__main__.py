@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
 
     results, complete = run_suite(
         harness,
-        load_scenarios(args.scenario),
+        load_scenarios(args.scenario, offline=args.provider == "fake"),
         simulator if args.simulate else None,
         args.budget_usd,
         report,

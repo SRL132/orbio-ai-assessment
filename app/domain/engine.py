@@ -109,6 +109,8 @@ def turn(
 ) -> TurnResult:
     t = _Turn.begin(state, config, ports)
     t.event(EventType.MESSAGE_RECEIVED, stage=t.state.stage.value)
+    if t.state.status == Status.ABANDONED and t.state.went_silent:
+        _resume(t)
     if t.state.stage == Stage.CLOSED:
         t.say("closed")
         return _finish(t)
@@ -170,9 +172,38 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
     else:
         drop = t.state.awaiting.value if t.state.awaiting else t.state.stage.value
         t.state.dropped_at = drop
+        t.state.went_silent = True
         t.event(EventType.ABANDONED, drop_off=drop)
         _close(t, Status.ABANDONED)
     return _finish(t, schedule_reminder=False)
+
+
+def _resume(t: _Turn) -> None:
+    """A candidate abandoned for silence writes again: reopen at the stage they stopped at, so
+    this message is read as their answer and the flow carries on with the missing fields."""
+    state = t.state
+    if state.dropped_at == Stage.CONSENT.value:
+        state.stage = Stage.CONSENT
+    elif state.dropped_at == Stage.RECAP.value:
+        state.stage = Stage.RECAP
+    else:
+        state.stage = Stage.COLLECTING
+        state.awaiting = next_missing_field(state.candidate, t.config)
+    state.status = Status.IN_PROGRESS
+    state.went_silent = False
+    state.ended_at = None
+    state.summary = None
+    t.events.append(
+        DomainEvent(
+            type=EventType.STATUS_CHANGED,
+            data={
+                "from": Status.ABANDONED.value,
+                "to": Status.IN_PROGRESS.value,
+                "reason": f"resumed_after_silence:{state.dropped_at}",
+            },
+        )
+    )
+    state.dropped_at = None
 
 
 def _hold_for_retry(t: _Turn, exc: LLMUnavailable) -> TurnResult:

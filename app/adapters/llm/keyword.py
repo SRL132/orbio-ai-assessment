@@ -46,12 +46,17 @@ _ABUSE = _vocab("idiota|imbecil|estupido|gilipollas|puta|mierda|idiot|stupid|fuc
 # Words that tip the language guess (whole words, after normalize()).
 _ENGLISH = _vocab(
     "yes|hi|hello|my|name|is|i|im|have|the|and|car|both|none|weekends|full|part|time|morning|"
-    "afternoon|evening|tomorrow|today|never|years|sure|live|in|want|next|week"
+    "afternoon|evening|tomorrow|today|never|years|sure|live|in|want|next|week|can|you|speak|"
+    "english|please|sorry|continue|we|mornings|afternoons|evenings|weekend|everything|correct|"
+    "all|good|from|with|on"
 )
 _SPANISH = _vocab(
     "si|hola|me|llamo|soy|tengo|coche|ambos|vivo|en|de|jornada|completa|media|fines|semana|"
-    "manana|tarde|noche|nunca|anos|hoy|lunes|el|la|y|con|quiero|vale|claro"
+    "manana|tarde|noche|nunca|anos|hoy|lunes|el|la|y|con|quiero|vale|claro|espanol|castellano|"
+    "hablar|hablas|puedes|podemos|seguir|por|favor|perdona|prefiero|he|repartido|todo|bien"
 )
+# "I don't know" is not an answer: never read it as "no" (a knockout at the license question).
+_DONT_KNOW = ("no se", "no lo se", "ni idea", "not sure", "dont know", "don't know", "dunno")
 
 
 def _numbered(words: str, start: int = 0, step: int = 1) -> dict[str, int]:
@@ -204,7 +209,10 @@ class KeywordExtractor:
 
         awaiting = state.awaiting if state.stage == Stage.COLLECTING else None
         intent: Intent = "answer"
-        if _has(t, *_ABUSE):
+        confused = not words  # "?" or "..." alone: they didn't understand the question
+        if confused:
+            intent = "other"
+        elif _has(t, *_ABUSE):
             intent = "abuse"
         elif "?" in text and _has(t, "eres", "are you", "es un bot", "is this"):
             intent = "question"  # "¿Eres una persona?" asks what Lucía is; it isn't a hand-off
@@ -216,6 +224,8 @@ class KeywordExtractor:
         yes_no: bool | None = None
         if t in _YES or (words and words[0] in _YES and len(words) <= 4):
             yes_no = True
+        elif _has(t, *_DONT_KNOW):
+            yes_no = None
         elif t in _NO or (words and words[0] == "no" and len(words) <= 3 and awaiting is None):
             yes_no = False
 
@@ -251,6 +261,7 @@ class KeywordExtractor:
             fields=ExtractedFields.model_validate(fields),
             language=self._language(words, state.language),
             intent=intent,
+            confused=confused,
             yes_no=yes_no,
             sensitive_data=bool(_SENSITIVE.search(t)),
             question=text.strip() if intent == "question" else None,
@@ -291,6 +302,8 @@ class KeywordExtractor:
             vehicle = Vehicle.MOTO
         elif _has(t, "coche", "car", "carro", "auto"):
             vehicle = Vehicle.CAR
+        if _has(t, *_DONT_KNOW) and vehicle is None:
+            return
         says_no = _has(t, "no tengo", "none", "no", "en tramite", "sacando")
         if awaiting == FieldName.LICENSE and says_no and vehicle is None:
             put("has_license", False)

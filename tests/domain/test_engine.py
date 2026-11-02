@@ -280,6 +280,50 @@ def test_reminders_then_abandoned(chat: Chat, clock: FakeClock) -> None:
     assert abandoned.data["drop_off"] == "license"
 
 
+def _abandon(chat: Chat, clock: FakeClock) -> None:
+    for hours in (2, 22, 24):
+        clock.advance(hours=hours)
+        chat.silence()
+    assert chat.state.status == Status.ABANDONED
+
+
+def test_reply_after_abandoned_resumes_at_the_missing_field(chat: Chat, clock: FakeClock) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López"))
+    _abandon(chat, clock)
+
+    result = chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.candidate.vehicle == Vehicle.MOTO
+    assert chat.state.awaiting == FieldName.LOCATION
+    assert chat.state.dropped_at is None
+    assert chat.state.ended_at is None
+    assert chat.state.next_reminder_at is not None
+    reopened = next(e for e in result.events if e.type == "status_changed")
+    assert reopened.data == {
+        "from": "abandoned",
+        "to": "in_progress",
+        "reason": "resumed_after_silence:license",
+    }
+
+
+def test_reply_after_silence_at_consent_asks_for_consent_again(
+    chat: Chat, clock: FakeClock
+) -> None:
+    _abandon(chat, clock)
+    chat.say(ex(yes_no=True))
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.stage == Stage.COLLECTING
+    assert chat.state.awaiting == FieldName.FULL_NAME
+
+
+def test_declined_consent_is_not_resumed(chat: Chat) -> None:
+    chat.say(ex(yes_no=False))
+    chat.say(ex(yes_no=True))
+    assert chat.state.status == Status.ABANDONED
+    assert chat.result.replies == [chat.config.template("es", "closed")]
+
+
 def test_reply_resets_reminders(chat: Chat, clock: FakeClock) -> None:
     chat.say(ex(yes_no=True))
     clock.advance(hours=2)

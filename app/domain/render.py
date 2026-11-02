@@ -56,7 +56,7 @@ def check_reply(text: str, config: ClientConfig, channel: Channel = "chat") -> b
     """
     stripped = text.strip()
     ok = 0 < len(stripped) <= config.max_reply_chars and stripped.count("?") <= 1
-    return ok and (channel == "chat" or speakable(stripped))
+    return ok and (channel != "voice" or speakable(stripped))
 
 
 def speakable(text: str) -> bool:

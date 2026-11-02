@@ -49,6 +49,7 @@
   expect:
     status: qualified
     language: en
+    reply_languages: [es, es, es, en, en, en, en, en, en]
     fields: {location_id: es-valencia, availability: [full_time], experience_years: 1, platforms: [Uber Eats]}
 
 - id: code_switching
@@ -57,6 +58,7 @@
   steps: [Sí, Me llamo Pedro Sanz, I have a moto license, Vivo en Sevilla, weekends, noches, 3 years con Glovo, mañana, sí]
   expect:
     status: qualified
+    language: es
     fields: {full_name: Pedro Sanz, vehicle: moto, availability: [weekends], schedule: [evening], experience_years: 3}
 
 - id: no_license
@@ -210,3 +212,294 @@
     status: qualified
     interview_booked: true
     fields: {vehicle: both, location_id: mx-cdmx, experience_years: 1, start_date: "2026-11-04"}
+
+# --- Edge-case ladders (docs/process-design.md, "Edge cases"). Each one goes from mild to
+# extreme. `requires_llm` scenarios need a real model to understand the candidate, so the offline
+# keyword extractor skips them; they run with --provider.
+
+# Stops responding. Reminders at 2 h and 24 h (23 h on WhatsApp), abandoned 24 h after the last;
+# a later reply resumes at the missing fields.
+
+- id: silence_1_resumes_after_first_reminder
+  description: Goes quiet after the name, gets the first reminder, and finishes the screening.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts tomorrow.
+  steps: [Sí, Raúl Díaz, {wait_hours: 2}, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    reminders_sent: 0
+    events_include: [reminder_sent]
+    fields: {vehicle: moto, location_id: es-madrid, start_date: "2026-11-03"}
+
+- id: silence_2_resumes_after_last_reminder
+  description: Only comes back after the second, last reminder, a day later.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts tomorrow.
+  steps: [Sí, Raúl Díaz, {wait_hours: 2}, {wait_hours: 22}, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    events_include: [reminder_sent]
+    fields: {vehicle: moto, start_date: "2026-11-04"}
+
+- id: silence_3_drifts_off_repeatedly
+  description: Goes quiet three times at different questions and comes back every time.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts on Friday.
+  steps: [Sí, Raúl Díaz, {wait_hours: 2}, Moto, "Madrid, Retiro", {wait_hours: 2}, {wait_hours: 22}, Jornada completa, Tardes, nunca, {wait_hours: 2}, el viernes, Sí]
+  expect:
+    status: qualified
+    fields: {full_name: Raúl Díaz, vehicle: moto, location_id: es-madrid, availability: [full_time], schedule: [afternoon], experience_years: 0, start_date: "2026-11-06"}
+
+- id: silence_4_returns_after_abandoned
+  description: Abandoned at the license question, then replies anyway; picks up where they left.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts the day after he comes back.
+  steps: [Sí, Raúl Díaz, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    events_include: [abandoned]
+    fields: {full_name: Raúl Díaz, vehicle: moto, start_date: "2026-11-05"}
+
+- id: silence_5_returns_after_abandoned_at_recap
+  description: Answers everything, goes silent at the recap until abandoned, then confirms it.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts tomorrow.
+  steps: [Sí, Raúl Díaz, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí]
+  expect:
+    status: qualified
+    events_include: [abandoned]
+
+- id: silence_6_never_consents
+  description: Never answers the opening message at all; abandoned at consent.
+  persona: Someone who opens the chat and never writes anything.
+  steps: [{wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}]
+  expect:
+    status: abandoned
+    reminders_sent: 2
+    dropped_at: consent
+
+- id: silence_7_consents_after_abandoned
+  description: Ignores the opening message until abandoned, then says yes; asked for consent's next step.
+  persona: Raúl Díaz, who only answers two days after the first message.
+  steps: [{wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí, Raúl Díaz]
+  expect:
+    status: in_progress
+    awaiting: license
+    fields: {full_name: Raúl Díaz}
+
+- id: silence_8_whatsapp_window
+  description: On WhatsApp the last reminder goes at 23 h (free 24 h window), so abandoned at 47 h.
+  channel: whatsapp
+  persona: Raúl Díaz on WhatsApp, gives his name and stops answering.
+  steps: [Sí, Raúl Díaz, {wait_hours: 2}, {wait_hours: 21}, {wait_hours: 24}]
+  expect:
+    status: abandoned
+    reminders_sent: 2
+    dropped_at: license
+
+- id: silence_9_returns_weeks_later
+  description: Abandoned, then comes back three weeks later; relative dates count from that day.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience. Comes back three weeks later and starts the next day.
+  steps: [Sí, Raúl Díaz, Moto, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, {wait_hours: 480}, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    fields: {vehicle: moto, location_id: es-madrid, start_date: "2026-11-25"}
+
+- id: silence_10_abandoned_during_confirmation
+  description: Goes silent right when asked to confirm a looked-up town; abandoned, then answers the check.
+  persona: Raquel Ortiz, car license, lives in Móstoles. Goes quiet when asked to confirm Móstoles, comes back two days later and says yes. Full time, mornings, one year with Glovo, starts on Monday.
+  steps: [Sí, Raquel Ortiz, Coche, Móstoles, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí, Jornada completa, Mañanas, un año en Glovo, el lunes, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: ["borderline_zone:location"]
+    events_include: [abandoned, confirmation_answered]
+
+# Invalid answers. Acknowledge and rephrase; two tries, then the field goes to review and the
+# flow moves on. Nothing invalid is ever a knockout.
+
+- id: invalid_2_first_name_only_twice
+  description: Gives only a first name twice; accepted and flagged, the flow continues.
+  persona: Ana, who only ever gives her first name. Retiro (Madrid), moto, part time, mornings, no experience, starts tomorrow.
+  steps: [Sí, Ana, Ana, Moto, "Madrid, Retiro", Media jornada, Mañanas, nunca, mañana, Sí]
+  expect:
+    status: [qualified, needs_review]
+    fields: {full_name: Ana, vehicle: moto}
+    field_notes: {full_name: surname_missing}
+
+- id: invalid_3_impossible_experience
+  description: Claims 150 years of experience, is asked again, then gives a real number.
+  persona: Sofía Ramos, Retiro (Madrid), moto, part time, mornings. First says 150 years of experience as a joke, then 2 years on Glovo. Starts tomorrow.
+  steps: [Sí, Sofía Ramos, Moto, "Madrid, Retiro", Media jornada, Mañanas, 150 años, 2 años en Glovo, mañana, Sí]
+  expect:
+    status: qualified
+    fields: {experience_years: 2, platforms: [Glovo]}
+
+- id: invalid_4_date_fails_twice
+  description: Two unusable start dates in a row; the field goes to review and the flow moves on.
+  persona: Sofía Ramos, Retiro (Madrid), moto, part time, mornings, no experience. Gives a past date, then "yesterday", then confirms the recap.
+  steps: [Sí, Sofía Ramos, Moto, "Madrid, Retiro", Media jornada, Mañanas, nunca, "el 1/1/2020", ayer, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: ["field_failed_twice:start_date"]
+    field_status: {start_date: needs_review}
+
+- id: invalid_5_contradicts_license_later
+  description: Said moto earlier, then admits there is no license yet; code knocks out on the new answer.
+  persona: Ana López, Retiro (Madrid). First says moto, then while answering availability admits she has no license yet.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", "Jornada completa. Bueno, en realidad no tengo carnet todavía", Sí]
+  expect:
+    status: disqualified
+    disqualify_reason: no_license
+    keep_on_file: true
+
+- id: invalid_6_corrects_at_recap
+  description: Spots a wrong answer at the recap and corrects it; the recap is shown again.
+  persona: Ana López, Retiro (Madrid). Says moto by mistake, then at the recap corrects it to car. Full time, evenings, no experience, starts tomorrow.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", Jornada completa, Noches, nunca, mañana, "No, me equivoqué: tengo carnet de coche", Sí]
+  expect:
+    status: qualified
+    fields: {vehicle: car}
+    events_include: [field_changed]
+
+- id: invalid_7_only_question_marks
+  description: Answers the license question with "?" twice; it must not loop forever.
+  persona: Ana López, confused by the license question, replies "?" twice, then answers the rest normally (Retiro, Madrid; full time, evenings, no experience, starts tomorrow).
+  steps: [Sí, Ana López, "?", "??", "Madrid, Retiro", Jornada completa, Noches, nunca, mañana, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: ["field_failed_twice:license"]
+
+- id: invalid_8_junk_to_everything
+  description: Replies with junk to every question. Never qualified, never knocked out; ends in review.
+  persona: Someone who consents and then only sends numbers and symbols, whatever is asked, and finally confirms.
+  steps: [Sí, "123", "...", "000", "---", "999", "!!!", "...", "1", "2", "...", "-", "...", "...", "...", Sí]
+  expect:
+    status: needs_review
+
+# Ambiguous answers. Store what is certain, ask about the rest; never guess.
+
+- id: ambiguous_2_city_only_twice
+  description: Says only "Madrid" twice when asked for the neighbourhood; location goes to review.
+  persona: Marta Ruiz, both licenses, only ever says "Madrid" when asked where she lives. Weekends, flexible, no experience, starts Monday.
+  steps: [Sí, Marta Ruiz, Ambos, Madrid, Madrid, Fines de semana, Flexible, nunca, el lunes, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: ["field_failed_twice:location"]
+    fields: {city: Madrid}
+
+- id: ambiguous_3_hesitant_consent
+  description: Answers the consent question with a question; gets an answer, then consents.
+  persona: Nuria Gil, who first asks what this is about before agreeing, then gives her name.
+  steps: ["Depende, ¿de qué va esto?", vale, Nuria Gil]
+  expect:
+    status: in_progress
+    awaiting: license
+    fields: {full_name: Nuria Gil}
+
+- id: ambiguous_4_vague_start_date
+  description: Says "whenever I can" for the start date; asked again with examples, then answers.
+  persona: Sofía Ramos, Retiro (Madrid), moto, part time, mornings, no experience. Says "cuando pueda", then "el lunes".
+  steps: [Sí, Sofía Ramos, Moto, "Madrid, Retiro", Media jornada, Mañanas, nunca, cuando pueda, el lunes, Sí]
+  expect:
+    status: qualified
+    fields: {start_date: "2026-11-09"}
+
+- id: ambiguous_5_dont_know_license
+  description: Says "no sé" to the license question. That is not a no, so it must not be a knockout.
+  persona: Ana López, unsure at first, then remembers she has a moto license. Retiro (Madrid), full time, evenings, no experience, starts tomorrow.
+  steps: [Sí, Ana López, no sé, "Ah sí, de moto", "Madrid, Retiro", Jornada completa, Noches, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    fields: {vehicle: moto}
+
+- id: ambiguous_6_hedged_availability
+  description: '"Full time, maybe some weekends": store full time only and confirm the weekends.'
+  requires_llm: true
+  persona: Ana López, Retiro (Madrid), moto. Wants full time and is only maybe available some weekends.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", "Jornada completa, y quizá algún fin de semana"]
+  expect:
+    status: in_progress
+    fields: {availability: [full_time]}
+
+- id: ambiguous_7_car_license_for_moto
+  description: Has a car (B) license for one year and wants to ride a moto; not enough, goes to review.
+  requires_llm: true
+  persona: Ana López, Retiro (Madrid). Has had a B car license for one year and wants to deliver by moto. Full time, afternoons, no experience, starts tomorrow.
+  steps: [Sí, Ana López, "Tengo el carnet B desde hace un año y querría repartir en moto", "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: [license_unclear]
+
+- id: ambiguous_8_vague_about_everything
+  description: Hedges every answer. Must never be knocked out or guessed into a clean qualification.
+  requires_llm: true
+  persona: Ana López, Centro (Madrid). Vague about everything ("no sé", "creo que", "lo que sea"), but never refuses. Thinks she has a car license, flexible about everything, some months of experience, can start "soon".
+  steps: [Sí, "Ana, bueno, Ana López", "no sé, creo que el de coche", "por el centro", "Madrid, Centro", "lo que me digáis", "da igual", "algo he hecho, unos meses", "pronto", "la semana que viene", "sí"]
+  expect:
+    status: [qualified, needs_review]
+    fields: {full_name: Ana López, location_id: es-madrid}
+
+# Switches language. Reply in the language of the latest message; stored values don't change.
+
+- id: language_2_english_to_spanish
+  description: Starts in English and asks to switch to Spanish.
+  persona: John Smith, Seville, car license. Starts in English, then asks to continue in Spanish. Part time, mornings, no experience, starts next week.
+  steps: ["Yes", John Smith, Car, "Perdona, ¿podemos seguir en español? Vivo en Sevilla", Media jornada, Mañanas, nunca, la semana que viene, Sí]
+  expect:
+    status: qualified
+    language: es
+    reply_languages: [en, en, en, es, es, es, es, es, es]
+    fields: {vehicle: car, location_id: es-sevilla, availability: [part_time], schedule: [morning]}
+
+- id: language_3_asks_without_answering
+  description: Asks "Can you speak English?" without answering anything; switches and re-asks.
+  persona: Ana López, Retiro (Madrid), moto. Asks for English before the license question and answers in English from then on. Full time, evenings, no experience, starts tomorrow.
+  steps: [Sí, Ana López, "Can you speak English please?", Moto, "Madrid, Retiro", full time, evenings, never, tomorrow, "yes"]
+  expect:
+    status: qualified
+    language: en
+    reply_languages: [es, es, en, en, en, en, en, en, en, en]
+
+- id: language_4_switch_at_recap
+  description: Spanish all along, confirms the recap in English; the outcome comes in English.
+  persona: Ana López, Retiro (Madrid), moto, full time, evenings, no experience, starts tomorrow. Confirms the recap in English.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", Jornada completa, Noches, nunca, mañana, "yes, all good"]
+  expect:
+    status: qualified
+    language: en
+    reply_languages: [es, es, es, es, es, es, es, es, en]
+
+- id: language_5_flip_flops_every_message
+  description: Alternates Spanish and English on every message; each reply follows the latest one.
+  persona: Laura Gómez, Valencia, moto, full time, evenings, no experience, starts tomorrow. Alternates Spanish and English every single message.
+  steps: [Sí, My name is Laura Gómez, Tengo moto, I live in Valencia, Jornada completa, evenings, nunca he repartido, tomorrow, sí]
+  expect:
+    status: qualified
+    language: es
+    reply_languages: [es, en, es, en, es, en, es, en, es]
+    fields: {full_name: Laura Gómez, vehicle: moto, location_id: es-valencia, availability: [full_time], schedule: [evening], experience_years: 0, start_date: "2026-11-03"}
+
+- id: language_6_mixed_inside_messages
+  description: Spanglish inside each message; every value is still stored correctly.
+  persona: Carlos Ruiz, Salamanca (Madrid), car. Mixes both languages inside every message. Full time, mornings only, two years on Glovo, starts tomorrow.
+  steps: [Sí, "Hi! Me llamo Carlos Ruiz and I have coche", "vivo en Madrid, barrio Salamanca", "full time pero solo mañanas", "two years en Glovo", mañana, "yes"]
+  expect:
+    status: qualified
+    fields: {full_name: Carlos Ruiz, vehicle: car, location_id: es-madrid, zone: Salamanca, availability: [full_time], schedule: [morning], experience_years: 2, platforms: [Glovo]}
+
+- id: language_7_unsupported_catalan
+  description: Writes in Catalan, which isn't supported; understood, and answered in Spanish.
+  requires_llm: true
+  persona: Marta Puig, Gràcia (Barcelona), moto. Writes only in Catalan. Full time, evenings, never delivered, starts tomorrow.
+  steps: ["Hola, sí", Sóc la Marta Puig, Tinc carnet de moto, "Visc a Gràcia, Barcelona", Jornada completa, A la nit, Mai, Demà, Sí]
+  expect:
+    status: qualified
+    language: es
+    reply_languages: [es, es, es, es, es, es, es, es, es]
+    fields: {full_name: Marta Puig, vehicle: moto, location_id: es-barcelona, start_date: "2026-11-03"}
+
+- id: language_8_voice_switch
+  description: On a voice call, asks to continue in English; every spoken reply follows.
+  channel: voice
+  persona: Marta Ruiz on a voice call. Tetuán (Madrid), car. Asks for English right after her name. Full time, flexible, never delivered, starts next week.
+  steps: [sí, marta ruiz, sorry can we continue in english, i have a car, madrid tetuan, full time, flexible, never, next week, "yes"]
+  expect:
+    status: qualified
+    language: en
+    reply_languages: [es, es, en, en, en, en, en, en, en, en]
+    fields: {vehicle: car, location_id: es-madrid, start_date: "2026-11-09"}

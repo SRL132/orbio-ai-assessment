@@ -9,9 +9,40 @@ from evals.runner import Expect, Harness, Scenario, load_scenarios
 
 def test_offline_suite_passes(config: ClientConfig) -> None:
     harness = Harness(config, KeywordExtractor(), TemplateResponder())
-    results = [harness.run_scripted(s) for s in load_scenarios()]
+    results = [harness.run_scripted(s) for s in load_scenarios(offline=True)]
     failing = {r.id: r.failures for r in results if not r.passed}
     assert failing == {}
+
+
+def test_offline_skips_scenarios_that_need_an_llm() -> None:
+    every = load_scenarios()
+    offline = load_scenarios(offline=True)
+    assert any(s.requires_llm for s in every)
+    assert not any(s.requires_llm for s in offline)
+    assert len(offline) < len(every)
+
+
+def test_reply_language_is_checked_per_candidate_message(config: ClientConfig) -> None:
+    scenario = Scenario(
+        id="x",
+        description="",
+        persona="",
+        steps=["Sí", "Ana López"],
+        expect=Expect(status="in_progress", reply_languages=["es", "en"]),
+    )
+    result = Harness(config, KeywordExtractor(), TemplateResponder()).run_scripted(scenario)
+    assert result.failures == ["reply to message 2 in es, not en"]
+
+
+def test_status_accepts_any_of_a_list(config: ClientConfig) -> None:
+    scenario = Scenario(
+        id="x",
+        description="",
+        persona="",
+        steps=["Sí"],
+        expect=Expect(status=["qualified", "in_progress"]),
+    )
+    assert Harness(config, KeywordExtractor(), TemplateResponder()).run_scripted(scenario).passed
 
 
 def test_wrong_expectation_is_reported(config: ClientConfig) -> None:

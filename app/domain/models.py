@@ -233,6 +233,10 @@ class ConversationState(BaseModel):
     dropped_at: str | None = Field(
         default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
     )
+    went_silent: bool = Field(
+        default=False,
+        description="Abandoned for not replying (not for declining consent): a reply resumes it.",
+    )
     progress: int = Field(
         default=0,
         description="How many fields, in the client's priority order, are answered (funnel).",

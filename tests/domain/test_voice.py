@@ -44,6 +44,12 @@ def test_check_reply_rejects_emoji_and_option_lists_on_voice(config: ClientConfi
     assert check_reply("¡Hola! 👋 ¿Empezamos?", config, "chat")
     assert not check_reply("¡Hola! 👋 ¿Empezamos?", config, "voice")
     assert not check_reply("Moto · Coche", config, "voice")
+
+
+def test_check_reply_keeps_text_rules_on_whatsapp(config: ClientConfig) -> None:
+    # WhatsApp is text: emoji and option lists are fine there, only voice can't say them.
+    assert check_reply("¡Hola! 👋 ¿Empezamos?", config, "whatsapp")
+    assert check_reply("Responde: Moto · Coche · Ambos · No tengo", config, "whatsapp")
     assert check_reply("¿Moto, coche o los dos?", config, "voice")
 
 

@@ -10,6 +10,7 @@ relative dates ("mañana", "el lunes") are deterministic.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,7 +29,14 @@ from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.models import Channel, ConversationState, Stage
+from app.domain.models import (
+    Channel,
+    ConversationState,
+    FieldName,
+    Language,
+    Stage,
+    StoredMessage,
+)
 from app.domain.ports import Extractor, Ports, Responder
 from app.domain.render import check_reply, speakable
 from app.domain.validators import normalize
@@ -40,7 +48,7 @@ MAX_SIMULATED_TURNS = 20
 
 
 class Expect(BaseModel):
-    status: str
+    status: str | list[str]  # a list: any of these outcomes is acceptable
     language: str | None = None
     fields: dict[str, Any] = Field(default_factory=dict)
     review_reasons_include: list[str] = Field(default_factory=list)
@@ -53,12 +61,21 @@ class Expect(BaseModel):
     max_turns: int | None = None
     interview_booked: bool | None = None
     reply_contains: list[str] = Field(default_factory=list)
+    dropped_at: str | None = None
+    # Per field: its status ("valid", "needs_review", "missing") and/or note ("surname_missing").
+    field_status: dict[str, str] = Field(default_factory=dict)
+    field_notes: dict[str, str] = Field(default_factory=dict)
+    # One entry per candidate message: the language every agent reply to it must be in
+    # (null = don't check). The rule is "reply in the language of the latest message".
+    reply_languages: list[Language | None] = Field(default_factory=list)
 
 
 class Scenario(BaseModel):
     id: str
     description: str
     channel: Channel = "chat"
+    # Needs a real LLM to understand the candidate: skipped by the offline keyword extractor.
+    requires_llm: bool = False
     persona: str
     steps: list[str | dict[str, float]]
     expect: Expect
@@ -100,11 +117,14 @@ class Completer(Protocol):
     def complete(self, system: str, user: str, max_tokens: int = ...) -> str: ...
 
 
-def load_scenarios(only: list[str] | None = None) -> list[Scenario]:
+def load_scenarios(only: list[str] | None = None, *, offline: bool = False) -> list[Scenario]:
+    """The scenarios to run. `offline` (the keyword extractor) leaves out those that need an LLM."""
     raw = yaml.safe_load(SCENARIOS.read_text(encoding="utf-8"))
     scenarios = [Scenario.model_validate(item) for item in raw]
     if only:
         scenarios = [s for s in scenarios if s.id in only]
+    if offline:
+        scenarios = [s for s in scenarios if not s.requires_llm]
     return scenarios
 
 
@@ -211,9 +231,8 @@ class Harness:
             if not ok:
                 failures.append(message)
 
-        check(
-            state.status.value == expect.status, f"status {state.status.value} != {expect.status}"
-        )
+        allowed = [expect.status] if isinstance(expect.status, str) else expect.status
+        check(state.status.value in allowed, f"status {state.status.value} not in {allowed}")
         if expect.language:
             check(state.language == expect.language, f"language {state.language}")
         for reason in expect.review_reasons_include:
@@ -246,6 +265,15 @@ class Harness:
         all_replies = " ".join(m.text for m in messages if m.direction == "out")
         for needle in expect.reply_contains:
             check(needle in all_replies, f"no reply contains {needle!r}")
+        if expect.dropped_at is not None:
+            check(state.dropped_at == expect.dropped_at, f"dropped_at {state.dropped_at}")
+        for name, status in expect.field_status.items():
+            actual_status = state.candidate.meta[FieldName(name)].status.value
+            check(actual_status == status, f"{name} status {actual_status} != {status}")
+        for name, note in expect.field_notes.items():
+            actual_note = state.candidate.meta[FieldName(name)].note
+            check(actual_note == note, f"{name} note {actual_note} != {note}")
+        failures.extend(_language_failures(messages, expect.reply_languages))
         event_types = {e.type for e in repo.events(cid)}
         for event in expect.events_include:
             check(event in event_types, f"missing event {event}")
@@ -281,6 +309,148 @@ class Harness:
         )
 
 
+_ES_WORDS = frozenset(
+    [
+        "de",
+        "la",
+        "el",
+        "que",
+        "y",
+        "en",
+        "tu",
+        "te",
+        "por",
+        "para",
+        "con",
+        "una",
+        "un",
+        "es",
+        "los",
+        "las",
+        "del",
+        "se",
+        "me",
+        "lo",
+        "al",
+        "ya",
+        "muy",
+        "bien",
+        "gracias",
+        "hola",
+        "perfecto",
+        "vale",
+        "dime",
+        "tienes",
+        "cuando",
+        "donde",
+        "como",
+        "vives",
+        "puedes",
+        "eres",
+        "estas",
+        "sigues",
+        "seguimos",
+        "nos",
+        "quedan",
+        "preguntas",
+        "si",
+        "o",
+        "jornada",
+        "completa",
+        "media",
+        "semana",
+        "fines",
+        "manana",
+        "tarde",
+        "noche",
+    ]
+)
+_EN_WORDS = frozenset(
+    [
+        "the",
+        "you",
+        "your",
+        "to",
+        "and",
+        "for",
+        "is",
+        "are",
+        "an",
+        "we",
+        "what",
+        "do",
+        "can",
+        "please",
+        "thanks",
+        "hi",
+        "great",
+        "have",
+        "of",
+        "in",
+        "it",
+        "this",
+        "that",
+        "when",
+        "where",
+        "how",
+        "which",
+        "would",
+        "could",
+        "if",
+        "still",
+        "left",
+        "questions",
+        "got",
+        "thank",
+        "yes",
+        "or",
+        "more",
+        "one",
+        "pick",
+        "sorry",
+        "give",
+        "moment",
+        "looking",
+        "answer",
+        "right",
+        "back",
+        "full",
+        "part",
+        "time",
+        "weekends",
+        "morning",
+        "afternoon",
+        "evening",
+    ]
+)
+
+
+def reply_language(text: str) -> Language | None:
+    """A rough guess at the language of an agent reply, from common words (None if unclear)."""
+    words = re.findall(r"[a-z]+", normalize(text))
+    es = sum(w in _ES_WORDS for w in words) + 2 * (("¿" in text) + ("¡" in text))
+    en = sum(w in _EN_WORDS for w in words)
+    if es == en:
+        return None
+    return "es" if es > en else "en"
+
+
+def _language_failures(messages: list[StoredMessage], expected: list[Language | None]) -> list[str]:
+    """Every reply to candidate message i must be in expected[i]."""
+    failures: list[str] = []
+    turn = -1
+    for message in messages:
+        if message.direction == "in":
+            turn += 1
+            continue
+        if turn < 0 or turn >= len(expected) or expected[turn] is None:
+            continue
+        found = reply_language(message.text)
+        if found != expected[turn]:
+            failures.append(f"reply to message {turn + 1} in {found}, not {expected[turn]}")
+    return failures
+
+
 def _field(state: ConversationState, name: str) -> object:
     return state.candidate.model_dump(mode="json").get(name)
 
@@ -306,7 +476,7 @@ LONG_ALLOWED = ("Repasemos", "Let's recap", "Elige un horario", "Pick a time")
 
 def _reply_ok(text: str, channel: Channel, config: ClientConfig) -> bool:
     if "\n•" in text or text.startswith(LONG_ALLOWED):
-        return channel == "chat" or speakable(text)  # length and question count exempt
+        return channel != "voice" or speakable(text)  # length and question count exempt
     return check_reply(text, config, channel)
 
 

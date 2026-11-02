@@ -2,13 +2,37 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 23,
+    "passed": 50,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
         "turns": 3
+      },
+      "ambiguous_2_city_only_twice": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "ambiguous_3_hesitant_consent": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "ambiguous_4_vague_start_date": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "ambiguous_5_dont_know_license": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
       },
       "asks_for_human": {
         "field_accuracy": 1.0,
@@ -58,6 +82,48 @@
         "replies_failed": 0,
         "turns": 2
       },
+      "invalid_2_first_name_only_twice": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "invalid_3_impossible_experience": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "invalid_4_date_fails_twice": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "invalid_5_contradicts_license_later": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 6
+      },
+      "invalid_6_corrects_at_recap": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "invalid_7_only_question_marks": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "invalid_8_junk_to_everything": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 16
+      },
       "invalid_date_then_valid": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -69,6 +135,42 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 3
+      },
+      "language_2_english_to_spanish": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "language_3_asks_without_answering": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "language_4_switch_at_recap": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "language_5_flip_flops_every_message": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "language_6_mixed_inside_messages": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 7
+      },
+      "language_8_voice_switch": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
       },
       "language_switch": {
         "field_accuracy": 1.0,
@@ -112,6 +214,66 @@
         "replies_failed": 0,
         "turns": 2
       },
+      "silence_10_abandoned_during_confirmation": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
+      },
+      "silence_1_resumes_after_first_reminder": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_2_resumes_after_last_reminder": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_3_drifts_off_repeatedly": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_4_returns_after_abandoned": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_5_returns_after_abandoned_at_recap": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_6_never_consents": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 0
+      },
+      "silence_7_consents_after_abandoned": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 2
+      },
+      "silence_8_whatsapp_window": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 2
+      },
+      "silence_9_returns_weeks_later": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
       "unlisted_nearby_town": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -143,6 +305,6 @@
         "turns": 4
       }
     },
-    "total": 23
+    "total": 50
   }
 }
