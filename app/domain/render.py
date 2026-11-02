@@ -23,6 +23,7 @@ from app.domain.models import (
     Availability,
     Candidate,
     Channel,
+    ConfirmField,
     ConversationState,
     Disqualify,
     DomainEvent,
@@ -113,6 +114,8 @@ def render(
                 replies.append(fill("recap", summary=summary))
             case Qualified():
                 replies.append(fill("qualified"))
+            case ConfirmField(field=name):
+                replies.append(fill("confirm_value", value=_pending_text(name, state, config)))
             case OfferSlots(slots=slots, location_id=location_id):
                 replies.append(
                     fill("offer_slots", slots=_slot_list(slots, location_id, state, config))
@@ -126,6 +129,17 @@ def render(
             case ScheduleReminder():
                 pass
     return replies, events
+
+
+def _pending_text(name: FieldName, state: ConversationState, config: ClientConfig) -> str:
+    """The value waiting for confirmation, as the recap would show it (or the geocoded place)."""
+    pending = state.confirming
+    if pending is None or pending.field != name:
+        return ""
+    if pending.place:
+        return pending.place
+    draft = Candidate.model_validate({**state.candidate.model_dump(), **pending.values})
+    return field_values(draft, config, state.language, state.channel)[name] or ""
 
 
 # --- Candidate record as text ---------------------------------------------------------------------
@@ -251,6 +265,7 @@ def _fallback_key(action: AskField | ReAsk | AnswerQuestion) -> str:
 _COMMON = frozenset({"name", "persona", "company", "missing_count"})
 _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "recap": _COMMON | {"summary"},
+    "confirm_value": _COMMON | {"value"},
     "offer_slots": _COMMON | {"slots"},
     "interview_booked": _COMMON | {"when"},
     "slot_format": frozenset({"weekday", "day", "month", "time"}),
@@ -279,6 +294,7 @@ def required_templates(config: ClientConfig) -> set[str]:
         "handoff_human",
         "needs_review",
         "recap",
+        "confirm_value",
         "qualified",
         "offer_slots",
         "interview_booked",

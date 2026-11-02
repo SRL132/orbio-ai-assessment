@@ -36,6 +36,22 @@ def test_openrouter_provider(tmp_path: Path) -> None:
         settings(tmp_path, llm_provider="openrouter", openrouter_api_key="k", openrouter_model="m")
     )
     assert isinstance(primary(container).extractor, OpenRouterLLM)
+    assert primary(container).extractor.reasoning_effort == "low"  # the default
+    container.close()
+
+
+@pytest.mark.parametrize(("effort", "sent"), [("minimal", "minimal"), ("", None)])
+def test_openrouter_reasoning_effort(tmp_path: Path, effort: str, sent: str | None) -> None:
+    container = build(
+        settings(
+            tmp_path,
+            llm_provider="openrouter",
+            openrouter_api_key="k",
+            openrouter_model="m",
+            openrouter_reasoning_effort=effort,
+        )
+    )
+    assert primary(container).extractor.reasoning_effort == sent
     container.close()
 
 
@@ -80,3 +96,14 @@ def test_offset_clock_only_moves_forward() -> None:
     assert (clock.now() - before).total_seconds() >= 7200
     with pytest.raises(ValueError, match="forward"):
         clock.advance(hours=-1)
+
+
+def test_geocoder_is_chosen_by_settings() -> None:
+    from app.adapters.geo.fake import FakeGeocoder
+    from app.adapters.geo.nominatim import NominatimGeocoder
+    from app.bootstrap import make_geocoder
+
+    assert make_geocoder(Settings(_env_file=None, geocoder="")) is None
+    assert isinstance(make_geocoder(Settings(_env_file=None, geocoder="fake")), FakeGeocoder)
+    nominatim = Settings(_env_file=None, geocoder="nominatim", nominatim_user_agent="x (a@b.c)")
+    assert isinstance(make_geocoder(nominatim), NominatimGeocoder)

@@ -23,6 +23,8 @@ class ServiceLocation(BaseModel):
         default_factory=list,
         description="Places just outside the area: they go to human review, not a knockout.",
     )
+    lat: float | None = Field(default=None, description="City centre, for geocoded distances.")
+    lon: float | None = None
 
 
 class LicenseRule(BaseModel):
@@ -66,6 +68,16 @@ class ClientConfig(BaseModel):
     license_rules: dict[str, CountryLicenseRules] = Field(default_factory=dict)
     known_platforms: list[str] = Field(default_factory=list)
     max_attempts: int = 2
+    confirm_below_confidence: float = Field(
+        default=0.5,
+        description="A value the model is less sure of than this is confirmed with the "
+        "candidate (yes/no) before it counts, including a knockout.",
+    )
+    geo_review_radius_km: float = Field(
+        default=30.0,
+        description="A place not in the config but this close to a served city goes to review "
+        "(after the candidate confirms it); farther away is outside the area.",
+    )
     max_abuse_strikes: int = 2
     far_start_days: int = 60
     reminder_hours: list[float] = Field(default_factory=lambda: [2.0, 24.0])

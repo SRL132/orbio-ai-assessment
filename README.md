@@ -43,10 +43,11 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openrouter`, or `anthropic` |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | — | Development and model comparison (synthetic data only) |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT` | —, —, `low` | Development and model comparison (synthetic data only); reasoning per call (`none`, `minimal`, `low`…), less is faster |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-opus-5-5` | The intended production path |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | — | Optional: the WhatsApp channel (all four needed) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
+| `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
 | `RECRUITER_USERS`, `SESSION_SECRET` | — | Dashboard login (no default accounts) |

@@ -20,12 +20,15 @@ from app.domain.models import (
     Action,
     AnswerQuestion,
     AskField,
+    ConfirmField,
     ConversationState,
     Disqualify,
     DomainEvent,
     EventType,
+    ExtractedFields,
     ExtractionResult,
     FieldStatus,
+    GeoLookup,
     HandOff,
     InboundMessage,
     InterviewBooked,
@@ -44,8 +47,10 @@ from app.domain.models import (
     TurnResult,
 )
 from app.domain.policy import (
+    FIELD_GROUPS,
     ApplyResult,
     add_review_reason,
+    apply_confirmed,
     apply_extraction,
     next_missing_field,
     progress,
@@ -54,7 +59,7 @@ from app.domain.policy import (
 from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
-from app.domain.validators import final_review_reasons
+from app.domain.validators import final_review_reasons, is_known_place, nearest_location
 
 # Intents that count as a (possibly failed) attempt at answering the awaited question.
 _ANSWER_INTENTS = frozenset({"answer", "other"})
@@ -224,8 +229,14 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
     """Collecting and recap: apply the extracted fields, then ask, recap or finish."""
     if extraction.intent == "question" and extraction.question:
         t.actions.append(AnswerQuestion(question=extraction.question))
+    fields = extraction.fields
+    if t.state.confirming is not None:
+        rest = _on_confirmation(t, extraction)
+        if rest is None:
+            return
+        fields = rest
     applied = apply_extraction(
-        t.state, extraction.fields, t.config, t.now.date(), message=t.message
+        t.state, fields, t.config, t.now.date(), message=t.message, geo=_locate(t, fields)
     )
     t.events.extend(applied.events)
     if applied.knockout:
@@ -236,8 +247,77 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
         _ask_next(t, extraction, applied)
 
 
+def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields | None:
+    """The candidate answers our "did I get that right?" question. Returns the fields still to
+    apply from this message, or None when this turn is fully handled."""
+    pending = t.state.confirming
+    if pending is None:
+        return extraction.fields
+    group = FIELD_GROUPS[pending.field]
+    corrected = extraction.yes_no is not True and any(
+        getattr(extraction.fields, attr) is not None for attr in group
+    )
+    if extraction.yes_no is True:
+        applied = apply_confirmed(t.state)
+        t.events.extend(applied.events)
+        t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="yes")
+        if applied.knockout:
+            _disqualify(t, applied.knockout)
+            return None
+        if t.state.stage == Stage.RECAP:
+            t.actions.append(Recap())
+            return None
+        # Go on with the rest of the message, minus the value just confirmed.
+        return extraction.fields.model_copy(update=dict.fromkeys(group))
+    if extraction.yes_no is False or corrected:
+        t.state.confirming = None
+        t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="no")
+        if corrected:  # "no, Móstoles": the new value goes through the checks again
+            return extraction.fields
+        if t.state.stage == Stage.RECAP:
+            t.actions.append(Recap())  # keep the answer they had before the correction
+            return None
+        t.state.awaiting = pending.field
+        _ask_next(t, extraction, ApplyResult())  # counts the attempt and asks again
+        return None
+    if extraction.intent in _ANSWER_INTENTS:
+        pending.asked += 1
+    if pending.asked >= t.config.max_attempts:  # no clear yes or no: ask the question afresh
+        t.state.confirming = None
+        t.state.awaiting = pending.field
+        _ask_next(t, extraction, ApplyResult())
+        return None
+    t.actions.append(ConfirmField(field=pending.field))
+    return None
+
+
+def _locate(t: _Turn, fields: ExtractedFields) -> GeoLookup | None:
+    """Look up a place the config doesn't list, so distance decides instead of a knockout.
+    Only the place name goes to the geocoder."""
+    geocoder = t.ports.geocoder
+    if geocoder is None:
+        return None
+    city = fields.city.value if fields.city else None
+    zone = fields.zone.value if fields.zone else None
+    place = city or (zone if t.state.candidate.city is None else None)
+    if not place or is_known_place(place, t.config):
+        return None
+    countries = sorted({loc.country for loc in t.config.locations})
+    try:
+        found = geocoder.locate(place, countries)
+    except Exception as exc:  # the lookup failed: a recruiter decides, nobody is rejected
+        t.event(EventType.LOCATION_GEOCODED, found=False, error=type(exc).__name__)
+        return GeoLookup(place=place, failed=True)
+    nearest = nearest_location(found, t.config) if found else None
+    km = round(nearest[1], 1) if nearest else None
+    t.event(EventType.LOCATION_GEOCODED, found=found is not None, km=km)
+    return GeoLookup(place=place, found=found)
+
+
 def _on_recap_reply(t: _Turn, extraction: ExtractionResult, applied: ApplyResult) -> None:
-    if applied.added or applied.changed:
+    if applied.confirm is not None:
+        t.actions.append(ConfirmField(field=applied.confirm))
+    elif applied.added or applied.changed:
         t.actions.append(Recap())  # they corrected something: confirm the new version
     elif extraction.yes_no is True:
         _finalize(t)
@@ -254,6 +334,10 @@ def _ask_next(t: _Turn, extraction: ExtractionResult, applied: ApplyResult) -> N
     if extraction.sentiment == "frustrated" and not t.state.offered_human:
         t.state.offered_human = True
         t.say("offer_human")
+    if t.state.confirming is not None:
+        t.state.awaiting = t.state.confirming.field
+        t.actions.append(ConfirmField(field=t.state.confirming.field))
+        return
 
     awaited = t.state.awaiting
     nxt = next_missing_field(t.state.candidate, t.config)
@@ -275,7 +359,9 @@ def _count_unusable_answer(
     """The candidate tried to answer the field we asked for, but nothing usable came out.
     Count the attempt: returns why (to re-ask), or None once the field gives up and moves on."""
     awaited = t.state.awaiting
-    tried = extraction.intent in _ANSWER_INTENTS and not applied.progressed
+    tried = (
+        extraction.intent in _ANSWER_INTENTS and not applied.progressed and applied.confirm is None
+    )
     if awaited is None or not tried:
         return None
     if t.state.candidate.meta[awaited].status != FieldStatus.MISSING:
@@ -398,6 +484,8 @@ def _ask_current(t: _Turn) -> None:
     """Repeat whatever we were waiting for (after a warning)."""
     if t.state.stage == Stage.CONSENT:
         t.say("consent_reask")
+    elif t.state.confirming is not None:
+        t.actions.append(ConfirmField(field=t.state.confirming.field))
     elif t.state.stage == Stage.RECAP:
         t.actions.append(Recap())
     elif nxt := t.state.awaiting or next_missing_field(t.state.candidate, t.config):

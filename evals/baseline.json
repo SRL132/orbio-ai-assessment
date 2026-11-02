@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 22,
+    "passed": 23,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -86,7 +86,7 @@
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
-        "turns": 5
+        "turns": 6
       },
       "prompt_injection": {
         "field_accuracy": 1.0,
@@ -111,6 +111,12 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 2
+      },
+      "unlisted_nearby_town": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 10
       },
       "vague_location": {
         "field_accuracy": 1.0,
@@ -137,6 +143,6 @@
         "turns": 4
       }
     },
-    "total": 22
+    "total": 23
   }
 }

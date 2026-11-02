@@ -12,6 +12,8 @@ from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.channels.whatsapp import WhatsAppClient
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.geo.fake import FakeGeocoder
+from app.adapters.geo.nominatim import NominatimGeocoder
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.resilient import Pair, ResilientLLM
@@ -22,7 +24,7 @@ from app.adapters.storage.retention import SqlRetention
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
-from app.domain.ports import Clock, Extractor, Ports, Responder
+from app.domain.ports import Clock, Extractor, Geocoder, Ports, Responder
 from app.settings import Settings
 from app.worker.pool import TurnPool
 from app.worker.runner import Runner
@@ -49,6 +51,16 @@ class Container:
         self.db.dispose()
 
 
+def make_geocoder(settings: Settings) -> Geocoder | None:
+    match settings.geocoder:
+        case "nominatim":
+            return NominatimGeocoder(settings.nominatim_user_agent, base_url=settings.nominatim_url)
+        case "fake":
+            return FakeGeocoder()
+        case _:
+            return None
+
+
 def make_llm(
     settings: Settings,
     meter: UsageMeter | None = None,
@@ -70,6 +82,7 @@ def make_llm(
                 model or settings.openrouter_model,
                 timeout=settings.llm_timeout_seconds,
                 meter=meter,
+                reasoning_effort=settings.openrouter_reasoning_effort.strip() or None,
                 max_retries=settings.llm_max_retries,
             )
             return llm, llm
@@ -124,7 +137,13 @@ def build(settings: Settings | None = None) -> Container:
     llm = make_resilient_llm(settings)
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
-    ports = Ports(extractor=llm, responder=llm, clock=clock, calendar=calendar)
+    ports = Ports(
+        extractor=llm,
+        responder=llm,
+        clock=clock,
+        calendar=calendar,
+        geocoder=make_geocoder(settings),
+    )
     # Leases run on the system clock: fast-forwarding the demo clock mustn't expire them.
     repo = SqlRepository(db, clock, config.client_id, lease_clock=SystemClock())
     service = ScreeningService(repo, config, ports)

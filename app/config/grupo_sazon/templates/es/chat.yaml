@@ -39,6 +39,7 @@ recap: |-
   Repasemos:
   {summary}
   ¿Es todo correcto?
+confirm_value: "Solo para confirmar: {value}, ¿correcto?"
 ask_change: Claro, ¿qué quieres cambiar?
 qualified: ¡Genial, {name}! Cumples los requisitos 🎉
 qualified_no_slots: Un reclutador te escribirá en 2 días laborables para fijar la entrevista.

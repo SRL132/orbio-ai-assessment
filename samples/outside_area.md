@@ -2,7 +2,7 @@
 
 Lives in a city clearly outside the service area.
 
-Run: `fake/keyword/scripted` · passed · 5 candidate messages
+Run: `fake/keyword/scripted` · passed · 6 candidate messages
 
 **Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
 
@@ -19,6 +19,10 @@ Run: `fake/keyword/scripted` · passed · 5 candidate messages
 **Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: Bilbao  
+
+**Lucía**: Solo para confirmar: Bilbao (País Vasco), ¿correcto?  
+
+**Candidate**: Sí  
 
 **Lucía**: Gracias, Carmen. Por ahora no repartimos en tu zona, así que no podemos seguir. ¿Quieres que guardemos tus datos por si abrimos cerca de ti?  
 

@@ -216,12 +216,12 @@ def test_review_outcome_notes_and_evidence(config: ClientConfig) -> None:
     state = ConversationState(client_id=config.client_id)
     fields = ex(city="Madrid", zone="Getafe").fields
     fields.city.quote, fields.zone.quote = "vivo en Madrid", "en Getafe"  # type: ignore[union-attr]
-    fields.zone.confidence = 0.4  # type: ignore[union-attr]
+    fields.zone.confidence = 0.55  # type: ignore[union-attr]  # above confirm_below_confidence
     result = apply_extraction(state, fields, config, TODAY, message=said(fields))
     meta = state.candidate.meta[FieldName.LOCATION]
     assert meta.note == "borderline_zone"
     assert meta.quote == "vivo en Madrid / en Getafe"  # each quote once, joined
-    assert meta.confidence == 0.4  # the least sure part decides
+    assert meta.confidence == 0.55  # the least sure part decides
     assert result.added == {FieldName.LOCATION}
     assert state.review_reasons == [
         ReviewReason(reason=Reason.BORDERLINE_ZONE, field=FieldName.LOCATION)

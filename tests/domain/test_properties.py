@@ -14,6 +14,7 @@ from hypothesis import strategies as st
 
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.llm.fake import ScriptedExtractor, TemplateResponder
 from app.adapters.llm.keyword import spoken_numbers
 from app.domain import engine
@@ -37,7 +38,7 @@ from tests.conftest import said
 
 CONFIG = load_client_config("grupo_sazon")  # module-level: Hypothesis reruns the test body
 START = datetime(2026, 11, 2, 10, tzinfo=UTC)
-CITIES = [loc.city for loc in CONFIG.locations] + ["Narnia", "Getafe", ""]
+CITIES = [loc.city for loc in CONFIG.locations] + ["Narnia", "Getafe", "Móstoles", "Toledo", ""]
 ZONES = [*[z for loc in CONFIG.locations for z in loc.zones][:6], "Nowhere", ""]
 
 
@@ -137,13 +138,15 @@ cooperative = st.builds(
     channel=st.sampled_from(["chat", "voice"]),
     # Half the runs quote only what the candidate wrote; the rest invent some values.
     honest=st.just([True] * 25) | st.lists(st.booleans(), min_size=25, max_size=25),
+    geocoder=st.sampled_from(["none", "works", "fails"]),
 )
 def test_no_extraction_can_break_the_rules(
-    script: list[ExtractionResult], channel: str, honest: list[bool]
+    script: list[ExtractionResult], channel: str, honest: list[bool], geocoder: str
 ) -> None:
     clock = FakeClock(START)
     extractor = ScriptedExtractor(script)
-    ports = Ports(extractor, TemplateResponder(), clock, _Calendar())
+    geo = None if geocoder == "none" else FakeGeocoder(fail=geocoder == "fails")
+    ports = Ports(extractor, TemplateResponder(), clock, _Calendar(), geo)
     state = engine.start(
         ConversationState(client_id=CONFIG.client_id, channel=channel), CONFIG, ports
     ).state

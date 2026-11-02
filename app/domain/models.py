@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -84,6 +84,7 @@ class Reason(StrEnum):
     POSTAL_CODE_NOT_LISTED = "postal_code_not_listed"
     FIELD_FAILED_TWICE = "field_failed_twice"
     UNGROUNDED_ANSWER = "ungrounded_answer"
+    LOCATION_UNVERIFIED = "location_unverified"
 
 
 # Knockouts end the screening; each needs a `disqualified_<reason>` template.
@@ -142,6 +143,44 @@ class FieldMeta(BaseModel):
     note: str | None = None
 
 
+class GeoPlace(BaseModel):
+    """A place found by the geocoder: what it's called and where it is."""
+
+    name: str
+    region: str | None = None
+    country_code: str
+    lat: float
+    lon: float
+
+    def label(self) -> str:
+        """How the candidate is asked to confirm it: 'Móstoles (Comunidad de Madrid)'."""
+        return f"{self.name} ({self.region})" if self.region else self.name
+
+
+class GeoLookup(BaseModel):
+    """The geocoder's answer for a place the config doesn't list, handed to the validator.
+    `found` None with `failed` False: no such place; `failed`: the lookup itself didn't work."""
+
+    place: str
+    found: GeoPlace | None = None
+    failed: bool = False
+
+
+class PendingConfirmation(BaseModel):
+    """A value held back until the candidate confirms it (the model wasn't sure, or the place
+    came from the geocoder). Nothing is applied to the candidate until they say yes."""
+
+    field: FieldName
+    values: dict[str, Any]
+    outcome: Literal["valid", "review", "knockout"]
+    reason: Reason | None = None
+    note: str | None = None
+    quote: str | None = None
+    confidence: float | None = None
+    place: str | None = Field(default=None, description="Geocoded place label, if any.")
+    asked: int = 0
+
+
 class Candidate(BaseModel):
     full_name: str | None = None
     has_license: bool | None = None
@@ -170,6 +209,7 @@ class ConversationState(BaseModel):
     status: Status = Status.IN_PROGRESS
     stage: Stage = Stage.CONSENT
     awaiting: FieldName | None = None
+    confirming: PendingConfirmation | None = None
     language: Language = "es"
     review_reasons: list[ReviewReason] = Field(default_factory=list)
     disqualify_reason: Reason | None = None
@@ -304,6 +344,13 @@ class Qualified(BaseModel):
     kind: Literal["qualified"] = "qualified"
 
 
+class ConfirmField(BaseModel):
+    """A yes/no check of the value in `state.confirming` (fixed template, no LLM)."""
+
+    kind: Literal["confirm_field"] = "confirm_field"
+    field: FieldName
+
+
 # Fixed messages the engine can say. Every key must exist in each language's templates; the
 # config loader checks that at startup (`render.template_problems`).
 SayTemplate = Literal[
@@ -367,6 +414,7 @@ Action = Annotated[
     | HandOff
     | Recap
     | Qualified
+    | ConfirmField
     | Say
     | Remind
     | OfferSlots
@@ -422,6 +470,9 @@ class EventType(StrEnum):
     ABANDONED = "abandoned"
     ABUSE_FLAGGED = "abuse_flagged"
     SENSITIVE_DATA_REDACTED = "sensitive_data_redacted"
+    CONFIRMATION_ASKED = "confirmation_asked"
+    CONFIRMATION_ANSWERED = "confirmation_answered"
+    LOCATION_GEOCODED = "location_geocoded"
     EXTRACTOR_FAILED = "extractor_failed"
     RESPONDER_FAILED = "responder_failed"
     REPLY_REJECTED = "reply_rejected"

@@ -62,6 +62,7 @@ class TestPrompts:
         assert extractor_system(config) == extractor_system(config)
         assert "Madrid" in extractor_system(config)
         assert "Glovo" in extractor_system(config)
+        assert "Getafe" in extractor_system(config)  # nearby towns, so they're read as cities
         assert "Lucía" in responder_system(config)
 
     def test_per_turn_context_goes_in_the_user_message(self, state: ConversationState) -> None:

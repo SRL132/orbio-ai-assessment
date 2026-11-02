@@ -47,32 +47,48 @@ known_platforms:
   - DiDi Food
   - Amazon Flex
 
+# lat/lon: city centre. Places not listed here are geocoded (GEOCODER) and decided by their
+# distance to the nearest city centre: within geo_review_radius_km, review; farther, outside.
+geo_review_radius_km: 30
+# Values the model is less sure of than this are confirmed with the candidate (yes/no) first.
+confirm_below_confidence: 0.5
+
 locations:
   - id: es-madrid
+    lat: 40.4168
+    lon: -3.7038
     country: ES
     city: Madrid
     zones: [Centro, Chamberí, Salamanca, Retiro, Arganzuela, Tetuán, Chamartín, Moncloa]
     postal_prefixes: ["280"]
     nearby: [Alcobendas, Getafe, Leganés, Pozuelo de Alarcón, Alcorcón]
   - id: es-barcelona
+    lat: 41.3874
+    lon: 2.1686
     country: ES
     city: Barcelona
     zones: [Eixample, Gràcia, Sants, Sant Martí, Ciutat Vella, Les Corts]
     postal_prefixes: ["080"]
     nearby: [L'Hospitalet de Llobregat, Badalona, Cornellà de Llobregat]
   - id: es-valencia
+    lat: 39.4699
+    lon: -0.3763
     country: ES
     city: Valencia
     aliases: [València]
     postal_prefixes: ["460"]
     nearby: [Burjassot, Paterna, Mislata]
   - id: es-sevilla
+    lat: 37.3891
+    lon: -5.9845
     country: ES
     city: Sevilla
     aliases: [Seville]
     postal_prefixes: ["410"]
     nearby: [Dos Hermanas, Mairena del Aljarafe]
   - id: mx-cdmx
+    lat: 19.4326
+    lon: -99.1332
     country: MX
     city: Ciudad de México
     aliases: [CDMX, Mexico City, DF, Ciudad de Mexico]
@@ -81,12 +97,16 @@ locations:
     timezone: America/Mexico_City
     nearby: [Naucalpan, Tlalnepantla, Ciudad Nezahualcóyotl]
   - id: mx-guadalajara
+    lat: 20.6597
+    lon: -103.3496
     country: MX
     city: Guadalajara
     postal_prefixes: ["44"]
     timezone: America/Mexico_City
     nearby: [Zapopan, Tlaquepaque, Tonalá]
   - id: mx-monterrey
+    lat: 25.6866
+    lon: -100.3161
     country: MX
     city: Monterrey
     postal_prefixes: ["64"]

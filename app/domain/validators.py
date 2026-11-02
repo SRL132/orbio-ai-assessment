@@ -6,6 +6,7 @@ config. The LLM proposes values; these functions decide whether they are accepta
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -13,7 +14,16 @@ from datetime import date
 from typing import Literal
 
 from app.domain.config import ClientConfig, ServiceLocation
-from app.domain.models import Availability, Candidate, InvalidReason, Reason, Schedule, Vehicle
+from app.domain.models import (
+    Availability,
+    Candidate,
+    GeoLookup,
+    GeoPlace,
+    InvalidReason,
+    Reason,
+    Schedule,
+    Vehicle,
+)
 
 OutcomeKind = Literal["valid", "invalid", "knockout", "review"]
 
@@ -112,13 +122,66 @@ def _is_nearby(place: str, locations: list[ServiceLocation]) -> ServiceLocation 
     return None
 
 
+def is_known_place(place: str, config: ClientConfig) -> bool:
+    """A served city (or alias), one of its zones, or a listed nearby town: no lookup needed."""
+    wanted = normalize(place)
+    return any(
+        wanted in {normalize(n) for n in [loc.city, *loc.aliases, *loc.zones, *loc.nearby]}
+        for loc in config.locations
+    )
+
+
+def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance (haversine)."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(h))
+
+
+def nearest_location(place: GeoPlace, config: ClientConfig) -> tuple[ServiceLocation, float] | None:
+    """The served city closest to a geocoded place, and how far it is."""
+    found = [
+        (loc, distance_km(place.lat, place.lon, loc.lat, loc.lon))
+        for loc in config.locations
+        if loc.lat is not None and loc.lon is not None
+    ]
+    return min(found, key=lambda pair: pair[1]) if found else None
+
+
+def _geocoded(city: str, zone: str | None, geo: GeoLookup, config: ClientConfig) -> Outcome:
+    """A place the config doesn't list, decided by distance instead of an automatic knockout.
+    Every geocoded outcome is confirmed with the candidate first (note "geocoded")."""
+    if geo.failed:  # the lookup didn't work: a recruiter decides, nobody is rejected for it
+        return Outcome.review(Reason.LOCATION_UNVERIFIED, city=city, zone=zone)
+    if geo.found is None:  # no such place: ask again (a typo, or not a place at all)
+        return Outcome.invalid("unclear")
+    nearest = nearest_location(geo.found, config)
+    if nearest is not None and nearest[1] <= config.geo_review_radius_km:
+        return Outcome(
+            "review",
+            reason=Reason.BORDERLINE_ZONE,
+            updates={"city": geo.found.name, "zone": zone},
+            note="geocoded",
+        )
+    return Outcome(
+        "knockout", reason=Reason.OUTSIDE_AREA, updates={"city": geo.found.name}, note="geocoded"
+    )
+
+
 def _digits(text: str) -> str:
     return "".join(ch for ch in text if ch.isdigit())
 
 
 def validate_location(
-    city: str | None, zone: str | None, postal_code: str | None, config: ClientConfig
+    city: str | None,
+    zone: str | None,
+    postal_code: str | None,
+    config: ClientConfig,
+    geo: GeoLookup | None = None,
 ) -> Outcome:
+    """`geo` is the geocoder's answer for a city (or zone given alone) the config doesn't
+    list. Without it, an unlisted city is outside the area."""
     # The city comes first: Spanish and Mexican postal codes overlap (e.g. 06xxx is Badajoz and
     # also Mexico City), so a postal code alone never decides the location.
     pc = _digits(postal_code) if postal_code else ""
@@ -148,8 +211,17 @@ def validate_location(
         nearby = _is_nearby(city, config.locations)
         if nearby is not None:
             return Outcome.review(Reason.BORDERLINE_ZONE, city=city, zone=zone)
+        if geo is not None and normalize(geo.place) == normalize(city):
+            return _geocoded(city, zone, geo, config)
         return Outcome.knockout(Reason.OUTSIDE_AREA)
 
+    if zone and (_match_city(zone, config.locations) or _is_nearby(zone, config.locations)):
+        # A town given as the zone, with no city ("Getafe" read as a Madrid neighbourhood): it is
+        # the city. Only names from the config, so a real neighbourhood still asks for the city.
+        return validate_location(zone, None, postal_code, config)
+    if zone and geo is not None and normalize(geo.place) == normalize(zone):
+        # An unlisted place given alone: look it up like a city ("Móstoles", "Vallecas").
+        return validate_location(zone, None, postal_code, config, geo)
     if pc:
         return Outcome.invalid("city_missing", postal_code=pc)
     return Outcome.invalid("missing")

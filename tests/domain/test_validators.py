@@ -6,9 +6,12 @@ from hypothesis import strategies as st
 
 from app.adapters.config.yaml_loader import load_client_config
 from app.domain.config import ClientConfig
-from app.domain.models import Availability, Candidate, Schedule, Vehicle
+from app.domain.models import Availability, Candidate, GeoLookup, GeoPlace, Schedule, Vehicle
 from app.domain.validators import (
+    distance_km,
     final_review_reasons,
+    is_known_place,
+    nearest_location,
     normalize,
     normalize_platforms,
     validate_availability,
@@ -67,6 +70,11 @@ class TestLicense:
         assert validate_license(None, None).reason == "missing"
 
 
+MOSTOLES = GeoPlace(
+    name="Móstoles", region="Comunidad de Madrid", country_code="ES", lat=40.3223, lon=-3.8649
+)
+
+
 class TestLocation:
     def test_served_city_and_zone(self, config: ClientConfig) -> None:
         outcome = validate_location("Madrid", "Chamberí", None, config)
@@ -97,6 +105,72 @@ class TestLocation:
     def test_nearby_town_goes_to_review(self, config: ClientConfig) -> None:
         outcome = validate_location("Getafe", None, None, config)
         assert (outcome.kind, outcome.reason) == ("review", "borderline_zone")
+
+    def test_nearby_town_given_as_the_zone_is_the_city(self, config: ClientConfig) -> None:
+        # Some models read "Getafe" as a Madrid neighbourhood: still a borderline town, not a
+        # missing city.
+        outcome = validate_location(None, "Getafe", None, config)
+        assert (outcome.kind, outcome.reason) == ("review", "borderline_zone")
+        assert outcome.updates == {"city": "Getafe", "zone": None}
+
+    def test_served_city_given_as_the_zone_asks_for_the_zone(self, config: ClientConfig) -> None:
+        outcome = validate_location(None, "Madrid", None, config)
+        assert (outcome.kind, outcome.reason) == ("invalid", "zone_missing")
+        assert outcome.updates == {"city": "Madrid"}
+
+    def test_a_neighbourhood_alone_still_asks_for_the_city(self, config: ClientConfig) -> None:
+        outcome = validate_location(None, "Chamberí", None, config)
+        assert (outcome.kind, outcome.reason) == ("invalid", "missing")
+
+    def test_geocoded_town_within_the_radius_goes_to_review(self, config: ClientConfig) -> None:
+        geo = GeoLookup(place="Móstoles", found=MOSTOLES)
+        outcome = validate_location("Móstoles", None, None, config, geo)
+        assert (outcome.kind, outcome.reason, outcome.note) == (
+            "review",
+            "borderline_zone",
+            "geocoded",
+        )
+        assert outcome.updates["city"] == "Móstoles"
+
+    def test_geocoded_town_beyond_the_radius_is_outside(self, config: ClientConfig) -> None:
+        bilbao = GeoPlace(name="Bilbao", country_code="ES", lat=43.263, lon=-2.935)
+        outcome = validate_location(
+            "Bilbao", None, None, config, GeoLookup(place="Bilbao", found=bilbao)
+        )
+        assert (outcome.kind, outcome.reason, outcome.note) == (
+            "knockout",
+            "outside_area",
+            "geocoded",
+        )
+
+    def test_a_place_the_geocoder_doesnt_know_is_asked_again(self, config: ClientConfig) -> None:
+        outcome = validate_location("Narnia", None, None, config, GeoLookup(place="Narnia"))
+        assert (outcome.kind, outcome.reason) == ("invalid", "unclear")
+
+    def test_a_failed_lookup_goes_to_review(self, config: ClientConfig) -> None:
+        geo = GeoLookup(place="Móstoles", failed=True)
+        outcome = validate_location("Móstoles", None, None, config, geo)
+        assert (outcome.kind, outcome.reason) == ("review", "location_unverified")
+
+    def test_an_unlisted_place_given_as_zone_is_looked_up(self, config: ClientConfig) -> None:
+        geo = GeoLookup(place="Móstoles", found=MOSTOLES)
+        outcome = validate_location(None, "Móstoles", None, config, geo)
+        assert (outcome.kind, outcome.reason) == ("review", "borderline_zone")
+
+    def test_a_lookup_for_another_place_is_ignored(self, config: ClientConfig) -> None:
+        geo = GeoLookup(place="Móstoles", found=MOSTOLES)
+        assert validate_location("Bilbao", None, None, config, geo).kind == "knockout"
+
+    def test_distances(self, config: ClientConfig) -> None:
+        assert 495 < distance_km(40.4168, -3.7038, 41.3874, 2.1686) < 515  # Madrid-Barcelona
+        nearest = nearest_location(MOSTOLES, config)
+        assert nearest is not None
+        assert nearest[0].id == "es-madrid"
+        assert 15 < nearest[1] < 22
+
+    def test_known_places(self, config: ClientConfig) -> None:
+        assert all(is_known_place(p, config) for p in ["madrid", "CDMX", "Chamberí", "Getafe"])
+        assert not is_known_place("Móstoles", config)
 
     def test_city_clearly_outside_is_a_knockout(self, config: ClientConfig) -> None:
         outcome = validate_location("Bilbao", None, None, config)

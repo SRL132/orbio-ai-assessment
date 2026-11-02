@@ -23,6 +23,10 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     openrouter_model: str = ""
+    # Hidden reasoning per call: none, minimal, low… Screening turns are simple, and reasoning
+    # costs seconds per turn (voice!). Some models need it (Gemini 3.x: use "minimal"). Empty:
+    # don't send the parameter (the model's default). Pick it with the evals (--reasoning).
+    openrouter_reasoning_effort: str = "low"
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
@@ -55,6 +59,12 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
     worker_concurrency: int = 16  # turns at once per process (they mostly wait for the LLM)
     chat_stream_seconds: float = 300.0  # an SSE stream ends after this; the browser reconnects
+
+    # Places the client config doesn't list: "" = outside the area (as before), "nominatim" =
+    # look them up and decide by distance (only the place name is sent), "fake" = a fixed list.
+    geocoder: Literal["", "nominatim", "fake"] = ""
+    nominatim_url: str = "https://nominatim.openstreetmap.org"
+    nominatim_user_agent: str = ""  # required by Nominatim's usage policy: app name + contact
 
     database_url: str = "sqlite:///./data/sazon.db"
     client_id: str = "grupo_sazon"

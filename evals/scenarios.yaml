@@ -70,8 +70,8 @@
 
 - id: outside_area
   description: Lives in a city clearly outside the service area.
-  persona: Carmen Vidal, car license, lives in Bilbao. Doesn't want her details kept.
-  steps: [Sí, Carmen Vidal, Coche, Bilbao, "No"]
+  persona: Carmen Vidal, car license, lives in Bilbao. Confirms Bilbao when asked. Doesn't want her details kept.
+  steps: [Sí, Carmen Vidal, Coche, Bilbao, Sí, "No"]
   expect:
     status: disqualified
     disqualify_reason: outside_area
@@ -81,6 +81,14 @@
   description: Lives just outside the area; must go to human review, not a knockout.
   persona: Jorge Martín, moto license, lives in Getafe (next to Madrid). Full time, afternoons, six months of experience, starts tomorrow.
   steps: [Sí, Jorge Martín, Moto, Getafe, Jornada completa, Tardes, 6 meses, mañana, Sí]
+  expect:
+    status: needs_review
+    review_reasons_include: ["borderline_zone:location"]
+
+- id: unlisted_nearby_town
+  description: Lives in a town the config doesn't list, 17 km from Madrid. Geocoded, confirmed by the candidate, then review (not a knockout).
+  persona: Raquel Ortiz, car license, lives in Móstoles. Full time, mornings, one year with Glovo, starts on Monday.
+  steps: [Sí, Raquel Ortiz, Coche, Móstoles, Sí, Jornada completa, Mañanas, un año en Glovo, el lunes, Sí]
   expect:
     status: needs_review
     review_reasons_include: ["borderline_zone:location"]

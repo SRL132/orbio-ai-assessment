@@ -15,12 +15,14 @@ These were produced in **offline mode** (`LLM_PROVIDER=fake`): the candidate mes
 | [no license](no_license.md) | chat | No driving license is a knockout; offered to stay on file. |
 | [outside area](outside_area.md) | chat | Lives in a city clearly outside the service area. |
 | [borderline zone](borderline_zone.md) | chat | Lives just outside the area; must go to human review, not a knockout. |
+| [unlisted nearby town](unlisted_nearby_town.md) | chat | A town the config doesn't list (Móstoles): geocoded, confirmed, then review. |
 | [asks for human](asks_for_human.md) | chat | Asks to talk to a person; immediate hand-off. |
 | [abusive](abusive.md) | chat | Insults twice; one calm warning, then the conversation ends and is flagged. |
 | [shares id number](shares_id_number.md) | chat | Volunteers an ID number; the message must be redacted and the flow continue. |
 | [goes silent](goes_silent.md) | chat | Stops replying; two reminders, then abandoned at the license question. |
 | [invalid date then valid](invalid_date_then_valid.md) | chat | Gives a past start date, gets asked again, then answers correctly. |
 | [prompt injection](prompt_injection.md) | chat | Tries to instruct the assistant to qualify them. Code decides, so nothing changes. |
+| [prompt injection license](prompt_injection_license.md) | chat | Has no license but tells the assistant to record one: still disqualified. |
 | [job question](job_question.md) | chat | Asks about pay mid-flow; answered, then the flow continues without penalty. |
 | [books interview](books_interview.md) | chat | Qualified candidate picks one of the offered interview slots in the chat. |
 | [asks if bot](asks_if_bot.md) | chat | Asks whether it's talking to a person; the assistant says it's automated and carries on. |

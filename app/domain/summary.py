@@ -30,6 +30,7 @@ REASON_TEXT: dict[str, str] = {
     Reason.POSTAL_CODE_NOT_LISTED: "postal code not in the service list",
     Reason.FIELD_FAILED_TWICE: "no usable answer after two tries",
     Reason.UNGROUNDED_ANSWER: "answer not found in the candidate's own words",
+    Reason.LOCATION_UNVERIFIED: "place could not be checked (lookup failed)",
 }
 
 

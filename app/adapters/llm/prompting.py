@@ -35,9 +35,11 @@ def extractor_system(config: ClientConfig) -> str:
         {loc.city for loc in config.locations}
         | {a for loc in config.locations for a in loc.aliases}
     )
+    nearby = sorted({town for loc in config.locations for town in loc.nearby})
     return _read("extractor_system.md").format(
         company=config.persona.company,
         cities=", ".join(cities),
+        nearby=", ".join(nearby) or "(none)",
         platforms=", ".join(config.known_platforms),
     )
 
@@ -59,6 +61,8 @@ def extractor_user(state: ConversationState, text: str, today: date) -> str:
         if meta.status != FieldStatus.MISSING
     ]
     asked = state.awaiting.value if state.awaiting else state.stage.value
+    if state.confirming is not None:  # a yes/no check of what we understood: read yes_no
+        asked = f"confirming the {state.confirming.field.value} we understood (a yes/no question)"
     return (
         f"Today: {today.isoformat()} ({today.strftime('%A')})\n"
         f"Current language: {state.language}\n"

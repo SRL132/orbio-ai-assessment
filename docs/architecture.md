@@ -120,6 +120,7 @@ Prompt caching for the system prompt and config; token usage and cost logged per
 | `Extractor`, `Responder` | LLM → fake for tests, cheaper model |
 | `Repository`, `EventLog` | SQLite → Postgres |
 | `CalendarProvider` | mock slots → Google Calendar |
+| `Geocoder` | fixed list (fake) → Nominatim (OpenStreetMap) → self-hosted Nominatim |
 | `KnowledgeBase` | FAQ in prompt → embeddings |
 | `Clock` | system → fake |
 
@@ -146,12 +147,12 @@ app/
     render.py        # actions -> replies (templates + responder); checks a config's templates
     summary.py       # recruiter summary
     ports.py         # Protocols: Extractor, Responder, Repository, EventLog,
-                     #            CalendarProvider, KnowledgeBase, Clock, Channel
+                     #            CalendarProvider, Geocoder, KnowledgeBase, Clock, Channel
   adapters/
     llm/             # extractor + responder (real, fake); prompts/ as versioned files
     channels/        # web chat, (whatsapp, voice)
     storage/         # SQLAlchemy repository, event log, projections
-    calendar/ kb/ clock/
+    calendar/ geo/ kb/ clock/
   api/               # FastAPI: webhooks, chat endpoint, dashboard routes
   worker/            # turn processor, reminder scheduler
   config/            # one directory per client: client.yaml, templates/<lang>/<channel>.yaml
@@ -237,6 +238,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Guardrails | Input: `intent` drives the policy. Output: a Python check on every reply, with a template fallback. Data: personal data redacted before logging | Low–Med |
 | RAG | `KnowledgeBase` port; a small FAQ goes in the cached prompt, embeddings only if it grows. Answers come only from the FAQ | Low–Med |
 | Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `InterviewBooked` actions; a database constraint prevents double-booking. Booking is idempotent per candidate, so a turn that booked but failed to save can be retried (an external calendar can't join our transaction anyway). A periodic job releases bookings the conversation never recorded, after a 10-minute grace period | Med |
+| Location lookup | Done: a `Geocoder` port, called by the engine only for places the config doesn't list (only the place name is sent). The validator decides by distance to the nearest served city (`geo_review_radius_km`), and the candidate confirms the place first. Nominatim adapter: in-memory cache, one request per second and an identifying User-Agent (its usage policy); at volume, self-host it or swap the adapter. A failed lookup sends the candidate to review, never to a knockout | Low–Med |
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
 | Deployment design | Done: "Deployment and monitoring" above | Low |
 | Voice | Done: a `/voice` page on the same engine. Push-to-talk in the browser (Web Speech API, Chrome/Edge) → text → `engine.turn()` → reply spoken by ElevenLabs when `ELEVENLABS_API_KEY` is set, else by the browser. Voice templates (no emoji or "·" lists, options as sentences, spoken dates), a speech-aware prompt note, spoken-number parsing, no debounce. See "Voice channel" below | Done |

@@ -16,6 +16,7 @@ from app.domain.models import (
     ConversationState,
     DomainEvent,
     ExtractionResult,
+    GeoPlace,
     Outbound,
     ReAsk,
     StoredMessage,
@@ -55,6 +56,15 @@ class CalendarProvider(Protocol):
         """Returns False if another candidate took the slot in the meantime. Idempotent: the
         candidate who already holds the slot gets True again (the turn may be retried after a
         failed save, and an external calendar can't join our database transaction)."""
+        ...
+
+
+class Geocoder(Protocol):
+    """Finds a place by name, for places the client config doesn't list. Only the place name
+    is sent, never who asked. Raises when the lookup itself fails (the caller decides)."""
+
+    def locate(self, place: str, country_codes: list[str]) -> GeoPlace | None:
+        """The best match in these countries (ISO codes, e.g. ["ES", "MX"]), or None."""
         ...
 
 
@@ -159,3 +169,4 @@ class Ports:
     responder: Responder
     clock: Clock
     calendar: CalendarProvider | None = None
+    geocoder: Geocoder | None = None  # None: unlisted places are outside the area, as before

@@ -24,6 +24,7 @@ from sqlalchemy import Engine
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
+from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
@@ -136,8 +137,13 @@ class Harness:
         self._engines.append(db)
         repo = SqlRepository(db, clock, self.config.client_id)
         calendar = SqlCalendar(db, self.config, clock)
+        # A fixed list of towns, never the real geocoder: evals stay offline and repeatable.
         ports = Ports(
-            extractor=self.extractor, responder=self.responder, clock=clock, calendar=calendar
+            extractor=self.extractor,
+            responder=self.responder,
+            clock=clock,
+            calendar=calendar,
+            geocoder=FakeGeocoder(),
         )
         return ScreeningService(repo, self.config, ports), clock, repo
 

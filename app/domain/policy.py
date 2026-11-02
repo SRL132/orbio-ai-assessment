@@ -20,7 +20,9 @@ from app.domain.models import (
     FieldMeta,
     FieldName,
     FieldStatus,
+    GeoLookup,
     InvalidReason,
+    PendingConfirmation,
     Reason,
     ReviewReason,
 )
@@ -56,6 +58,7 @@ class ApplyResult:
     progressed: set[FieldName] = field(default_factory=set)  # accepted, even if already known
     added: set[FieldName] = field(default_factory=set)  # had no answer before
     changed: set[FieldName] = field(default_factory=set)  # had a different answer before
+    confirm: FieldName | None = None  # held back in state.confirming until the candidate agrees
 
 
 def next_missing_field(candidate: Candidate, config: ClientConfig) -> FieldName | None:
@@ -129,14 +132,16 @@ def _grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
     return True
 
 
-def _validate(name: FieldName, draft: Candidate, config: ClientConfig, today: date) -> Outcome:
+def _validate(
+    name: FieldName, draft: Candidate, config: ClientConfig, today: date, geo: GeoLookup | None
+) -> Outcome:
     match name:
         case FieldName.FULL_NAME:
             return validate_full_name(draft.full_name)
         case FieldName.LICENSE:
             return validate_license(draft.has_license, draft.vehicle)
         case FieldName.LOCATION:
-            return validate_location(draft.city, draft.zone, draft.postal_code, config)
+            return validate_location(draft.city, draft.zone, draft.postal_code, config, geo)
         case FieldName.AVAILABILITY:
             return validate_availability(draft.availability)
         case FieldName.SCHEDULE:
@@ -151,6 +156,74 @@ def _snapshot(candidate: Candidate, name: FieldName) -> tuple[object, ...]:
     return tuple(getattr(candidate, attr) for attr in FIELD_GROUPS[name])
 
 
+def _unsure(outcome: Outcome, confidence: float, config: ClientConfig) -> bool:
+    """Confirm with the candidate before this counts: the model wasn't sure, or the place came
+    from the geocoder (so they see which place we understood)."""
+    return outcome.note == "geocoded" or confidence < config.confirm_below_confidence
+
+
+def _knock_out(
+    state: ConversationState,
+    name: FieldName,
+    values: dict[str, object],
+    reason: Reason,
+    evidence: tuple[str | None, float | None],
+    result: ApplyResult,
+) -> None:
+    meta = state.candidate.meta[name]
+    meta.quote, meta.confidence = evidence
+    for attr, value in values.items():
+        setattr(state.candidate, attr, value)
+    result.knockout = reason
+    result.events.append(
+        DomainEvent(type=EventType.KNOCKOUT, data={"field": name.value, "reason": reason.value})
+    )
+
+
+def _accept(
+    state: ConversationState,
+    name: FieldName,
+    values: dict[str, object],
+    outcome: Outcome,
+    evidence: tuple[str | None, float | None],
+    grounded: bool,
+    result: ApplyResult,
+) -> None:
+    """Store an accepted (valid or review) value with its evidence, and log it."""
+    candidate = state.candidate
+    meta = candidate.meta[name]
+    before = _snapshot(candidate, name)
+    was_set = meta.status != FieldStatus.MISSING
+    for attr, value in values.items():
+        setattr(candidate, attr, value)
+    meta.quote, meta.confidence = evidence
+    meta.note = outcome.note or outcome.reason  # a review's reason; valid ones have none
+    if outcome.kind == "review":
+        meta.status = FieldStatus.NEEDS_REVIEW
+        add_review_reason(state, outcome.verdict, name)
+        if not grounded:  # already in review for another reason; record this one too
+            add_review_reason(state, Reason.UNGROUNDED_ANSWER, name)
+    else:
+        meta.status = FieldStatus.VALID
+    result.progressed.add(name)
+    if not was_set:
+        result.added.add(name)
+    if was_set and _snapshot(candidate, name) != before:
+        result.changed.add(name)
+        result.events.append(DomainEvent(type=EventType.FIELD_CHANGED, data={"field": name.value}))
+    result.events.append(
+        DomainEvent(
+            type=EventType.FIELD_EXTRACTED,
+            data={
+                "field": name.value,
+                "status": meta.status.value,
+                "confidence": evidence[1],
+                "grounded": grounded,
+            },
+        )
+    )
+
+
 def apply_extraction(
     state: ConversationState,
     fields: ExtractedFields,
@@ -158,11 +231,14 @@ def apply_extraction(
     today: date,
     *,
     message: str,
+    geo: GeoLookup | None = None,
 ) -> ApplyResult:
     """Validate every proposed field and update the candidate in place. Stops at a knockout.
 
     `message` is the candidate's text the fields were extracted from. A value whose quote isn't
     in it is kept but sent to review: it never qualifies or knocks out a candidate on its own.
+    A value the model wasn't sure of, or a geocoded place (`geo`), isn't applied: it waits in
+    `state.confirming` for the candidate's yes (one at a time).
     """
     result = ApplyResult()
     candidate = state.candidate
@@ -173,25 +249,39 @@ def apply_extraction(
         # Merge the new proposals over what we already know for this field (e.g. a zone that
         # completes a city given earlier), then validate the whole group.
         draft = candidate.model_copy(update=proposals)
-        outcome = _validate(name, draft, config, today)
+        outcome = _validate(name, draft, config, today, geo)
         grounded = _grounded(fields, name, message)
         if not grounded and outcome.kind in ("knockout", "valid"):
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
         quote, confidence = _evidence(fields, name)
-        meta = candidate.meta[name]
-        before = _snapshot(candidate, name)
-        was_set = meta.status != FieldStatus.MISSING
 
-        if outcome.kind == "knockout":
-            meta.quote, meta.confidence = quote, confidence
-            for attr, value in proposals.items():
-                setattr(candidate, attr, value)
-            result.knockout = outcome.verdict
+        if (
+            outcome.kind != "invalid"
+            and state.confirming is None
+            and _unsure(outcome, confidence, config)
+        ):
+            place = geo.found.label() if geo and geo.found and outcome.note == "geocoded" else None
+            state.confirming = PendingConfirmation(
+                field=name,
+                values={**proposals, **outcome.updates},
+                outcome=outcome.kind,
+                reason=outcome.reason if isinstance(outcome.reason, Reason) else None,
+                note=outcome.note,
+                quote=quote,
+                confidence=confidence,
+                place=place,
+            )
+            result.confirm = name
+            why = "geocoded" if outcome.note == "geocoded" else "low_confidence"
             result.events.append(
                 DomainEvent(
-                    type=EventType.KNOCKOUT, data={"field": name.value, "reason": outcome.reason}
+                    type=EventType.CONFIRMATION_ASKED, data={"field": name.value, "why": why}
                 )
             )
+            continue
+
+        if outcome.kind == "knockout":
+            _knock_out(state, name, proposals, outcome.verdict, (quote, confidence), result)
             return result
 
         if outcome.kind == "invalid":
@@ -207,36 +297,27 @@ def apply_extraction(
             )
             continue
 
-        for attr, value in {**proposals, **outcome.updates}.items():
-            setattr(candidate, attr, value)
-        meta.quote, meta.confidence = quote, confidence
-        meta.note = outcome.note or outcome.reason  # a review's reason; valid ones have none
-        if outcome.kind == "review":
-            meta.status = FieldStatus.NEEDS_REVIEW
-            add_review_reason(state, outcome.verdict, name)
-            if not grounded:  # already in review for another reason; record this one too
-                add_review_reason(state, Reason.UNGROUNDED_ANSWER, name)
-        else:
-            meta.status = FieldStatus.VALID
-        result.progressed.add(name)
-        if not was_set:
-            result.added.add(name)
-        if was_set and _snapshot(candidate, name) != before:
-            result.changed.add(name)
-            result.events.append(
-                DomainEvent(type=EventType.FIELD_CHANGED, data={"field": name.value})
-            )
-        result.events.append(
-            DomainEvent(
-                type=EventType.FIELD_EXTRACTED,
-                data={
-                    "field": name.value,
-                    "status": meta.status.value,
-                    "confidence": confidence,
-                    "grounded": grounded,
-                },
-            )
-        )
+        values = {**proposals, **outcome.updates}
+        _accept(state, name, values, outcome, (quote, confidence), grounded, result)
+    return result
+
+
+def apply_confirmed(state: ConversationState) -> ApplyResult:
+    """The candidate said yes to `state.confirming`: apply it as the validator decided."""
+    pending = state.confirming
+    result = ApplyResult()
+    if pending is None:
+        return result
+    state.confirming = None
+    # Stored as JSON between turns: validate again to get dates and enums back.
+    restored = Candidate.model_validate({**state.candidate.model_dump(), **pending.values})
+    values = {attr: getattr(restored, attr) for attr in pending.values}
+    evidence = (pending.quote, pending.confidence)
+    if pending.outcome == "knockout" and pending.reason is not None:
+        _knock_out(state, pending.field, values, pending.reason, evidence, result)
+        return result
+    outcome = Outcome(pending.outcome, reason=pending.reason, note=pending.note)
+    _accept(state, pending.field, values, outcome, evidence, True, result)
     return result
 
 
