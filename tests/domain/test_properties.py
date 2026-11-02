@@ -154,7 +154,7 @@ def test_no_extraction_can_break_the_rules(
     for extraction, grounded in zip(script, honest, strict=False):
         clock.advance(minutes=1)
         # Either the candidate wrote what the extractor quotes, or the extractor made it up.
-        text = said(extraction.fields) if grounded else "…"
+        text = said(extraction.fields, extraction.yes_no) if grounded else "…"
         message = InboundMessage(
             conversation_id=state.conversation_id, text=text, received_at=clock.now()
         )

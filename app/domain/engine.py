@@ -52,6 +52,7 @@ from app.domain.policy import (
     add_review_reason,
     apply_confirmed,
     apply_extraction,
+    has_words,
     next_missing_field,
     progress,
     register_failed_attempt,
@@ -285,10 +286,10 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
     if pending is None:
         return extraction.fields
     group = FIELD_GROUPS[pending.field]
-    corrected = extraction.yes_no is not True and any(
-        getattr(extraction.fields, attr) is not None for attr in group
-    )
-    if extraction.yes_no is True:
+    # Code decides: a "yes" only confirms if the candidate actually wrote something.
+    said_yes = extraction.yes_no is True and has_words(t.message)
+    corrected = not said_yes and any(getattr(extraction.fields, attr) is not None for attr in group)
+    if said_yes:
         applied = apply_confirmed(t.state)
         t.events.extend(applied.events)
         t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="yes")

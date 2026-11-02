@@ -78,11 +78,13 @@ def ex(
     )
 
 
-def said(fields: ExtractedFields) -> str:
+def said(fields: ExtractedFields, yes_no: bool | None = None) -> str:
     """A message that contains every quote of `fields`: what the candidate wrote for `ex(...)`.
-    Policy only accepts values whose quote is in the message (see `apply_extraction`)."""
+    Policy only accepts values whose quote is in the message (see `apply_extraction`), and a
+    yes or no is only one if the message has words, so it starts with "sí" or "no"."""
     quotes = (getattr(fields, name) for name in type(fields).model_fields)
-    return " ".join(e.quote for e in quotes if e is not None) or "..."
+    answer = {True: "sí", False: "no", None: ""}[yes_no]
+    return " ".join([answer, *(e.quote for e in quotes if e is not None)]).strip() or "..."
 
 
 def claim_concurrently(repo: Any, threads: int = 16) -> int:

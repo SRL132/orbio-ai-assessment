@@ -50,7 +50,7 @@ class Chat:
         self.extractor.push(extraction)
         message = InboundMessage(
             conversation_id=UUID(int=1),
-            text=said(extraction.fields) if text is None else text,
+            text=said(extraction.fields, extraction.yes_no) if text is None else text,
             received_at=self.ports.clock.now(),
         )
         self.result = engine.turn(self.state, message, self.config, self.ports)

@@ -133,6 +133,17 @@ def test_yes_confirms_and_moves_on(chat: Chat) -> None:
     assert EventType.CONFIRMATION_ANSWERED in events(chat)
 
 
+def test_a_yes_the_message_does_not_contain_confirms_nothing(chat: Chat) -> None:
+    # The extractor claims "yes" for a message with no words in it (found by
+    # tests/domain/test_properties.py): nothing the candidate wrote backs the value.
+    chat.say(ex(yes_no=True))
+    chat.say(unsure(full_name="Ana López"))
+    chat.say(ex(yes_no=True), text="…")
+    assert chat.state.candidate.meta[FieldName.FULL_NAME].status != FieldStatus.VALID
+    assert chat.state.confirming is not None
+    assert ConfirmField(field=FieldName.FULL_NAME) in chat.result.actions  # asked again
+
+
 def test_no_asks_the_question_again(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(unsure(full_name="Ana López"))

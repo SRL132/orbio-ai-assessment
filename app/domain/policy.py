@@ -114,6 +114,11 @@ def _plain(text: str) -> str:
     return " ".join(_NOT_WORD.sub(" ", normalize(text)).split())
 
 
+def has_words(message: str) -> bool:
+    """The message says something. A yes the extractor reads into "…" or "?" confirms nothing."""
+    return bool(_plain(message))
+
+
 def _grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
     """Every value proposed for this field quotes words the candidate actually wrote.
 

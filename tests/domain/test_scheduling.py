@@ -54,7 +54,9 @@ def run(
     def say(extraction):
         extractor.push(extraction)
         message = InboundMessage(
-            conversation_id=UUID(int=1), text=said(extraction.fields), received_at=clock.now()
+            conversation_id=UUID(int=1),
+            text=said(extraction.fields, extraction.yes_no),
+            received_at=clock.now(),
         )
         result = engine.turn(holder["state"], message, config, ports)
         holder["state"] = result.state
