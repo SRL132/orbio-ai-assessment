@@ -132,14 +132,20 @@ function listen() {
   const rec = new Recognition();
   rec.lang = language === "en" ? "en-US" : "es-ES";
   rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
-  let finalText = "";
+  let finalText = "", interimText = "";
   rec.onresult = (event) => {
-    let interim = "";
-    for (const r of event.results) { if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
-    caption.textContent = finalText || interim;
+    let final = "", interim = "";
+    for (const r of event.results) { if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; }
+    finalText = final; interimText = interim;
+    caption.textContent = finalText || interimText;
   };
   rec.onerror = (event) => { setState("Error: " + event.error); };
-  rec.onend = () => { listening = false; mic.classList.remove("listening"); micReady(); if (finalText.trim()) send(finalText); };
+  // Short answers ("sí", "no") often end without a final result: send what was heard anyway.
+  rec.onend = () => {
+    listening = false; mic.classList.remove("listening"); micReady();
+    const heard = (finalText + interimText).trim();
+    if (heard) send(heard);
+  };
   listening = true; mic.classList.add("listening"); micReady();
   setState(language === "en" ? "Listening…" : "Te escucho…");
   rec.start();
