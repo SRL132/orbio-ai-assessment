@@ -61,7 +61,7 @@ def available_models(api_key: str, transport: httpx.BaseTransport | None = None)
         return {str(model["id"]) for model in response.json()["data"]}
 
 
-def table(rows: list[tuple[Run, dict[str, Any] | None]], spent: float, budget: float) -> str:
+def table(rows: list[tuple[Run, dict[str, Any]]], spent: float, budget: float) -> str:
     lines = [
         f"# Model comparison · {datetime.now(UTC):%Y-%m-%d %H:%M} UTC",
         "",
@@ -73,9 +73,6 @@ def table(rows: list[tuple[Run, dict[str, Any] | None]], spent: float, budget: f
     ]
     for run, summary in rows:
         mode = "simulated" if run.simulate else "scripted"
-        if summary is None:
-            lines.append(f"| {run.name} | {mode} | not run: budget reached | | | | |")
-            continue
         partial = "" if summary["complete"] else " (partial)"
         lines.append(
             f"| {run.name} | {mode} | {summary['passed']}/{summary['total']}{partial} | "
@@ -114,11 +111,15 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
 
     config = load_client_config(settings.client_id)
     scenarios = load_scenarios(args.scenario)
-    meter = UsageMeter()
+    # One meter and one share of the budget per run: side by side, a shared meter would charge
+    # each run for the others' calls, and could stop a cheap run because of an expensive one.
+    meters = [UsageMeter() for _ in matrix.runs]
+    share = budget / len(matrix.runs)
 
-    def execute(run: Run) -> tuple[Run, dict[str, Any] | None]:
-        if meter.cost_usd >= budget:
-            return run, None
+    def spent() -> float:
+        return sum(meter.cost_usd for meter in meters)
+
+    def execute(run: Run, meter: UsageMeter) -> tuple[Run, dict[str, Any]]:
         simulator_model = matrix.simulator_model if run.simulate else None
         extractor, responder, simulator = openrouter_trio(
             settings, run.model, run.responder_model, simulator_model, meter, transport
@@ -129,18 +130,18 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             simulator.reasoning_effort = matrix.simulator_reasoning
         harness = Harness(config, FastPathExtractor(extractor), responder, meter)
         results, complete = run_suite(
-            harness, scenarios, simulator if run.simulate else None, budget
+            harness, scenarios, simulator if run.simulate else None, share
         )
         summary = summarize(results, complete)
-        print(f"{run.name}: {summary['passed']}/{summary['total']} · ${meter.cost_usd:.3f} so far")
+        print(f"{run.name}: {summary['passed']}/{summary['total']} · ${spent():.3f} so far")
         return run, summary
 
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
-        rows: list[tuple[Run, dict[str, Any] | None]] = list(pool.map(execute, matrix.runs))
+        rows: list[tuple[Run, dict[str, Any]]] = list(pool.map(execute, matrix.runs, meters))
 
     RESULTS.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    report = table(rows, meter.cost_usd, budget)
+    report = table(rows, spent(), budget)
     (RESULTS / f"compare-{stamp}.md").write_text(report, encoding="utf-8")
     (RESULTS / f"compare-{stamp}.json").write_text(
         json.dumps([{"run": r.model_dump(), "summary": s} for r, s in rows], indent=2) + "\n"

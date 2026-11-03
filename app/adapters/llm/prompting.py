@@ -7,9 +7,13 @@ the user message.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from functools import cache
 from pathlib import Path
+from typing import Any, cast
+
+from pydantic import BaseModel
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -20,6 +24,7 @@ from app.domain.models import (
 )
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+_DROPPED_KEYWORDS = frozenset({"title", "default", "minimum", "maximum"})
 
 
 @cache
@@ -27,6 +32,52 @@ def _read(name: str) -> str:
     text = (PROMPTS_DIR / name).read_text(encoding="utf-8")
     # Drop the version comment line: it's for humans, not for the model.
     return "\n".join(line for line in text.splitlines() if not line.startswith("<!--")).strip()
+
+
+def strict_schema(model: type[BaseModel]) -> dict[str, Any]:
+    """The model's JSON schema, in the form every provider's strict structured output accepts.
+
+    Every property is required (optional ones are nullable instead), no others are allowed, and
+    keywords some providers reject are dropped: OpenAI requires `additionalProperties: false`.
+    The Pydantic model still validates the answer, range checks included.
+    """
+
+    def tidy(node: object) -> object:
+        if isinstance(node, list):
+            return [tidy(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        out = {key: tidy(value) for key, value in node.items() if key not in _DROPPED_KEYWORDS}
+        if "properties" in node:
+            out["properties"] = {name: tidy(prop) for name, prop in node["properties"].items()}
+            out["required"] = list(node["properties"])
+            out["additionalProperties"] = False
+        if "$defs" in node:
+            out["$defs"] = {name: tidy(item) for name, item in node["$defs"].items()}
+        return out
+
+    return cast(dict[str, Any], tidy(model.model_json_schema()))
+
+
+def json_instruction(model: type[BaseModel]) -> str:
+    """For Claude, the schema goes in the prompt and Pydantic checks the answer. Its constrained
+    output compiles a schema into a grammar, and rejects or times out on ours, with 13 nullable
+    objects (tested 2026-11-03 on Haiku 5.5 and Sonnet 5.5 through OpenRouter). Sorted, so the
+    system prompt stays byte-stable for caching."""
+    schema = json.dumps(strict_schema(model), ensure_ascii=False, sort_keys=True)
+    return (
+        "\n\nAnswer with only a JSON object that matches this JSON schema, with no code fence "
+        f"and no other text:\n{schema}"
+    )
+
+
+def strip_code_fence(text: str) -> str:
+    """Some models wrap JSON in ```json fences even when asked not to."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
+        stripped = stripped.rsplit("```", 1)[0]
+    return stripped.strip()
 
 
 def extractor_system(config: ClientConfig) -> str:

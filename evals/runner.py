@@ -43,6 +43,7 @@ from app.domain.validators import normalize
 from app.worker.service import ScreeningService
 
 SCENARIOS = Path(__file__).parent / "scenarios.yaml"
+HOLDOUT = Path(__file__).parent / "holdout.yaml"
 EVAL_START = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
 MAX_SIMULATED_TURNS = 20
 
@@ -119,9 +120,11 @@ class Completer(Protocol):
     def complete(self, system: str, user: str, max_tokens: int = ...) -> str: ...
 
 
-def load_scenarios(only: list[str] | None = None, *, offline: bool = False) -> list[Scenario]:
+def load_scenarios(
+    only: list[str] | None = None, *, offline: bool = False, path: Path = SCENARIOS
+) -> list[Scenario]:
     """The scenarios to run. `offline` (the keyword extractor) leaves out those that need an LLM."""
-    raw = yaml.safe_load(SCENARIOS.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     scenarios = [Scenario.model_validate(item) for item in raw]
     if only:
         scenarios = [s for s in scenarios if s.id in only]

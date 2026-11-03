@@ -27,6 +27,7 @@ from app.adapters.llm.usage import UsageMeter
 from app.bootstrap import make_llm
 from app.settings import Settings
 from evals.runner import (
+    SCENARIOS,
     Completer,
     Harness,
     Scenario,
@@ -53,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
         "--reasoning", default="low", help="OpenRouter reasoning effort (none, low…)"
     )
     parser.add_argument("--scenario", action="append", help="run only these scenario ids")
+    parser.add_argument(
+        "--scenarios", type=Path, default=SCENARIOS, help="scenario file (evals/holdout.yaml)"
+    )
     parser.add_argument("--check", action="store_true", help="exit 1 on regression")
     parser.add_argument("--write-baseline", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true", help="print failing transcripts")
@@ -61,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.simulate and args.provider == "fake":
         parser.error("--simulate needs a real provider (openrouter or anthropic)")
-    if args.write_baseline and args.scenario:
+    if args.write_baseline and (args.scenario or args.scenarios != SCENARIOS):
         parser.error("--write-baseline needs the full suite: a subset would shrink the ratchet")
 
     overrides: dict[str, Any] = {"llm_provider": args.provider}
@@ -104,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
 
     results, complete = run_suite(
         harness,
-        load_scenarios(args.scenario, offline=args.provider == "fake"),
+        load_scenarios(args.scenario, offline=args.provider == "fake", path=args.scenarios),
         simulator if args.simulate else None,
         args.budget_usd,
         report,
@@ -118,7 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     _save(key, run)
 
     baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
-    regressions = _regressions(baseline.get(key), run) if not args.scenario else []
+    subset = args.scenario or args.scenarios != SCENARIOS
+    regressions = _regressions(baseline.get(key), run) if not subset else []
     for line in regressions:
         print(f"REGRESSION {line}")
     if args.write_baseline:

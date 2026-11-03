@@ -6,7 +6,7 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.domain.config import ClientConfig
 from evals.__main__ import BASELINE, _regressions, main, summarize
-from evals.runner import Expect, Harness, Scenario, load_scenarios
+from evals.runner import HOLDOUT, Expect, Harness, Scenario, load_scenarios
 
 
 def test_offline_suite_passes(config: ClientConfig) -> None:
@@ -87,3 +87,13 @@ def test_cli_refuses_a_baseline_from_a_subset(capsys: pytest.CaptureFixture[str]
     assert refused.value.code == 2
     assert "full suite" in capsys.readouterr().err
     assert BASELINE.read_text() == before
+
+
+def test_holdout_scenarios_are_valid_and_need_a_real_model() -> None:
+    scenarios = load_scenarios(path=HOLDOUT)
+    assert len(scenarios) >= 12
+    assert len({s.id for s in scenarios}) == len(scenarios)
+    assert all(s.requires_llm and s.id.startswith("holdout_") for s in scenarios)
+    assert not {s.id for s in scenarios} & {
+        s.id for s in load_scenarios()
+    }  # never in the main suite

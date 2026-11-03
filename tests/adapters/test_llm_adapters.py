@@ -8,20 +8,24 @@ from typing import Any
 import httpx
 import pytest
 from prometheus_client import REGISTRY
+from pydantic import BaseModel
 
 from app.adapters.llm.anthropic_sdk import FALLBACK_BETA, AnthropicLLM, RefusalError
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
+    json_instruction,
     responder_system,
     responder_user,
+    strict_schema,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
     AskField,
     ConversationState,
+    ExtractedFields,
     ExtractionResult,
     FieldName,
     ReAsk,
@@ -133,19 +137,14 @@ class _StubMessages:
         self.response = response
         self.calls: list[dict[str, Any]] = []
 
-    def parse(self, **kwargs: Any) -> Any:
-        self.calls.append(kwargs)
-        return self.response
-
     def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         return self.response
 
 
-def _response(stop_reason: str = "end_turn", parsed: Any = None, text: str = "") -> Any:
+def _response(stop_reason: str = "end_turn", text: str = "") -> Any:
     return SimpleNamespace(
         stop_reason=stop_reason,
-        parsed_output=parsed,
         content=[SimpleNamespace(type="text", text=text)],
         model="claude-opus-5-5",
         usage=SimpleNamespace(
@@ -158,6 +157,71 @@ def _response(stop_reason: str = "end_turn", parsed: Any = None, text: str = "")
     )
 
 
+def _no_optional_objects(node: Any) -> None:
+    if isinstance(node, list):
+        for item in node:
+            _no_optional_objects(item)
+    elif isinstance(node, dict):
+        if "properties" in node:
+            assert node["additionalProperties"] is False
+            assert node["required"] == list(node["properties"])
+        assert "minimum" not in node
+        for value in node.values():
+            _no_optional_objects(value)
+
+
+def test_strict_schema_is_what_strict_providers_require() -> None:
+    schema = strict_schema(ExtractionResult)
+    _no_optional_objects(schema)
+    assert "fields" in schema["properties"]  # a property called "title" or "default" would survive
+
+
+def test_strict_schema_keeps_a_property_named_like_a_keyword() -> None:
+    class Odd(BaseModel):
+        title: str
+        default: int = 0
+
+    assert strict_schema(Odd)["required"] == ["title", "default"]
+
+
+def test_a_strict_answer_with_nulls_is_a_valid_extraction() -> None:
+    nulls = dict.fromkeys(ExtractedFields.model_fields)
+    answer = {
+        "fields": nulls,
+        "language": "es",
+        "intent": "answer",
+        "sentiment": "neutral",
+        "confused": False,
+        "yes_no": None,
+        "sensitive_data": False,
+        "faq_id": None,
+        "question": None,
+        "slot_choice": None,
+    }
+    assert set(answer) == set(strict_schema(ExtractionResult)["required"])
+    assert ExtractionResult.model_validate(answer).fields.full_name is None
+
+
+@pytest.mark.parametrize(
+    ("model", "strict"),
+    [("anthropic/claude-haiku-5.5", False), ("google/gemini-3.5-flash-lite", True)],
+)
+def test_openrouter_uses_strict_output_except_on_claude(
+    config: ClientConfig, state: ConversationState, model: str, strict: bool
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        content = json.dumps(RECORDED_EXTRACTION)
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    llm = OpenRouterLLM("k", model, transport=httpx.MockTransport(handler))
+    llm.extract(state, "hola", config, TODAY)
+    assert ("response_format" in sent[0]) is strict
+    assert ("JSON schema" in sent[0]["messages"][0]["content"]) is not strict
+
+
 class TestAnthropic:
     def make(self, response: Any) -> tuple[AnthropicLLM, _StubMessages]:
         messages = _StubMessages(response)
@@ -168,15 +232,34 @@ class TestAnthropic:
         self, config: ClientConfig, state: ConversationState
     ) -> None:
         parsed = ExtractionResult.model_validate(RECORDED_EXTRACTION)
-        llm, messages = self.make(_response(parsed=parsed))
+        llm, messages = self.make(_response(text=json.dumps(RECORDED_EXTRACTION)))
         assert llm.extract(state, "tengo carnet de moto", config, TODAY) == parsed
         call = messages.calls[0]
-        assert call["output_format"] is ExtractionResult
+        assert "output_format" not in call  # Claude's compiler rejects a grammar for this schema
         assert call["output_config"] == {"effort": "low"}
         assert call["fallbacks"] == "default"
         assert call["betas"] == [FALLBACK_BETA]
         assert call["system"][0]["cache_control"] == {"type": "ephemeral"}
-        assert call["system"][0]["text"] == extractor_system(config)
+        assert call["system"][0]["text"] == (
+            extractor_system(config) + json_instruction(ExtractionResult)
+        )
+
+    def test_extract_rejects_an_answer_outside_the_schema(
+        self, config: ClientConfig, state: ConversationState
+    ) -> None:
+        llm, _ = self.make(_response(text='{"language": "klingon"}'))
+        with pytest.raises(ValueError, match="language"):
+            llm.extract(state, "hola", config, TODAY)
+
+    def test_extract_reads_a_fenced_answer_after_thinking(
+        self, config: ClientConfig, state: ConversationState
+    ) -> None:
+        response = _response(text="```json\n" + json.dumps(RECORDED_EXTRACTION) + "\n```")
+        response.content.insert(0, SimpleNamespace(type="thinking", thinking=""))
+        llm, _ = self.make(response)
+        assert llm.extract(state, "hola", config, TODAY) == ExtractionResult.model_validate(
+            RECORDED_EXTRACTION
+        )
 
     def test_refusal_raises(self, config: ClientConfig, state: ConversationState) -> None:
         llm, _ = self.make(_response(stop_reason="refusal"))

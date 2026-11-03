@@ -106,9 +106,18 @@ def test_full_run_writes_a_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "| B extract | scripted |" in report
 
 
-def test_table_marks_runs_skipped_by_the_budget() -> None:
+def test_table_marks_a_run_stopped_by_the_budget() -> None:
     run = compare.Run(name="X", model="x/y")
-    assert "not run: budget reached" in compare.table([(run, None)], 5.0, 5.0)
+    summary = {
+        "passed": 1,
+        "total": 2,
+        "complete": False,
+        "field_accuracy": 1.0,
+        "p50_turn_s": 1.0,
+        "p95_turn_s": 2.0,
+        "cost_per_conversation_usd": 0.01,
+    }
+    assert "1/2 (partial)" in compare.table([(run, summary)], 5.0, 5.0)
 
 
 def test_reasoning_effort_is_sent_and_can_be_turned_off(

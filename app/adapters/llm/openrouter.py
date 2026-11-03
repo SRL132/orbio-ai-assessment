@@ -20,8 +20,11 @@ from app import metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
+    json_instruction,
     responder_system,
     responder_user,
+    strict_schema,
+    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -72,20 +75,26 @@ class OpenRouterLLM:
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
+        system = extractor_system(config)
+        response_format: dict[str, Any] | None = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "extraction",
+                "strict": True,
+                "schema": strict_schema(ExtractionResult),
+            },
+        }
+        if self._model.startswith("anthropic/"):
+            system += json_instruction(ExtractionResult)
+            response_format = None
         content = self._chat(
             kind="extract",
-            system=extractor_system(config),
+            system=system,
             user=extractor_user(state, text, today),
             max_tokens=2000,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "extraction",
-                    "schema": ExtractionResult.model_json_schema(),
-                },
-            },
+            response_format=response_format,
         )
-        return ExtractionResult.model_validate_json(_strip_code_fence(content))
+        return ExtractionResult.model_validate_json(strip_code_fence(content))
 
     def compose(
         self,
@@ -182,12 +191,3 @@ def _backoff(attempt: int, retry_after: str | None = None) -> float:
             return min(max(float(retry_after), 0.0), MAX_BACKOFF_SECONDS)
     ceiling = min(BASE_BACKOFF_SECONDS * 2**attempt, MAX_BACKOFF_SECONDS)
     return _jitter.uniform(0, ceiling)
-
-
-def _strip_code_fence(text: str) -> str:
-    """Some models wrap JSON in ```json fences even when asked for a schema."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
-        stripped = stripped.rsplit("```", 1)[0]
-    return stripped.strip()

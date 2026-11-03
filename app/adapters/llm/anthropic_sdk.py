@@ -1,7 +1,8 @@
 """Anthropic adapter: the intended production path (docs/architecture.md, "LLM provider").
 
-Uses the official SDK: structured outputs via `messages.parse` with our Pydantic schema, prompt
-caching on the stable system prompt, low effort for latency, and server-side refusal fallbacks.
+Uses the official SDK: the schema in the prompt with Pydantic checking the answer (see
+`json_instruction`), prompt caching on the stable system prompt, low effort for latency, and
+server-side refusal fallbacks.
 """
 
 from __future__ import annotations
@@ -18,8 +19,10 @@ from app import metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
+    json_instruction,
     responder_system,
     responder_user,
+    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -57,24 +60,23 @@ class AnthropicLLM:
         self._prices = usd_per_mtok
 
     def extract(
-        self, state: ConversationState, text: str, config: ClientConfig, today: date
+        self, state: ConversationState, message: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
         started = time.monotonic()
-        response = self._client.beta.messages.parse(
+        response = self._client.beta.messages.create(
             model=self._model,
             max_tokens=8000,
-            system=_cached_system(extractor_system(config)),
-            messages=[{"role": "user", "content": extractor_user(state, text, today)}],
-            output_format=ExtractionResult,
+            system=_cached_system(extractor_system(config) + json_instruction(ExtractionResult)),
+            messages=[{"role": "user", "content": extractor_user(state, message, today)}],
             output_config=self._output_config,
             betas=[FALLBACK_BETA],
             fallbacks="default",
         )
         self._log("extract", response, started)
-        if response.stop_reason == "refusal" or response.parsed_output is None:
-            raise RefusalError(str(response.stop_reason))
-        result: ExtractionResult = response.parsed_output
-        return result
+        if response.stop_reason == "refusal":
+            raise RefusalError("refusal")
+        text = "".join(block.text for block in response.content if block.type == "text")
+        return ExtractionResult.model_validate_json(strip_code_fence(text))
 
     def compose(
         self,
