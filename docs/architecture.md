@@ -275,7 +275,7 @@ Limits and the production path: browser speech recognition only works in Chrome 
 - **The port is provider-neutral.** The domain only sees our Pydantic types (`ExtractionResult`, `Reply`), never SDK types, so a second provider is just a second adapter.
 - **No routing library (e.g. LiteLLM) in the product.** It's another layer to explain, and it tends to hide provider-specific features.
 - **OpenRouter only for model comparison in evals.** One `OpenRouterLLM` adapter runs the same simulated candidates against several providers. It adds roughly a ~5% fee on credits and tens of milliseconds per call, which is negligible for evals. Confirm the winner through its own SDK before locking the baseline, since features differ through the proxy.
-- **Offline mode for CI and demos without a key.** `LLM_PROVIDER=fake` uses a rule-based `KeywordExtractor` (Spanish/English keywords, read in the context of the question just asked) and template replies. It is not a production path.
+- **Offline mode for CI and demos without a key.** `LLM_PROVIDER=fake` uses a rule-based `KeywordExtractor` (Spanish/English keywords, read in the context of the question just asked) and template replies. As a full extractor it is not a production path; in production it only reads whole-message closed answers, through `FastPathExtractor`.
 - **Evals use synthetic candidates only.** No real personal data is ever sent to a provider that isn't the approved production one.
 
 ### Provider scorecard

@@ -32,26 +32,26 @@ from app.domain.validators import normalize
 Put = Callable[[str, object], None]
 
 
-def _vocab(entries: str) -> frozenset[str]:
+def vocab(entries: str) -> frozenset[str]:
     """'si|vale|de acuerdo' -> a set of entries ('|' separates them, so phrases keep spaces)."""
     return frozenset(entries.split("|"))
 
 
-_YES = _vocab(
+_YES = vocab(
     "si|sí|vale|ok|okay|claro|correcto|perfecto|yes|yeah|yep|sure|dale|de acuerdo|empezamos|"
     "adelante|go|correct"
 )
-_NO = _vocab("no|nope|no gracias|no thanks|nah")
-_HUMAN = _vocab("persona|humano|human|agente|agent|reclutador|recruiter|real person")
-_ABUSE = _vocab("idiota|imbecil|estupido|gilipollas|puta|mierda|idiot|stupid|fuck|shit")
+_NO = vocab("no|nope|no gracias|no thanks|nah")
+_HUMAN = vocab("persona|humano|human|agente|agent|reclutador|recruiter|real person")
+_ABUSE = vocab("idiota|imbecil|estupido|gilipollas|puta|mierda|idiot|stupid|fuck|shit")
 # Words that tip the language guess (whole words, after normalize()).
-_ENGLISH = _vocab(
+_ENGLISH = vocab(
     "yes|hi|hello|my|name|is|i|im|have|the|and|car|both|none|weekends|full|part|time|morning|"
     "afternoon|evening|tomorrow|today|never|years|sure|live|in|want|next|week|can|you|speak|"
     "english|please|sorry|continue|we|mornings|afternoons|evenings|weekend|everything|correct|"
     "all|good|from|with|on"
 )
-_SPANISH = _vocab(
+_SPANISH = vocab(
     "si|hola|me|llamo|soy|tengo|coche|ambos|vivo|en|de|jornada|completa|media|fines|semana|"
     "manana|tarde|noche|nunca|anos|hoy|lunes|el|la|y|con|quiero|vale|claro|espanol|castellano|"
     "hablar|hablas|puedes|podemos|seguir|por|favor|perdona|prefiero|he|repartido|todo|bien"
@@ -146,7 +146,7 @@ def _next_is_unit_noun(tokens: list[str], i: int) -> bool:
     return i + 1 < len(tokens) and tokens[i + 1] in ("ano", "anos", "year", "years", "mes", "month")
 
 
-def _words(text: str) -> list[str]:
+def tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text)
 
 
@@ -172,20 +172,20 @@ _NO_LICENSE = (
 
 # Words for each option beyond the client's own labels for it (`value_<option>` templates,
 # read by `_options`): partial phrases, plurals and synonyms people use.
-_AVAILABILITY_WORDS = {
-    Availability.FULL_TIME: _vocab("completa|full|cuando sea|whenever|todo el dia"),
-    Availability.PART_TIME: _vocab("media|part|parcial"),
-    Availability.WEEKENDS: _vocab("finde|findes|weekend"),
+AVAILABILITY_WORDS = {
+    Availability.FULL_TIME: vocab("completa|full|cuando sea|whenever|todo el dia"),
+    Availability.PART_TIME: vocab("media|part|parcial"),
+    Availability.WEEKENDS: vocab("finde|findes|weekend"),
 }
-_SCHEDULE_WORDS = {
-    Schedule.MORNING: _vocab("mananas|mornings"),
-    Schedule.AFTERNOON: _vocab("tardes|afternoons"),
-    Schedule.EVENING: _vocab("noches|evenings|night|nights"),
-    Schedule.FLEXIBLE: _vocab("cualquiera|any|da igual|whatever"),
+SCHEDULE_WORDS = {
+    Schedule.MORNING: vocab("mananas|mornings"),
+    Schedule.AFTERNOON: vocab("tardes|afternoons"),
+    Schedule.EVENING: vocab("noches|evenings|night|nights"),
+    Schedule.FLEXIBLE: vocab("cualquiera|any|da igual|whatever"),
 }
 
 
-def _labels(config: ClientConfig, option: StrEnum) -> list[str]:
+def option_labels(config: ClientConfig, option: StrEnum) -> list[str]:
     """The client's own words for an option in every language (its `value_<option>` template),
     so renaming an option in the config needs no change here."""
     key = f"value_{option.value}"
@@ -194,7 +194,20 @@ def _labels(config: ClientConfig, option: StrEnum) -> list[str]:
 
 def _options[O: StrEnum](t: str, config: ClientConfig, words: dict[O, frozenset[str]]) -> list[O]:
     """The options the text names, by the client's label or by one of the extra words."""
-    return [option for option, extra in words.items() if _has(t, *extra, *_labels(config, option))]
+    return [
+        option for option, extra in words.items() if _has(t, *extra, *option_labels(config, option))
+    ]
+
+
+def guess_language(words: list[str], current: Language) -> Language:
+    """The language these (normalized) words lean to; a tie keeps the current one."""
+    en = sum(w in _ENGLISH for w in words)
+    es = sum(w in _SPANISH for w in words)
+    if en > es:
+        return "en"
+    if es > en:
+        return "es"
+    return current
 
 
 class KeywordExtractor:
@@ -205,7 +218,7 @@ class KeywordExtractor:
         self, state: ConversationState, text: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
         t = spoken_numbers(normalize(text))
-        words = _words(t)
+        words = tokenize(t)
         fields: dict[str, Any] = {}
 
         def put(name: str, value: object) -> None:
@@ -265,7 +278,7 @@ class KeywordExtractor:
         return ExtractionResult(
             slot_choice=slot_choice,
             fields=ExtractedFields.model_validate(fields),
-            language=self._language(words, state.language),
+            language=guess_language(words, state.language),
             intent=intent,
             confused=confused,
             yes_no=yes_no,
@@ -283,16 +296,6 @@ class KeywordExtractor:
                 return number
         digit = re.fullmatch(r"\D{0,8}(\d)\D{0,8}", t)
         return int(digit.group(1)) if digit else None
-
-    @staticmethod
-    def _language(words: list[str], current: Language) -> Language:
-        en = sum(w in _ENGLISH for w in words)
-        es = sum(w in _SPANISH for w in words)
-        if en > es:
-            return "en"
-        if es > en:
-            return "es"
-        return current
 
     @staticmethod
     def _license(t: str, awaiting: FieldName | None, put: Put) -> None:
@@ -353,12 +356,12 @@ class KeywordExtractor:
 
     @staticmethod
     def _availability(t: str, config: ClientConfig, put: Put) -> None:
-        if found := _options(t, config, _AVAILABILITY_WORDS):
+        if found := _options(t, config, AVAILABILITY_WORDS):
             put("availability", found)
 
     @staticmethod
     def _schedule(t: str, config: ClientConfig, put: Put) -> None:
-        if found := _options(t, config, _SCHEDULE_WORDS):
+        if found := _options(t, config, SCHEDULE_WORDS):
             put("schedule", found)
 
     @staticmethod

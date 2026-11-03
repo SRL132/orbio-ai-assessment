@@ -13,12 +13,13 @@ from collections.abc import Mapping
 from datetime import date
 
 from app.adapters.llm.keyword import (
-    _AVAILABILITY_WORDS,
-    _SCHEDULE_WORDS,
+    AVAILABILITY_WORDS,
+    SCHEDULE_WORDS,
     KeywordExtractor,
-    _labels,
-    _vocab,
-    _words,
+    guess_language,
+    option_labels,
+    tokenize,
+    vocab,
 )
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -34,10 +35,10 @@ from app.domain.validators import normalize
 
 # Stripped before matching. "?" and "¿" stay: "¿sí?" is a question, so it goes to the LLM.
 _EDGES = " \t\r\n.,;:!¡"
-_YES = _vocab("si|vale|ok|okay|claro|correcto|de acuerdo|yes|yeah|yep|sure|correct")
-_NO = _vocab("no|nope|no gracias|no thanks")
-_LICENSE = _vocab("moto|coche|carro|car|ambos|both|las dos|los dos|no tengo|no|none")
-_SLOT = _vocab(
+_YES = vocab("si|vale|ok|okay|claro|correcto|de acuerdo|yes|yeah|yep|sure|correct")
+_NO = vocab("no|nope|no gracias|no thanks")
+_LICENSE = vocab("moto|coche|carro|car|ambos|both|las dos|los dos|no tengo|no|none")
+_SLOT = vocab(
     "1|2|3|4|5|6|7|8|9|primera|la primera|primero|el primero|segunda|la segunda|segundo|"
     "el segundo|tercera|la tercera|tercero|el tercero|first|the first|second|the second|third|"
     "the third|ninguno|ninguna|none|neither|no"
@@ -63,7 +64,7 @@ def closed_answer(
         # Only the yes or no: a "no" must never also be read as an answer to the field in question.
         if said not in _YES and said not in _NO:
             return None
-        language = KeywordExtractor._language(_words(said), state.language)
+        language = guess_language(tokenize(said), state.language)
         return ExtractionResult(yes_no=said in _YES, language=language)
     if state.stage == Stage.SCHEDULING:
         closed = not state.no_slot_fits and said in _SLOT
@@ -77,9 +78,9 @@ def _options(field: FieldName | None, config: ClientConfig) -> frozenset[str]:
         case FieldName.LICENSE:
             return _LICENSE
         case FieldName.AVAILABILITY:
-            return _spelled(_AVAILABILITY_WORDS, config)
+            return _spelled(AVAILABILITY_WORDS, config)
         case FieldName.SCHEDULE:
-            return _spelled(_SCHEDULE_WORDS, config)
+            return _spelled(SCHEDULE_WORDS, config)
         case _:
             return frozenset()
 
@@ -90,7 +91,7 @@ def _spelled(
 ) -> frozenset[str]:
     """Every way of saying these options: the client's labels and the extra words."""
     return frozenset(
-        word for option, extra in words.items() for word in (*extra, *_labels(config, option))
+        word for option, extra in words.items() for word in (*extra, *option_labels(config, option))
     )
 
 
