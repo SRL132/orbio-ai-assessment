@@ -16,6 +16,7 @@ from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.geo.nominatim import NominatimGeocoder
 from app.adapters.llm.fake import TemplateResponder
+from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.resilient import Pair, ResilientLLM
 from app.adapters.llm.usage import UsageMeter
@@ -151,7 +152,7 @@ def build(settings: Settings | None = None) -> Container:
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
     ports = Ports(
-        extractor=llm,
+        extractor=FastPathExtractor(llm),
         responder=llm,
         clock=clock,
         calendar=calendar,

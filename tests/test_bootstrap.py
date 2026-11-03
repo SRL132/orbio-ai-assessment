@@ -5,6 +5,7 @@ import pytest
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.anthropic_sdk import AnthropicLLM
+from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
@@ -17,9 +18,11 @@ def settings(tmp_path: Path, **overrides: object) -> Settings:
 
 
 def primary(container: Container) -> Pair:
-    llm = container.service.ports.extractor
+    llm = container.service.ports.responder
     assert isinstance(llm, ResilientLLM)
-    assert container.service.ports.responder is llm
+    extractor = container.service.ports.extractor
+    assert isinstance(extractor, FastPathExtractor)  # closed answers skip the LLM
+    assert extractor._llm is llm
     assert isinstance(llm.primary, Pair)
     return llm.primary
 
@@ -27,7 +30,7 @@ def primary(container: Container) -> Pair:
 def test_fake_provider_runs_offline(tmp_path: Path) -> None:
     container = build(settings(tmp_path))
     assert isinstance(primary(container).extractor, KeywordExtractor)
-    assert container.service.ports.extractor.fallback is None  # type: ignore[attr-defined]
+    assert container.service.ports.responder.fallback is None  # type: ignore[attr-defined]
     assert isinstance(container.clock, OffsetClock)
     container.close()
 
@@ -67,7 +70,7 @@ def test_fallback_provider_and_model(tmp_path: Path) -> None:
             openrouter_api_key="k",
         )
     )
-    llm = container.service.ports.extractor
+    llm = container.service.ports.responder
     assert isinstance(llm, ResilientLLM)
     assert isinstance(primary(container).extractor, AnthropicLLM)
     assert isinstance(llm.fallback, Pair)

@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None
     openrouter_model: str = ""
     # Hidden reasoning per call: none, minimal, low… Screening turns are simple, and reasoning
-    # costs seconds per turn (voice!). Some models need it (Gemini 3.x: use "minimal"). Empty:
+    # costs seconds per turn (voice!). On Gemini 3.5 Flash-Lite, "minimal" was no faster than
+    # "low" and failed more evals. Empty:
     # don't send the parameter (the model's default). Pick it with the evals (--reasoning).
     openrouter_reasoning_effort: str = "low"
 

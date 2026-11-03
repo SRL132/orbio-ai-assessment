@@ -16,7 +16,7 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
-from app.domain.models import Channel, Status
+from app.domain.models import Channel, Stage, Status
 from app.domain.ports import Ports
 from app.worker import whatsapp
 from app.worker.service import ScreeningService
@@ -30,6 +30,11 @@ class FakeWhatsApp:
         self.sent: list[tuple[str, str, list[str] | None]] = []
         self.templates: list[tuple[str, str, str]] = []
         self.fail_with: int | None = None  # HTTP status to fail with
+        self.typing: list[str] = []
+
+    def show_typing(self, message_id: str) -> None:
+        self._maybe_fail()
+        self.typing.append(message_id)
 
     def _maybe_fail(self) -> None:
         if self.fail_with is not None:
@@ -99,6 +104,27 @@ def test_screening_over_whatsapp(setup) -> None:
         say(service, channel, text)
     assert fake.sent[-1][1].startswith("¿En qué ciudad")
     assert fake.sent[-2][2] == ["Moto", "Coche", "Ambos", "No tengo"]
+
+
+def test_typing_shows_only_for_a_message_that_gets_a_turn(setup) -> None:
+    _, channel, fake, _ = setup
+    channel.handle(incoming("hola"))  # opens the conversation: the greeting needs no LLM turn
+    assert fake.typing == []
+    answer = incoming("Sí")
+    channel.handle(answer)
+    assert fake.typing == [answer["entry"][0]["changes"][0]["value"]["messages"][0]["id"]]
+
+
+def test_a_failed_typing_indicator_does_not_lose_the_message(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.handle(incoming("hola"))
+    fake.fail_with = 500
+    to_process = channel.handle(incoming("Sí"))
+    fake.fail_with = None
+    assert len(to_process) == 1
+    service.process_pending(to_process[0])
+    assert fake.typing == []
+    assert service.get(to_process[0]).stage == Stage.COLLECTING
 
 
 def test_duplicate_deliveries_are_ignored(setup) -> None:

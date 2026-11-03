@@ -81,6 +81,8 @@ def render(
                 replies.append(fill(key))
             case Remind(number=number):
                 replies.append(fill(f"reminder_{number}"))
+            case AskField(offer_options=False) if channel in config.template_questions_on:
+                replies.append(fill(_fallback_key(action)))
             case AskField() | ReAsk() | AnswerQuestion():
                 text: str | None
                 try:

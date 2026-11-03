@@ -61,6 +61,8 @@ confirm_below_confidence: 0.5
 # can't tell, so these are always read back, knockouts included. A "no" asks them to type it.
 always_confirm:
   voice: [full_name, location]
+# Silence on a call feels like a dropped line, so plain next questions skip the LLM there.
+template_questions_on: [voice]
 
 locations:
   - id: es-madrid

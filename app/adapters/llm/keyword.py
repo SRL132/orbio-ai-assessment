@@ -2,7 +2,8 @@
 
 It reads short answers in the context of the question that was just asked, with simple keyword
 rules in Spanish and English. It exists so the whole app runs without an API key; real
-conversations need the LLM adapters.
+conversations need the LLM adapters. In production it only reads messages `fast_path` has already
+matched exactly against a question's options.
 """
 
 from __future__ import annotations
@@ -197,6 +198,9 @@ def _options[O: StrEnum](t: str, config: ClientConfig, words: dict[O, frozenset[
 
 
 class KeywordExtractor:
+    def __init__(self, confidence: float = 0.6) -> None:
+        self._confidence = confidence
+
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
@@ -205,7 +209,7 @@ class KeywordExtractor:
         fields: dict[str, Any] = {}
 
         def put(name: str, value: object) -> None:
-            fields[name] = {"value": value, "quote": text.strip(), "confidence": 0.6}
+            fields[name] = {"value": value, "quote": text.strip(), "confidence": self._confidence}
 
         awaiting = state.awaiting if state.stage == Stage.COLLECTING else None
         intent: Intent = "answer"

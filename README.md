@@ -82,6 +82,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 - **Code decides, the LLM talks.** The LLM only extracts answers into a strict schema and words the messages. Qualification, knockouts and every status change are plain Python, tested and logged. A prompt-injection eval checks that a candidate can't talk their way into "qualified".
 - **Slot-filling, not a script.** The next question is the highest-priority field still missing, which is what lets candidates answer in any order.
+- **No LLM call when code can read the answer.** A message that is exactly one of the current question's options ("sí", "Moto", "la segunda") skips extraction, and on voice a plain next question uses its template. Anything else goes to the LLM.
 - **Rules in config, one engine for many clients.** Service areas, license rules, persona, templates and FAQ live in `app/config/grupo_sazon/` (`client.yaml` and per-language templates), and every table carries `client_id`.
 - **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length), or the template is used instead.
 - **No callback at the end.** Qualified candidates book the interview in the chat, because a callback would bring back the 60% no-answer problem at the last step.
@@ -90,17 +91,17 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 500+ tests (property tests included) with a coverage ratchet (≥ 97.5%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 500+ tests (property tests included) with a coverage ratchet (≥ 97.6%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
 The suite has 64 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 55 that work offline; the other 9 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
 | Offline (`fake/keyword/scripted`, in CI) | 55/55 | 100% |
-| Live scripted, `google/gemini-3.5-flash-lite` (2026-11-03, 3 runs) | 187/192 (97%) | 99% |
+| Live scripted, `google/gemini-3.5-flash-lite` (2026-11-03, 2 runs at `low` reasoning) | 127/128 (99%) | 100% |
 | Live simulated, `qwen/qwen3.7-plus` (2026-10-30, older 21-scenario suite) | 13/20 | 99% |
 
-The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure, with limits: results vary between runs (62, 62 and 63 of 64, with five different scenarios failing, and one earlier run reached 64/64); the suite isn't held out from the fixes it prompted; and live scores aren't in the baseline, so nothing fails automatically if they drop.
+The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure, with limits: results vary between runs (64 and 63 of 64 now; 62, 62 and 63 of 64 before closed answers skipped the LLM), and two runs are a small sample; the scripted messages use more closed answers than real candidates may, which flatters the speed and cost figures; the suite isn't held out from the fixes it prompted; and live scores aren't in the baseline, so nothing fails automatically if they drop.
 
 [`samples/`](samples/README.md) has one transcript per scenario.
 

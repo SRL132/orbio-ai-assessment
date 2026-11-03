@@ -104,6 +104,8 @@ A client config holds locations and service areas, license rules per country, fi
 
 ### 8. LLM calls are hardened
 
+Fewer calls first. `FastPathExtractor` (`app/adapters/llm/fast_path.py`) sits in front of the real extractor: a message that is exactly one of the current question's options ("sí", "Moto", "la segunda") is read by code, and anything else, however close ("¿sí?", "sí, pero solo los lunes"), goes to the LLM. Validators and policy still decide what the answer means. On the channels in `template_questions_on` (voice), a plain next question uses its template; re-asks, questions after confusion and FAQ answers still use the LLM. On the voice scenarios (3 repeats, sequential, LLM time only: no speech recognition or text-to-speech) this took p50 from 1.83 s to 0.01 s, p95 from 2.62 s to 1.92 s and LLM cost by 61%, with all 15 runs passing before and after. Scripted answers are more often closed than real ones may be, so the real gain will be smaller.
+
 Prompt caching for the system prompt and config; token usage and cost logged per call and added up per conversation. A smaller model can take over extraction if the evals show it's accurate enough. For a provider that is slow, rate-limited or down (`app/adapters/llm/resilient.py`, wired in `bootstrap.make_resilient_llm`):
 
 - **Retry with backoff.** Each call is retried `LLM_MAX_RETRIES` times on rate limits, server errors and failed connections, with full-jitter exponential backoff (so workers that failed together don't retry together) and the provider's `Retry-After` when it sends one. A read timeout isn't retried on the same provider: it already cost the whole timeout.
@@ -341,7 +343,9 @@ Results, all with synthetic candidates. Run files are in `evals/results/`, which
 
 | Run | Date | Suite | Mode | Pass rate | Field accuracy | p50 / p95 s per turn | $ per conversation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Gemini 3.5 Flash-Lite (3 runs) | 11-03 | 64 | scripted | 187/192 (62, 62, 63 of 64) | 99% | 2.02–2.19 / 4.03–4.22 | 0.0136 |
+| Gemini 3.5 Flash-Lite, `low` (2 runs, closed answers skip the LLM) | 11-03 | 64 | scripted | 127/128 (64, 63 of 64) | 100% | 1.21–1.33 / 2.63–3.08 | 0.0078 |
+| Gemini 3.5 Flash-Lite, `minimal` (2 runs, closed answers skip the LLM) | 11-03 | 64 | scripted | 125/128 (64, 61 of 64) | 99% | 1.34–1.36 / 3.06–3.09 | 0.0079 |
+| Gemini 3.5 Flash-Lite, `low` (3 runs, before closed answers skipped the LLM) | 11-03 | 64 | scripted | 187/192 (62, 62, 63 of 64) | 99% | 2.02–2.19 / 4.03–4.22 | 0.0136 |
 | Qwen 3.8 Flash extract, Qwen 3.7 Plus replies | 10-30 | 21 | scripted | 20/21 | 99% | 3.75 / 8.36 | 0.0395 |
 | Qwen 3.7 Plus | 10-30 | 21 | scripted | 19/21 | 97% | 5.95 / 8.49 | 0.0570 |
 | Mistral Large 4 | 10-30 | 21 | scripted | 8/21 | 68% | 13.0 / 19.53 | 0.0948 |
@@ -352,6 +356,6 @@ Results, all with synthetic candidates. Run files are in `evals/results/`, which
 | Mistral Large 4 | 10-30 | 20 | simulated | 9/20 | 83% | 12.87 / 20.43 | 0.1394 |
 | DeepSeek V4 Pro | 10-30 | 20 | simulated | 3/20 | 71% | 20.16 / 45.81 | 0.1764 |
 
-Don't read this as a ranking across dates. The Gemini runs used a bigger suite and a later version of the engine; the three ran at the same time, and five different scenarios failed across them, so the same model and code don't always give the same result. An earlier single run reached 64/64. The other rows are single runs. The 10-30 comparison only covered open-weight models, because the OpenRouter account was restricted from closed-weight ones at the time. A fair comparison means re-running every candidate, Claude included, on the current suite several times.
+Don't read this as a ranking across dates. The Gemini runs used a bigger suite and a later version of the engine. The same model and code don't always give the same result: five different scenarios failed across the three earlier runs, and an earlier single run reached 64/64. The earlier three ran side by side and the later four in pairs, so the speed gain is approximate. `minimal` was neither faster nor as reliable as `low`, so `low` stays. The other rows are single runs. The 10-30 comparison only covered open-weight models, because the OpenRouter account was restricted from closed-weight ones at the time. A fair comparison means re-running every candidate, Claude included, on the current suite several times.
 
 Models with a median turn over 5 s are out of consideration, so they won't be re-run. That rules out Qwen 3.7 Plus (5.95 s), the fallback named under resilience above, so a replacement still has to be chosen and pass the same evals.

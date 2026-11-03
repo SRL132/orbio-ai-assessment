@@ -94,7 +94,15 @@ class WhatsAppChannel:
                 raise
             if cid is not None:
                 to_process.append(cid)
+                self._show_typing(message)
         return list(dict.fromkeys(to_process))
+
+    def _show_typing(self, message: WhatsAppInbound) -> None:
+        """Only for a message that will get a reply. A nicety: failing must not lose the message."""
+        try:
+            self.client.show_typing(message.message_id)
+        except httpx.HTTPError as exc:
+            logger.warning("whatsapp_typing_failed error=%s", type(exc).__name__)
 
     def _handle_message(self, message: WhatsAppInbound) -> UUID | None:
         """One new (not retried) message. Returns its conversation if it needs a turn."""

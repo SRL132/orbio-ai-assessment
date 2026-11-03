@@ -27,6 +27,7 @@ MAX_LIST_ROWS = 10
 MAX_ROW_TITLE = 24
 MAX_INTERACTIVE_BODY = 1024
 MAX_TEXT = 4096
+TYPING_TIMEOUT_SECONDS = 3.0  # sent while the webhook waits: it must not delay the acknowledgement
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,15 @@ def build_template(to: str, name: str, language_code: str) -> dict[str, Any]:
         "to": to,
         "type": "template",
         "template": {"name": name, "language": {"code": language_code}},
+    }
+
+
+def build_typing(message_id: str) -> dict[str, Any]:
+    return {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message_id,
+        "typing_indicator": {"type": "text"},
     }
 
 
@@ -141,6 +151,13 @@ class WhatsAppClient:
 
     def send_template(self, to: str, name: str, language_code: str) -> str:
         return self._post(build_template(to, name, language_code))
+
+    def show_typing(self, message_id: str) -> None:
+        """Mark the candidate's message as read and show "typing…" until we reply (or 25 s)."""
+        response = self._client.post(
+            self._path, json=build_typing(message_id), timeout=TYPING_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
 
     def _post(self, body: dict[str, Any]) -> str:
         response = self._client.post(self._path, json=body)

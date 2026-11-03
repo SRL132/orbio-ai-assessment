@@ -88,6 +88,11 @@ class ClientConfig(BaseModel):
         "the model only sees the transcript, so it can be sure of a name or place that speech "
         "recognition got wrong. If the candidate says no, they're asked to type it instead.",
     )
+    template_questions_on: list[Channel] = Field(
+        default_factory=list,
+        description="Channels where a plain next question uses its template instead of the LLM. "
+        "Re-asks, questions with options after confusion and FAQ answers still use the LLM.",
+    )
     geo_review_radius_km: float = Field(
         default=30.0,
         description="A place not in the config but this close to a served city goes to review "

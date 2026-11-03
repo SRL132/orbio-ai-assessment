@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.usage import UsageMeter
 from app.bootstrap import make_llm
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--budget-usd needs ANTHROPIC_INPUT/OUTPUT_USD_PER_MTOK to price calls")
         extractor, responder = make_llm(settings, meter)
         simulator = extractor if isinstance(extractor, Completer) else None
-    harness = Harness(config, extractor, responder, meter)
+    harness = Harness(config, FastPathExtractor(extractor), responder, meter)
     key = _key(args, settings)
 
     def report(scenario: Scenario, result: ScenarioResult) -> None:

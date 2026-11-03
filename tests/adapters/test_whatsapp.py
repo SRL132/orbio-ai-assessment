@@ -108,6 +108,24 @@ def test_client_posts_to_graph_api() -> None:
     assert json.loads(seen[0].content)["type"] == "interactive"
 
 
+def test_show_typing_marks_read_with_an_indicator() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"success": True})
+
+    client = WhatsAppClient("token", "12345", transport=httpx.MockTransport(handler))
+    client.show_typing("wamid.in")
+    assert seen[0].url.path == "/v26.0/12345/messages"
+    assert json.loads(seen[0].content) == {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": "wamid.in",
+        "typing_indicator": {"type": "text"},
+    }
+
+
 def test_client_errors_raise() -> None:
     client = WhatsAppClient(
         "t", "1", transport=httpx.MockTransport(lambda _r: httpx.Response(400, json={}))

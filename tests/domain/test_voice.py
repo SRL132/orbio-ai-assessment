@@ -1,5 +1,6 @@
 """Voice channel: same engine, spoken wording."""
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -7,13 +8,17 @@ import pytest
 from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
+    AnswerQuestion,
+    AskField,
     Availability,
     ConversationState,
+    FieldName,
+    ReAsk,
     Schedule,
     Vehicle,
 )
 from app.domain.ports import Ports
-from app.domain.render import check_reply, recap_spoken, speakable
+from app.domain.render import check_reply, recap_spoken, render, speakable
 from app.domain.validators import validate_full_name
 from tests.conftest import ex
 
@@ -30,6 +35,49 @@ def test_voice_uses_spoken_templates_with_chat_fallback(config: ClientConfig) ->
     assert config.template("es", "ask_start_date", "voice") == config.template(
         "es", "ask_start_date"
     )
+
+
+@pytest.mark.parametrize(
+    ("action", "uses_llm"),
+    [
+        (AskField(field=FieldName.LICENSE), False),
+        (AskField(field=FieldName.LICENSE, offer_options=True), True),  # they seem confused
+        (ReAsk(field=FieldName.LICENSE, reason="unclear"), True),
+        (AnswerQuestion(question="¿Cuánto pagan?"), True),
+    ],
+)
+def test_only_plain_next_questions_skip_the_llm_on_voice(
+    voice_state: ConversationState,
+    config: ClientConfig,
+    ports: Ports,
+    action: AskField | ReAsk | AnswerQuestion,
+    uses_llm: bool,
+) -> None:
+    calls: list[object] = []
+
+    class Spy:
+        def compose(self, action: object, state: object, config: object) -> str:
+            calls.append(action)
+            return "del LLM"
+
+    spied = replace(ports, responder=Spy())
+    replies, _ = render([action], voice_state, config, spied)
+    assert bool(calls) is uses_llm
+    if not uses_llm:
+        assert replies == [config.template("es", "ask_license", "voice")]
+
+
+def test_chat_questions_still_use_the_llm(
+    state: ConversationState, config: ClientConfig, ports: Ports
+) -> None:
+    assert "chat" not in config.template_questions_on
+
+    class Spy:
+        def compose(self, action: object, state: object, config: object) -> str:
+            return "del LLM"
+
+    spied = replace(ports, responder=Spy())
+    assert render([AskField(field=FieldName.LICENSE)], state, config, spied)[0] == ["del LLM"]
 
 
 def test_spoken_greeting_mentions_audio_is_not_kept(

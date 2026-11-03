@@ -23,6 +23,7 @@ import yaml
 from pydantic import BaseModel
 
 from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.usage import UsageMeter
 from app.settings import Settings
 from evals.__main__ import RESULTS, openrouter_trio, summarize
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             llm.reasoning_effort = run.reasoning
         if run.simulate:
             simulator.reasoning_effort = matrix.simulator_reasoning
-        harness = Harness(config, extractor, responder, meter)
+        harness = Harness(config, FastPathExtractor(extractor), responder, meter)
         results, complete = run_suite(
             harness, scenarios, simulator if run.simulate else None, budget
         )
