@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -30,6 +31,8 @@ from app.worker.pool import TurnPool
 from app.worker.runner import Runner
 from app.worker.service import ScreeningService
 from app.worker.whatsapp import WhatsAppChannel
+
+logger = logging.getLogger("app.bootstrap")
 
 
 @dataclass
@@ -128,12 +131,22 @@ def make_resilient_llm(settings: Settings) -> ResilientLLM:
     )
 
 
+def with_public_links(config: ClientConfig, settings: Settings) -> ClientConfig:
+    """A relative privacy link works in the web chat but not on WhatsApp: make it absolute."""
+    base = settings.public_base_url.rstrip("/")
+    if base and config.privacy_url.startswith("/"):
+        return config.model_copy(update={"privacy_url": base + config.privacy_url})
+    if settings.whatsapp_phone_number_id and config.privacy_url.startswith("/"):
+        logger.warning("privacy link is relative: set PUBLIC_BASE_URL so it works on WhatsApp")
+    return config
+
+
 def build(settings: Settings | None = None) -> Container:
     settings = settings or Settings()
     tracing.configure_logging()
     tracing.configure_tracing(f"sazon-{settings.role}")
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
-    config = load_client_config(settings.client_id)
+    config = with_public_links(load_client_config(settings.client_id), settings)
     llm = make_resilient_llm(settings)
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)

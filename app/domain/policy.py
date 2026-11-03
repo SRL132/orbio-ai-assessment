@@ -25,6 +25,7 @@ from app.domain.models import (
     PendingConfirmation,
     Reason,
     ReviewReason,
+    Stage,
 )
 from app.domain.validators import (
     Outcome,
@@ -144,7 +145,7 @@ def _validate(
         case FieldName.FULL_NAME:
             return validate_full_name(draft.full_name)
         case FieldName.LICENSE:
-            return validate_license(draft.has_license, draft.vehicle)
+            return validate_license(draft.has_license, draft.vehicle, draft.license_type)
         case FieldName.LOCATION:
             return validate_location(draft.city, draft.zone, draft.postal_code, config, geo)
         case FieldName.AVAILABILITY:
@@ -166,22 +167,48 @@ def must_confirm(name: FieldName, state: ConversationState, config: ClientConfig
     return name in config.always_confirm.get(state.channel, [])
 
 
+def _days_only(fields: ExtractedFields, config: ClientConfig) -> bool:
+    """The availability answer only names days ("entre semana"), which says neither full nor
+    part time, so the value the model chose for it isn't the candidate's (client config)."""
+    extracted = fields.availability
+    rule = config.availability_days_only
+    if extracted is None or not rule.phrases:
+        return False
+    said = f" {_plain(extracted.quote or '')} "
+    names_days = any(f" {_plain(p)} " in said for p in rule.phrases)
+    return names_days and not any(f" {_plain(w)} " in said for w in rule.unless)
+
+
+def _changes_another_answer(name: FieldName, draft: Candidate, state: ConversationState) -> bool:
+    """While collecting, a new value for a field already answered, in reply to a different
+    question ("Mai" to the experience question replacing the name): confirm it first."""
+    return (
+        state.stage == Stage.COLLECTING
+        and name != state.awaiting
+        and state.candidate.meta[name].status != FieldStatus.MISSING
+        and _snapshot(draft, name) != _snapshot(state.candidate, name)
+    )
+
+
 def _why_confirm(
     name: FieldName,
     outcome: Outcome,
     confidence: float,
     state: ConversationState,
     config: ClientConfig,
+    draft: Candidate,
 ) -> str | None:
     """Why to confirm with the candidate before this counts, or None if it counts now: the place
     came from the geocoder (so they see which place we understood), the channel always confirms
-    this field, or the model wasn't sure."""
+    this field, the model wasn't sure, or it replaces an earlier answer nobody asked about."""
     if outcome.note == "geocoded":
         return "geocoded"
     if must_confirm(name, state, config):
         return "channel"
     if confidence < config.confirm_below_confidence:
         return "low_confidence"
+    if _changes_another_answer(name, draft, state):
+        return "unasked_change"
     return None
 
 
@@ -273,13 +300,21 @@ def apply_extraction(
         # completes a city given earlier), then validate the whole group.
         draft = candidate.model_copy(update=proposals)
         outcome = _validate(name, draft, config, today, geo)
+        if (
+            name == FieldName.AVAILABILITY
+            and outcome.kind == "valid"
+            and _days_only(fields, config)
+        ):
+            outcome = Outcome.invalid("days_only")
         grounded = _grounded(fields, name, message)
         if not grounded and outcome.kind in ("knockout", "valid"):
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
         quote, confidence = _evidence(fields, name)
 
         why = (
-            _why_confirm(name, outcome, confidence, state, config)
+            _why_confirm(
+                name, outcome, confidence, state, config, draft.model_copy(update=outcome.updates)
+            )
             if outcome.kind != "invalid"
             else None
         )

@@ -3,11 +3,12 @@ from pathlib import Path
 import pytest
 
 from app.adapters.clock.clocks import OffsetClock, SystemClock
+from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.anthropic_sdk import AnthropicLLM
 from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
-from app.bootstrap import Container, build
+from app.bootstrap import Container, build, with_public_links
 from app.settings import Settings
 
 
@@ -107,3 +108,10 @@ def test_geocoder_is_chosen_by_settings() -> None:
     assert isinstance(make_geocoder(Settings(_env_file=None, geocoder="fake")), FakeGeocoder)
     nominatim = Settings(_env_file=None, geocoder="nominatim", nominatim_user_agent="x (a@b.c)")
     assert isinstance(make_geocoder(nominatim), NominatimGeocoder)
+
+
+def test_public_base_url_makes_the_privacy_link_absolute() -> None:
+    config = load_client_config("grupo_sazon")
+    settings = Settings(_env_file=None, public_base_url="https://jobs.example.com/")
+    assert with_public_links(config, settings).privacy_url == "https://jobs.example.com/privacy"
+    assert with_public_links(config, Settings(_env_file=None)).privacy_url == "/privacy"

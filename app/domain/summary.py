@@ -72,7 +72,7 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
     where = ", ".join(p for p in (c.zone, c.city) if p) or "location unknown"
     vehicle = f"{c.vehicle.value} license" if c.vehicle else "license unknown"
     if c.vehicle and c.license_type:
-        held = f", {c.license_years:g} years" if c.license_years is not None else ""
+        held = f", {_years(c.license_years)}" if c.license_years is not None else ""
         vehicle += f" ({c.license_type}{held})"
     lines = [headline, f"{c.full_name or 'Name unknown'} · {where} · {vehicle}"]
 
@@ -83,14 +83,17 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
         lines.append(f"Availability: {availability} · Hours: {schedule} · Start: {start}")
     if c.experience_years is not None:
         platforms = f" ({', '.join(c.platforms)})" if c.platforms else ""
-        lines.append(f"Experience: {c.experience_years:g} years{platforms}")
+        lines.append(f"Experience: {_years(c.experience_years)}{platforms}")
 
     if state.interview_at is not None:
         lines.append(f"Interview booked: {local_time(state.interview_at, state, config)}")
 
     flags: list[str] = []
     if state.no_slot_fits:
-        flags.append("no offered interview slot fits: contact to schedule")
+        prefers = f' (prefers: "{state.preferred_times}")' if state.preferred_times else ""
+        flags.append(f"no offered interview slot fits: contact to schedule{prefers}")
+    if state.human_after_knockout:
+        flags.append("asked to talk to a person after the knockout")
     if c.meta[FieldName.FULL_NAME].note == "surname_missing":
         flags.append("first name only")
     if c.meta[FieldName.START_DATE].note == "start_date_far":
@@ -107,3 +110,7 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
     if flags:
         lines.append("Flags: " + "; ".join(flags))
     return "\n".join(lines)
+
+
+def _years(value: float) -> str:
+    return f"{value:g} year" if value == 1 else f"{value:g} years"

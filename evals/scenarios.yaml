@@ -353,13 +353,14 @@
     field_status: {start_date: needs_review}
 
 - id: invalid_5_contradicts_license_later
-  description: Said moto earlier, then admits there is no license yet; code knocks out on the new answer.
-  persona: Ana López, Retiro (Madrid). First says moto, then while answering availability admits she has no license yet.
-  steps: [Sí, Ana López, Moto, "Madrid, Retiro", "Jornada completa. Bueno, en realidad no tengo carnet todavía", Sí]
+  description: Said moto earlier, then admits there is no license yet. The change wasn't asked for, so it's confirmed first; then code knocks out on the new answer.
+  persona: Ana López, Retiro (Madrid). First says moto, then while answering availability admits she has no license yet. Confirms it, and wants her details kept.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", "Jornada completa. Bueno, en realidad no tengo carnet todavía", Sí, Sí]
   expect:
     status: disqualified
     disqualify_reason: no_license
     keep_on_file: true
+    reply_contains: ["confirmar: sin carnet"]
 
 - id: invalid_6_corrects_at_recap
   description: Spots a wrong answer at the recap and corrects it; the recap is shown again.

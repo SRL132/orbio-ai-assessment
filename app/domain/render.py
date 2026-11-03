@@ -166,7 +166,9 @@ def field_values(
             years=f"{years:g}", platforms=", ".join(candidate.platforms) or "-"
         )
     license_text = None
-    if candidate.vehicle:
+    if candidate.has_license is False:
+        license_text = label("value_no_license")
+    elif candidate.vehicle:
         license_text = label(f"value_{candidate.vehicle.value}")
         held = candidate.license_years
         if candidate.license_type and held is not None:
@@ -322,6 +324,7 @@ def required_templates(config: ClientConfig) -> set[str]:
         "experience_value",
         "experience_value_one",
         "experience_none",
+        "value_no_license",
         "license_with_type",
         "license_with_years",
         "license_with_years_one",

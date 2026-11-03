@@ -242,3 +242,15 @@ def test_logged_out_form_posts_go_to_login(client: TestClient, container: Contai
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+
+
+def test_license_details_are_shown_once(logged_in: TestClient, container: Container) -> None:
+    cid = chat(container, "sí", "Pedro Gómez", "moto")
+    repo = container.service.repo
+    state = repo.get(cid)
+    assert state is not None
+    state.candidate.license_type, state.candidate.license_years = "B", 1
+    repo.save_turn(state, [], [], [])
+    detail = logged_in.get(f"/dashboard/candidates/{cid}").text
+    assert detail.count("(B license") == 1
+    assert "1 years" not in detail

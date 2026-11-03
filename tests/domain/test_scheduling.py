@@ -51,11 +51,11 @@ def run(
     ports = Ports(extractor, TemplateResponder(), clock, calendar)
     holder = {"state": engine.start(state, config, ports).state}
 
-    def say(extraction):
+    def say(extraction, text=None):
         extractor.push(extraction)
         message = InboundMessage(
             conversation_id=UUID(int=1),
-            text=said(extraction.fields, extraction.yes_no),
+            text=said(extraction.fields, extraction.yes_no) if text is None else text,
             received_at=clock.now(),
         )
         result = engine.turn(holder["state"], message, config, ports)
@@ -102,13 +102,33 @@ def test_taken_slot_offers_new_ones(run, calendar: MemoryCalendar) -> None:
     assert any("se acaba de ocupar" in r for r in result.replies)
 
 
-def test_no_slot_fits_hands_to_recruiter(run) -> None:
+def test_no_slot_fits_asks_when_suits_and_passes_it_on(run) -> None:
     run(ex(yes_no=True))
     result = run(ex(yes_no=False))
-    assert result.state.stage == Stage.CLOSED
+    assert result.state.stage == Stage.SCHEDULING  # asked which days and times would suit
     assert result.state.no_slot_fits is True
+    assert "¿Qué días y horas" in result.replies[-1]
+    result = run(ex(), text="el jueves por la tarde")
+    assert result.state.stage == Stage.CLOSED
     assert result.state.status == Status.QUALIFIED
-    assert "no offered interview slot fits" in (result.state.summary or "")
+    assert result.state.preferred_times == "el jueves por la tarde"
+    summary = result.state.summary or ""
+    assert 'no offered interview slot fits: contact to schedule (prefers: "el jueves' in summary
+
+
+def test_after_none_fits_a_slot_can_still_be_picked(run, calendar: MemoryCalendar) -> None:
+    run(ex(yes_no=True))
+    run(ex(yes_no=False))
+    result = run(ExtractionWithSlot(1))
+    assert result.state.interview_at is not None
+
+
+def test_a_second_no_closes_without_a_preference(run) -> None:
+    run(ex(yes_no=True))
+    run(ex(yes_no=False))
+    result = run(ex(yes_no=False), text="no")
+    assert result.state.stage == Stage.CLOSED
+    assert result.state.preferred_times is None
 
 
 def test_unclear_answer_repeats_the_offer(run) -> None:

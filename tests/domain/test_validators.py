@@ -11,6 +11,7 @@ from app.domain.validators import (
     distance_km,
     final_review_reasons,
     is_known_place,
+    license_code,
     nearest_location,
     normalize,
     normalize_platforms,
@@ -272,3 +273,25 @@ def test_choosing_a_vehicle_means_having_a_license() -> None:
     outcome = validate_license(None, Vehicle.MOTO)
     assert outcome.kind == "valid"
     assert outcome.updates == {"has_license": True, "vehicle": Vehicle.MOTO}
+
+
+@pytest.mark.parametrize(
+    ("written", "code"),
+    [
+        ("B", "B"),
+        ("b", "B"),
+        ("A2", "A2"),
+        ("tipo A", "A"),
+        ("clase B", "B"),
+        ("BE", "BE"),
+        ("AM", "AM"),
+        ("moto", None),
+        ("coche", None),
+        ("carnet de moto", None),
+        ("", None),
+    ],
+)
+def test_license_type_is_kept_only_as_a_license_code(written: str, code: str | None) -> None:
+    assert license_code(written) == code
+    outcome = validate_license(True, Vehicle.MOTO, written)
+    assert outcome.updates["license_type"] == code

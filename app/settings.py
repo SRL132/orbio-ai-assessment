@@ -71,6 +71,9 @@ class Settings(BaseSettings):
 
     # Demo mode: the clock can be fast-forwarded from the chat page to show reminders.
     demo_mode: bool = True
+    # Where the app is reachable from outside, e.g. https://jobs.example.com. Relative links in
+    # messages (the privacy notice) are made absolute with it, which WhatsApp needs.
+    public_base_url: str = ""
     debounce_seconds: float = 1.5
     reminder_interval_seconds: float = 30.0
 

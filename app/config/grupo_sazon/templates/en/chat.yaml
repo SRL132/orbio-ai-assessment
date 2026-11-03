@@ -47,7 +47,9 @@ offer_slots: |-
   Reply with the number. If none works, say "none".
 interview_booked: Done! Your interview is on {when}. We'll send you the restaurant's address. See you soon!
 slot_taken: Oops, that time was just taken. Here are some others.
-no_slot_fits: No problem, a recruiter will write to you to find another time.
+no_slot_fits: No problem. Which days and times would suit you? I'll pass it on to the recruiter.
+preferred_times_noted: Noted. A recruiter will write to you to set up the interview.
+handoff_disqualified: I've noted it for the recruiting team. If there's anything to review, they'll write to you.
 retype_hint: Sorry, I got that wrong. Could you write it again?
 weekdays: Mon,Tue,Wed,Thu,Fri,Sat,Sun
 slot_format: "{weekday} {day}/{month} {time}"
@@ -77,6 +79,7 @@ label_start_date: Start
 value_moto: moto
 value_car: car
 value_both: moto and car
+value_no_license: no driving license
 value_full_time: full time
 value_part_time: part time
 value_weekends: weekends

@@ -70,14 +70,14 @@ The quote must be the candidate's own words. Python checks that it appears in th
 | --- | --- |
 | **Stops responding** | Reminder at 2 h, last one at 24 h (23 h on WhatsApp, to stay inside its free 24 h window), then `abandoned` with the stage reached. A later reply resumes at the missing fields. |
 | **Invalid answer** | Acknowledge, rephrase with examples ("e.g. tomorrow, next Monday, 1 March"). Two tries, then `needs_review`. |
-| **Ambiguous answer** ("evenings, maybe weekends") | Store what is certain, confirm the rest with a yes/no. |
+| **Ambiguous answer** ("evenings, maybe weekends") | Store what is certain and leave out what is only hedged; it is asked or confirmed separately. An availability that only names days ("entre semana") says neither full nor part time, so it is asked again (checked in code against the candidate's words; phrases in the client config). |
 | **Several answers at once** | Fill every field found; never ask for something already given. |
 | **Switches language** (ES ↔ EN, or mixed) | Reply in the language of the latest message. Stored values are language-independent (`evening`, not *tarde*). |
 | **Job questions** ("How much does it pay?") | Answer from the approved FAQ, otherwise say a recruiter will confirm. Then return to the current question. |
 | **Rude or nonsense input** | One calm reply; if it continues, end politely and flag for review. |
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed. |
-| **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. |
-| **Changes an earlier answer** | Take the latest value, re-validate, log the change. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks. |
+| **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. After a knockout the rejection stands (otherwise any rejected candidate could skip it): the request is logged, shown in the recruiter summary, and the candidate is told the team will write if there's anything to review. |
+| **Changes an earlier answer** | Take the latest value, re-validate, log the change. A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks. |
 | **The AI provider is down** | Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate. |
 
 ## Outcomes
@@ -86,7 +86,7 @@ Every conversation ends in exactly one status, set by code, plus a summary for t
 
 | Outcome | Triggered by | Candidate hears | Recruiter sees |
 | --- | --- | --- | --- |
-| **Qualified** | All fields valid, no knockout | Thanks, a recap, interview slots to book in the chat (a callback would bring back the 60% no-answer problem) | Top of the dashboard, with summary and transcript |
+| **Qualified** | All fields valid, no knockout | Thanks, a recap, interview slots to book in the chat (a callback would bring back the 60% no-answer problem). If none fits, they're asked which days and times would, and that goes to the recruiter | Top of the dashboard, with summary and transcript |
 | **Disqualified** | No license, or clearly outside the area | A warm, honest reason and an offer to keep their details for future roles | Filtered list, kept for audit |
 | **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour | A recruiter will contact them, with a timeframe | Review queue with the reason |
 | **Abandoned** | No reply 24 h after the last reminder, or consent declined | Nothing more (or a short acknowledgement if they declined). If they write again, consent is asked again; nothing is collected without a yes | Drop-off stage, for analytics |

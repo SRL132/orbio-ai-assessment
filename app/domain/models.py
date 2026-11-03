@@ -100,6 +100,7 @@ InvalidReason = Literal[
     "city_missing",
     "out_of_range",
     "in_past",
+    "days_only",
     "unclear",
 ]
 
@@ -230,6 +231,8 @@ class ConversationState(BaseModel):
     offered_slots: list[datetime] = Field(default_factory=list)
     interview_at: datetime | None = None
     no_slot_fits: bool = False
+    preferred_times: str | None = None  # their words, after no offered slot fit
+    human_after_knockout: bool = False  # asked for a person after a knockout (status stands)
     dropped_at: str | None = Field(
         default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
     )
@@ -379,6 +382,8 @@ SayTemplate = Literal[
     "no_slot_fits",
     "retype_hint",
     "slot_unclear",
+    "handoff_disqualified",
+    "preferred_times_noted",
 ]
 
 
@@ -473,6 +478,8 @@ class EventType(StrEnum):
     SLOTS_OFFERED = "slots_offered"
     SLOT_TAKEN = "slot_taken"
     NO_SLOT_FITS = "no_slot_fits"
+    PREFERRED_TIMES_GIVEN = "preferred_times_given"
+    HUMAN_REQUESTED = "human_requested"
     INTERVIEW_BOOKED = "interview_booked"
     REMINDER_SENT = "reminder_sent"
     ABANDONED = "abandoned"

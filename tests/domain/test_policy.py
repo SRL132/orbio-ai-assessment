@@ -1,8 +1,13 @@
 from datetime import date
 
+import pytest
+
 from app.domain.config import ClientConfig
 from app.domain.models import (
+    Availability,
     ConversationState,
+    Extracted,
+    ExtractedFields,
     FieldName,
     FieldStatus,
     Reason,
@@ -169,3 +174,27 @@ def test_a_quote_must_match_whole_words(state: ConversationState, config: Client
     fields.vehicle.quote = "moto"  # type: ignore[union-attr]
     apply_extraction(state, fields, config, TODAY, message="Sin carnet, voy en motocicleta")
     assert state.candidate.meta[FieldName.LICENSE].status == FieldStatus.NEEDS_REVIEW
+
+
+@pytest.mark.parametrize(
+    ("said", "kept"),
+    [
+        ("entre semana", False),
+        ("de lunes a viernes por las mañanas", False),
+        ("weekdays", False),
+        ("entre semana, jornada completa", True),
+        ("entre semana y fines de semana", True),
+        ("jornada completa", True),
+    ],
+)
+def test_an_availability_that_only_names_days_is_asked_again(
+    config: ClientConfig, said: str, kept: bool
+) -> None:
+    state = ConversationState(client_id=config.client_id)
+    fields = ExtractedFields(
+        availability=Extracted(value=[Availability.PART_TIME], quote=said, confidence=0.9)
+    )
+    result = apply_extraction(state, fields, config, date(2026, 11, 3), message=said)
+    assert (state.candidate.availability == [Availability.PART_TIME]) is kept
+    if not kept:
+        assert result.rejected[FieldName.AVAILABILITY] == "days_only"

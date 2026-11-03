@@ -436,3 +436,42 @@ def test_extractor_failure_asks_again_without_penalty(
     assert result.replies == [config.template("es", "technical_retry")]
     assert any(e.type == "extractor_failed" for e in result.events)
     assert result.state.stage == Stage.CONSENT
+
+
+def test_asking_for_a_person_after_a_knockout_keeps_the_knockout(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(intent="human_request"))
+    assert chat.state.status == Status.DISQUALIFIED
+    assert chat.state.stage == Stage.KEEP_ON_FILE  # the keep-on-file question is asked again
+    assert chat.state.human_after_knockout is True
+    assert chat.result.replies == [
+        chat.config.template("es", "handoff_disqualified"),
+        chat.config.template("es", "keep_on_file_reask"),
+    ]
+    assert "asked to talk to a person after the knockout" in (chat.state.summary or "")
+    assert {"after_knockout": True} in [e.data for e in chat.result.events]
+
+
+def test_a_new_answer_to_another_field_is_confirmed_first(chat: Chat) -> None:
+    # "Mai" ("never" in Catalan) to the experience question, read as a name: not applied unasked.
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Marta Puig", has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Barcelona", zone="Gràcia"))
+    chat.say(ex(availability=[Availability.FULL_TIME], schedule=[Schedule.EVENING]))
+    assert chat.state.awaiting == FieldName.EXPERIENCE
+    chat.say(ex(full_name="Mai Mai"))
+    assert chat.state.candidate.full_name == "Marta Puig"
+    assert chat.state.confirming is not None
+    assert chat.state.confirming.field == FieldName.FULL_NAME
+    chat.say(ex(yes_no=False))
+    assert chat.state.candidate.full_name == "Marta Puig"
+
+
+def test_the_answer_to_the_question_asked_is_applied_at_once(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana"))  # no surname: the name question is asked again
+    assert chat.state.awaiting == FieldName.FULL_NAME
+    chat.say(ex(full_name="Ana García"))
+    assert chat.state.candidate.full_name == "Ana García"
+    assert chat.state.confirming is None

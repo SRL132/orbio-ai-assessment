@@ -288,7 +288,6 @@ def export(conversation_id: UUID, c: App, user: Recruiter) -> JSONResponse:
 
 def field_rows(candidate: Candidate, config: ClientConfig) -> list[dict[str, Any]]:
     values = field_values(candidate, config, DASHBOARD_LANGUAGE)
-    values[FieldName.LICENSE] = _license_text(candidate, values[FieldName.LICENSE])
     labels = config.templates[DASHBOARD_LANGUAGE]
     return [
         {
@@ -311,18 +310,6 @@ def _login_page(request: Request, configured: bool, error: str, code: int) -> HT
 
 def _secret(value: SecretStr | None) -> str | None:
     return value.get_secret_value() if value is not None else None
-
-
-def _license_text(candidate: Candidate, vehicle: str | None) -> str | None:
-    """The recap's vehicle plus what recruiters also need: license type and years held."""
-    if vehicle is None:
-        return "no" if candidate.has_license is False else None
-    details = [d for d in (candidate.license_type, _years(candidate.license_years)) if d]
-    return vehicle + (f" ({', '.join(details)})" if details else "")
-
-
-def _years(value: float | None) -> str | None:
-    return f"{value:g} years" if value is not None else None
 
 
 def _choice[E: StrEnum](enum: type[E], raw: str | None) -> E | None:

@@ -67,6 +67,9 @@ from app.domain.validators import final_review_reasons, is_known_place, nearest_
 # The field each knockout comes from: a different answer to it reopens the screening.
 _KNOCKOUT_FIELDS = {Reason.NO_LICENSE: FieldName.LICENSE, Reason.OUTSIDE_AREA: FieldName.LOCATION}
 
+# A candidate's own words about when they could do the interview, kept for the recruiter.
+_PREFERRED_TIMES_CHARS = 200
+
 # Intents that count as a (possibly failed) attempt at answering the awaited question.
 _ANSWER_INTENTS = frozenset({"answer", "other"})
 
@@ -145,6 +148,8 @@ def turn(
 
     if extraction.intent == "abuse":
         _on_abuse(t)
+    elif extraction.intent == "human_request" and t.state.status == Status.DISQUALIFIED:
+        _human_after_knockout(t)
     elif extraction.intent == "human_request":
         add_review_reason(t.state, Reason.HUMAN_REQUESTED)
         _close(t, Status.NEEDS_REVIEW)
@@ -248,6 +253,16 @@ def _on_abuse(t: _Turn) -> None:
         return
     t.say("abuse_warning")
     _ask_current(t)
+
+
+def _human_after_knockout(t: _Turn) -> None:
+    """A knocked-out candidate asks for a person: the knockout stands (a review queue entry would
+    let every rejected candidate skip it), but the request is logged and shown to recruiters."""
+    t.state.human_after_knockout = True
+    t.event(EventType.HUMAN_REQUESTED, after_knockout=True)
+    t.say("handoff_disqualified")
+    if t.state.stage == Stage.KEEP_ON_FILE:
+        t.say("keep_on_file_reask")
 
 
 def _on_consent(t: _Turn, extraction: ExtractionResult) -> None:
@@ -496,10 +511,16 @@ def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
         t.say("slot_taken")
         _offer_slots(t)
         return
-    if extraction.yes_no is False:
-        state.no_slot_fits = True
+    if state.no_slot_fits:  # we asked which days and times would suit them: pass it on
+        if not t.redact and not (extraction.yes_no is False and len(t.message.split()) <= 2):
+            state.preferred_times = t.message.strip()[:_PREFERRED_TIMES_CHARS]
         state.offered_slots = []
         state.stage = Stage.CLOSED
+        t.event(EventType.PREFERRED_TIMES_GIVEN, given=state.preferred_times is not None)
+        t.say("preferred_times_noted")
+        return
+    if extraction.yes_no is False:
+        state.no_slot_fits = True  # the offer stays open: they can still pick one
         t.event(EventType.NO_SLOT_FITS)
         t.say("no_slot_fits")
         return

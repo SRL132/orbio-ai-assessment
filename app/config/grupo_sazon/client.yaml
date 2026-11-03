@@ -18,6 +18,11 @@ field_priority:
   - start_date
 
 max_attempts: 2
+# "Entre semana" names days, not full or part time: whatever the model picked for it is asked
+# again, unless the answer also says how much (checked in code, on the candidate's own words).
+availability_days_only:
+  phrases: [entre semana, de lunes a viernes, lunes a viernes, dias laborables, weekdays, during the week, monday to friday, mon to fri]
+  unless: [completa, completo, media, parcial, horas, fin de semana, fines de semana, full, part, hours, weekend, weekends, todo el dia, all day]
 max_abuse_strikes: 2
 far_start_days: 60
 # Disqualified and abandoned candidates are erased after ~6 months unless they opted to stay on file.

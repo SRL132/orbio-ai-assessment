@@ -50,6 +50,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
+| `PUBLIC_BASE_URL` | — | Public address of the app; makes the privacy link absolute (needed on WhatsApp) |
 | `RECRUITER_USERS`, `SESSION_SECRET` | — | Dashboard login (no default accounts) |
 
 ## What it does

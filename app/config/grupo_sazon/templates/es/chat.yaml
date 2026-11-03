@@ -49,7 +49,9 @@ offer_slots: |-
   Responde con el número. Si no te va ninguno, dime «ninguno».
 interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la dirección del local. ¡Hasta pronto!
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
-no_slot_fits: Sin problema, un reclutador te escribirá para buscar otro horario.
+no_slot_fits: Sin problema. ¿Qué días y horas te irían mejor? Se lo paso al reclutador.
+preferred_times_noted: Apuntado. Un reclutador te escribirá para fijar la entrevista.
+handoff_disqualified: Lo he anotado para el equipo de selección. Si ven algo que revisar, te escribirán.
 retype_hint: Perdona, lo había entendido mal. ¿Me lo escribes otra vez?
 weekdays: lun,mar,mié,jue,vie,sáb,dom
 slot_format: "{weekday} {day}/{month} {time}"
@@ -79,6 +81,7 @@ label_start_date: Inicio
 value_moto: moto
 value_car: coche
 value_both: moto y coche
+value_no_license: sin carnet
 value_full_time: jornada completa
 value_part_time: media jornada
 value_weekends: fines de semana

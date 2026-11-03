@@ -41,6 +41,15 @@ class CountryLicenseRules(BaseModel):
     conditional: list[LicenseRule] = Field(default_factory=list)
 
 
+class DaysOnlyRule(BaseModel):
+    """Availability answers that only name days, e.g. "entre semana": neither full nor part time."""
+
+    phrases: list[str] = Field(default_factory=list)
+    unless: list[str] = Field(
+        default_factory=list, description="Words that do say how much: then the answer counts."
+    )
+
+
 class InterviewConfig(BaseModel):
     slot_times: list[str] = Field(default_factory=lambda: ["10:00", "12:00", "17:00"])
     offer_count: int = 3
@@ -84,6 +93,7 @@ class ClientConfig(BaseModel):
         description="A place not in the config but this close to a served city goes to review "
         "(after the candidate confirms it); farther away is outside the area.",
     )
+    availability_days_only: DaysOnlyRule = Field(default_factory=DaysOnlyRule)
     max_abuse_strikes: int = 2
     far_start_days: int = 60
     reminder_hours: list[float] = Field(default_factory=lambda: [2.0, 24.0])

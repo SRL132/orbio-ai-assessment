@@ -93,7 +93,26 @@ def validate_full_name(full_name: str | None) -> Outcome:
     return Outcome.valid(full_name=cleaned)
 
 
-def validate_license(has_license: bool | None, vehicle: Vehicle | None) -> Outcome:
+# A license category as written on the card: AM, A1, A2, A, B, C1, BE... (a word like "moto" or
+# "coche" is a vehicle, not a category, and would wrongly fail the per-country license rules).
+_LICENSE_CODE = re.compile(r"[A-Z]{1,2}[0-9]?(\+?E)?")
+_LICENSE_WORDS = re.compile(r"^(tipo|clase|categoria|carnet|licencia|permiso|de)\s+")
+
+
+def license_code(license_type: str | None) -> str | None:
+    """'B' -> 'B', 'tipo A2' -> 'A2', 'moto' -> None."""
+    if not license_type:
+        return None
+    text = normalize(license_type)
+    while (stripped := _LICENSE_WORDS.sub("", text)) != text:
+        text = stripped
+    code = text.upper().replace(" ", "")
+    return code if _LICENSE_CODE.fullmatch(code) else None
+
+
+def validate_license(
+    has_license: bool | None, vehicle: Vehicle | None, license_type: str | None = None
+) -> Outcome:
     if has_license is None and vehicle is not None:
         has_license = True  # answering "Moto" / "Coche" / "Ambos" is a yes
     if has_license is None:
@@ -102,6 +121,10 @@ def validate_license(has_license: bool | None, vehicle: Vehicle | None) -> Outco
         return Outcome.knockout(Reason.NO_LICENSE)
     if vehicle is None:
         return Outcome.invalid("vehicle_missing", has_license=True)
+    if license_type is not None:
+        return Outcome.valid(
+            has_license=True, vehicle=vehicle, license_type=license_code(license_type)
+        )
     return Outcome.valid(has_license=True, vehicle=vehicle)
 
 
