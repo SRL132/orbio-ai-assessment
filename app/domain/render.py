@@ -215,8 +215,14 @@ def recap_spoken(candidate: Candidate, config: ClientConfig, language: Language)
 # --- Helpers --------------------------------------------------------------------------------------
 
 
+# ", {name}" / " {name}" before punctuation: dropped when the name isn't known yet.
+_NAME_SLOT = re.compile(r",?\s*\{name\}(?=\s*[.!?,;:])")
+
+
 def _fill(template: str, state: ConversationState, config: ClientConfig, **extra: str) -> str:
     first_name = (state.candidate.full_name or "").split(" ")[0]
+    if not first_name:  # "Gracias, {name}." without a name would read "Gracias, ."
+        template = _NAME_SLOT.sub("", template)
     return template.format(
         name=first_name,
         persona=config.persona.name,

@@ -154,6 +154,40 @@ def is_known_place(place: str, config: ClientConfig) -> bool:
     )
 
 
+# Answers spelled the same in Spanish and English: on their own they don't switch the language.
+_SAME_IN_BOTH = frozenset({"ok", "okay", "flexible", "no", "moto", "normal", "total"})
+
+
+def says_no_language(text: str, config: ClientConfig, names: list[str]) -> bool:
+    """The message is only proper names (served places, platforms, the candidate's own name),
+    numbers and words spelled the same in both languages, e.g. "madrid tetuan", "Glovo, 2" or
+    "flexible": it can't tell which language they're using."""
+
+    def words(t: str) -> str:
+        return " ".join(re.sub(r"[^a-z0-9]+", " ", normalize(t)).split())
+
+    rest = f" {words(text)} "
+    known = [
+        *(n for loc in config.locations for n in [loc.city, *loc.aliases, *loc.zones, *loc.nearby]),
+        *config.known_platforms,
+        *names,
+    ]
+    for name in sorted({words(n) for n in known if n}, key=len, reverse=True):
+        rest = rest.replace(f" {name} ", " ")
+    return all(word.isdigit() or word in _SAME_IN_BOTH for word in rest.split())
+
+
+_ZONE_PREFIX = re.compile(r"^(barrio|colonia|col|distrito|el|la|los|las|l|the)\b\s*")
+
+
+def _zone_key(zone: str) -> str:
+    """A zone without the words around its name: 'La Condesa', 'colonia Condesa' -> 'condesa'."""
+    text = " ".join(re.sub(r"[^a-z0-9]+", " ", normalize(zone)).split())
+    while (stripped := _ZONE_PREFIX.sub("", text, count=1)) != text:
+        text = stripped
+    return text or normalize(zone)
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance (haversine)."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -218,8 +252,8 @@ def validate_location(
             if not served_city.zones:
                 return Outcome.valid(location_id=served_city.id, city=served_city.city, zone=zone)
             if zone:
-                served = {normalize(z) for z in served_city.zones}
-                if normalize(zone) in served:
+                listed = {_zone_key(z) for z in served_city.zones}
+                if _zone_key(zone) in listed:  # "La Condesa" is the listed "Condesa"
                     return Outcome.valid(
                         location_id=served_city.id, city=served_city.city, zone=zone
                     )

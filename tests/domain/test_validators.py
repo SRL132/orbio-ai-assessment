@@ -15,6 +15,7 @@ from app.domain.validators import (
     nearest_location,
     normalize,
     normalize_platforms,
+    says_no_language,
     validate_availability,
     validate_experience,
     validate_full_name,
@@ -295,3 +296,30 @@ def test_license_type_is_kept_only_as_a_license_code(written: str, code: str | N
     assert license_code(written) == code
     outcome = validate_license(True, Vehicle.MOTO, written)
     assert outcome.updates["license_type"] == code
+
+
+@pytest.mark.parametrize(
+    ("text", "neutral"),
+    [
+        ("madrid tetuan", True),
+        ("Roma, CDMX", True),
+        ("L'Hospitalet de Llobregat", True),
+        ("Glovo, 2", True),
+        ("Marta Ruiz", True),
+        ("28020", True),
+        ("flexible", True),  # same word in both languages
+        ("vivo en madrid", False),
+        ("i live in madrid", False),
+        ("sí", False),
+        ("Pedro", False),  # not the candidate's name: could be anything
+    ],
+)
+def test_names_and_numbers_say_no_language(text: str, neutral: bool) -> None:
+    assert says_no_language(text, CONFIG, ["Marta", "Ruiz"]) is neutral
+
+
+@pytest.mark.parametrize("said", ["La Condesa", "colonia Condesa", "condesa", "la  condesa"])
+def test_listed_zone_matches_with_an_article_or_prefix(said: str) -> None:
+    outcome = validate_location("CDMX", said, None, CONFIG)
+    assert outcome.kind == "valid"
+    assert outcome.updates["location_id"] == "mx-cdmx"

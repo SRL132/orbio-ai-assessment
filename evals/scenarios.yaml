@@ -566,3 +566,43 @@
     status: in_progress
     later_replies_avoid: ["^\\W*(hola|hi|hello)\\b", "para empezar"]
 
+
+# --- Found by the second round of adversarial testing (2026-11-03) -----------------------------
+
+- id: hedged_availability_left_out
+  description: '"Jornada completa, quizá algún fin de semana": the hedged weekends are left out, full time is kept.'
+  requires_llm: true
+  persona: Lucía Romero, Chamberí (Madrid), moto. Full time for sure; weekends only maybe.
+  steps: [Sí, Lucía Romero, Moto, "Madrid, Chamberí", "jornada completa, quizá algún fin de semana"]
+  expect:
+    status: in_progress
+    fields: {availability: [full_time]}
+
+- id: catalan_never_is_not_a_name
+  description: Answers the experience question with Catalan "Mai" (never); it isn't read as a new name.
+  requires_llm: true
+  persona: Jordi Soler, Gràcia (Barcelona), car. Writes some answers in Catalan. Full time, evenings, never delivered, starts tomorrow.
+  steps: [Sí, Jordi Soler, Coche, "Barcelona, Gràcia", Jornada completa, Noches, Mai, Demà, Sí]
+  expect:
+    status: qualified
+    fields: {full_name: Jordi Soler, experience_years: 0, start_date: "2026-11-03"}
+
+- id: no_slot_fits_gives_preferred_times
+  description: None of the offered interview times works; asked which would, the answer is passed to the recruiter.
+  persona: Diego Navarro, Condesa (CDMX), moto. Full time, evenings, one year on Rappi, starts tomorrow. No offered time works; prefers Tuesday afternoons.
+  steps: [Sí, Diego Navarro, Moto, "CDMX, Condesa", Jornada completa, Noches, 1 año en Rappi, mañana, Sí, ninguno, los martes por la tarde]
+  expect:
+    status: qualified
+    interview_booked: false
+    events_include: [no_slot_fits, preferred_times_given]
+    reply_contains: ["Apuntado"]
+
+- id: human_after_knockout
+  description: Turned away for having no license, then asks for a person. The knockout stands; the request is logged.
+  persona: Raúl Ortega, no driving license. After the rejection he asks to talk to a real person.
+  steps: [Sí, Raúl Ortega, No tengo carnet, quiero hablar con una persona]
+  expect:
+    status: disqualified
+    disqualify_reason: no_license
+    events_include: [human_requested]
+    reply_contains: ["equipo de selección"]

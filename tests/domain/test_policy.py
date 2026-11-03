@@ -198,3 +198,15 @@ def test_an_availability_that_only_names_days_is_asked_again(
     assert (state.candidate.availability == [Availability.PART_TIME]) is kept
     if not kept:
         assert result.rejected[FieldName.AVAILABILITY] == "days_only"
+
+
+@pytest.mark.parametrize("junk", ["000", "!!!", "0"])
+def test_junk_is_not_a_no_license_knockout(
+    junk: str, state: ConversationState, config: ClientConfig
+) -> None:
+    fields = ExtractedFields.model_validate(
+        {"has_license": {"value": False, "quote": junk, "confidence": 0.9}}
+    )
+    result = apply_extraction(state, fields, config, TODAY, message=junk)
+    assert result.knockout is None
+    assert state.candidate.has_license is None

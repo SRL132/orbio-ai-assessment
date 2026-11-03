@@ -475,3 +475,29 @@ def test_the_answer_to_the_question_asked_is_applied_at_once(chat: Chat) -> None
     chat.say(ex(full_name="Ana García"))
     assert chat.state.candidate.full_name == "Ana García"
     assert chat.state.confirming is None
+
+
+def test_place_names_alone_keep_the_language(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Marta Ruiz", language="en"))
+    chat.say(ex(has_license=True, vehicle=Vehicle.CAR, language="en"), text="i have a car")
+    chat.say(ex(city="Madrid", zone="Tetuán", language="es"), text="madrid tetuan")
+    assert chat.state.language == "en"
+
+
+def test_knockout_before_the_name_reads_well(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(has_license=False))
+    assert chat.result.replies[-1].startswith("Gracias. Para este puesto")
+
+
+def test_keep_on_file_is_not_asked_forever(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=False))
+    for _ in range(chat.config.max_attempts):
+        chat.say(ex(), text="...")
+        assert chat.state.stage == Stage.KEEP_ON_FILE
+    chat.say(ex(), text="...")
+    assert chat.state.stage == Stage.CLOSED
+    assert chat.state.keep_on_file is False  # nothing kept without a yes
+    assert chat.result.replies[-1] == chat.config.template("es", "keep_on_file_no")

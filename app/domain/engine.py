@@ -62,7 +62,12 @@ from app.domain.policy import (
 from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
-from app.domain.validators import final_review_reasons, is_known_place, nearest_location
+from app.domain.validators import (
+    final_review_reasons,
+    is_known_place,
+    nearest_location,
+    says_no_language,
+)
 
 # The field each knockout comes from: a different answer to it reopens the screening.
 _KNOCKOUT_FIELDS = {Reason.NO_LICENSE: FieldName.LICENSE, Reason.OUTSIDE_AREA: FieldName.LOCATION}
@@ -140,7 +145,9 @@ def turn(
         return _finish(t)
     t.state.llm_failures, t.state.retry_turn_at = 0, None
 
-    t.state.language = extraction.language
+    own_name = (t.state.candidate.full_name or "").split()
+    if not says_no_language(message.text, config, own_name):  # "madrid tetuan" keeps the language
+        t.state.language = extraction.language
     if extraction.sensitive_data:
         t.redact = True
         t.say("sensitive_data")
@@ -446,13 +453,16 @@ def _on_keep_on_file(t: _Turn, extraction: ExtractionResult) -> None:
         _reopen_after_knockout(t, knocked_out)
         _on_answers(t, extraction)
         return
-    if extraction.yes_no is None:
+    keep = extraction.yes_no
+    if keep is None and t.state.keep_on_file_reasks < t.config.max_attempts:
+        t.state.keep_on_file_reasks += 1
         t.say("keep_on_file_reask")
         return
-    t.state.keep_on_file = extraction.yes_no
+    # Still no clear answer: nothing is kept without a yes, and the question isn't asked forever.
+    t.state.keep_on_file = bool(keep)
     t.state.stage = Stage.CLOSED
-    t.event(EventType.KEEP_ON_FILE, value=extraction.yes_no)
-    t.say("keep_on_file_yes" if extraction.yes_no else "keep_on_file_no")
+    t.event(EventType.KEEP_ON_FILE, value=keep)
+    t.say("keep_on_file_yes" if keep else "keep_on_file_no")
 
 
 def _corrected_knockout(t: _Turn, extraction: ExtractionResult) -> FieldName | None:

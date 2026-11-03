@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 53,
+    "passed": 55,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -88,6 +88,12 @@
         "replies_failed": 0,
         "turns": 2
       },
+      "human_after_knockout": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 4
+      },
       "invalid_2_first_name_only_twice": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -110,7 +116,7 @@
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
-        "turns": 6
+        "turns": 7
       },
       "invalid_6_corrects_at_recap": {
         "field_accuracy": 1.0,
@@ -195,6 +201,12 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 4
+      },
+      "no_slot_fits_gives_preferred_times": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
       },
       "outside_area": {
         "field_accuracy": 1.0,
@@ -320,9 +332,9 @@
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
-        "turns": 4
+        "turns": 5
       }
     },
-    "total": 53
+    "total": 55
   }
 }

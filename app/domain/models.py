@@ -233,6 +233,7 @@ class ConversationState(BaseModel):
     no_slot_fits: bool = False
     preferred_times: str | None = None  # their words, after no offered slot fit
     human_after_knockout: bool = False  # asked for a person after a knockout (status stands)
+    keep_on_file_reasks: int = 0  # unclear answers to "shall we keep your details?"
     dropped_at: str | None = Field(
         default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
     )

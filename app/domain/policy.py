@@ -120,6 +120,11 @@ def has_words(message: str) -> bool:
     return bool(_plain(message))
 
 
+def _has_letters(message: str) -> bool:
+    """Numbers and symbols alone ("000", "!!!") can't say whether someone has a license."""
+    return any(ch.isalpha() for ch in message)
+
+
 def _grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
     """Every value proposed for this field quotes words the candidate actually wrote.
 
@@ -306,6 +311,8 @@ def apply_extraction(
             and _days_only(fields, config)
         ):
             outcome = Outcome.invalid("days_only")
+        if outcome.kind == "knockout" and name == FieldName.LICENSE and not _has_letters(message):
+            outcome = Outcome.invalid("unclear")  # "000" is junk, not "I have no license"
         grounded = _grounded(fields, name, message)
         if not grounded and outcome.kind in ("knockout", "valid"):
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
