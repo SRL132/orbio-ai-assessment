@@ -183,7 +183,7 @@ _ZONE_PREFIX = re.compile(r"^(barrio|colonia|col|distrito|el|la|los|las|l|the)\b
 def _zone_key(zone: str) -> str:
     """A zone without the words around its name: 'La Condesa', 'colonia Condesa' -> 'condesa'."""
     text = " ".join(re.sub(r"[^a-z0-9]+", " ", normalize(zone)).split())
-    while (stripped := _ZONE_PREFIX.sub("", text, count=1)) != text:
+    while (stripped := _ZONE_PREFIX.sub("", text)) != text:
         text = stripped
     return text or normalize(zone)
 
@@ -278,7 +278,7 @@ def validate_location(
         return validate_location(zone, None, postal_code, config)
     if zone and geo is not None and normalize(geo.place) == normalize(zone):
         # An unlisted place given alone: look it up like a city ("Móstoles", "Vallecas").
-        return validate_location(zone, None, postal_code, config, geo)
+        return _geocoded(zone, None, geo, config)
     if pc:
         return Outcome.invalid("city_missing", postal_code=pc)
     return Outcome.invalid("missing")

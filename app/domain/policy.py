@@ -177,9 +177,9 @@ def _days_only(fields: ExtractedFields, config: ClientConfig) -> bool:
     part time, so the value the model chose for it isn't the candidate's (client config)."""
     extracted = fields.availability
     rule = config.availability_days_only
-    if extracted is None or not rule.phrases:
+    if extracted is None:
         return False
-    said = f" {_plain(extracted.quote or '')} "
+    said = f" {_plain(extracted.quote)} "
     names_days = any(f" {_plain(p)} " in said for p in rule.phrases)
     return names_days and not any(f" {_plain(w)} " in said for w in rule.unless)
 
@@ -335,7 +335,7 @@ def apply_extraction(
                 field=name,
                 values={**proposals, **outcome.updates},
                 outcome=outcome.kind,
-                reason=outcome.reason if isinstance(outcome.reason, Reason) else None,
+                reason=outcome.verdict if outcome.kind != "valid" else None,
                 note=outcome.note,
                 quote=quote,
                 confidence=confidence,
