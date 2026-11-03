@@ -38,6 +38,22 @@ def test_name_answer(collecting: ConversationState, config: ClientConfig) -> Non
     assert result.fields.full_name.value == "Ana López"
 
 
+def test_a_no_to_a_read_back_name_is_not_a_name(
+    collecting: ConversationState, config: ClientConfig
+) -> None:
+    result = extract(collecting, config, "no", FieldName.FULL_NAME)
+    assert result.yes_no is False
+    assert result.fields.full_name is None
+
+
+def test_an_unlisted_town_drops_the_lead_in(
+    collecting: ConversationState, config: ClientConfig
+) -> None:
+    result = extract(collecting, config, "vivo en ghost", FieldName.LOCATION)
+    assert result.fields.city is not None
+    assert result.fields.city.value == "ghost"
+
+
 @pytest.mark.parametrize(
     ("text", "has_license", "vehicle"),
     [

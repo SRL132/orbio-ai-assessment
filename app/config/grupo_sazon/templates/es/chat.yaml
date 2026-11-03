@@ -50,6 +50,7 @@ offer_slots: |-
 interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la dirección del local. ¡Hasta pronto!
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
 no_slot_fits: Sin problema, un reclutador te escribirá para buscar otro horario.
+retype_hint: Perdona, lo había entendido mal. ¿Me lo escribes otra vez?
 weekdays: lun,mar,mié,jue,vie,sáb,dom
 slot_format: "{weekday} {day}/{month} {time}"
 needs_review: ¡Gracias, {name}! Un reclutador revisará tu candidatura y te escribirá en 2 días laborables.

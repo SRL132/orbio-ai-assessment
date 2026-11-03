@@ -25,3 +25,4 @@ slot_format: "{weekday} {day} a las {time}"
 slot_ordinals: la primera,la segunda,la tercera,la cuarta,la quinta
 months: enero,febrero,marzo,abril,mayo,junio,julio,agosto,septiembre,octubre,noviembre,diciembre
 date_format: "{day} de {month}"
+retype_hint: Perdona, por voz a veces entiendo mal nombres y lugares. ¿Me lo escribes en el cuadro de texto de abajo?

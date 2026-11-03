@@ -236,13 +236,15 @@ class KeywordExtractor:
         )
         if name:
             put("full_name", name.group(1).strip(" .!"))
-        elif awaiting == FieldName.FULL_NAME and re.fullmatch(
-            r"[^\W\d_]+(?:[\s'-][^\W\d_]+){0,4}", text.strip()
+        elif (
+            awaiting == FieldName.FULL_NAME
+            and yes_no is None
+            and re.fullmatch(r"[^\W\d_]+(?:[\s'-][^\W\d_]+){0,4}", text.strip())
         ):
             put("full_name", text.strip())
 
         self._license(t, awaiting, put)
-        self._location(text, t, awaiting, config, put)
+        self._location(text, t, awaiting if yes_no is None else None, config, put)
         self._availability(t, config, put)
         if awaiting == FieldName.SCHEDULE or _has(
             t, "morning", "afternoon", "evening", "noches", "tardes", "mananas"
@@ -329,7 +331,13 @@ class KeywordExtractor:
                     zone = z
         postal = re.search(r"\b\d{5}\b", t)
         if awaiting == FieldName.LOCATION and city is None and zone is None and not postal:
-            words = [w for w in re.split(r"[,.\s]+", text.strip()) if w]
+            place = re.sub(
+                r"^(?:vivo en|soy de|estoy en|en|i live in|i'm in|in)\s+",
+                "",
+                text.strip(),
+                flags=re.I,
+            )
+            words = [w for w in re.split(r"[,.\s]+", place) if w]
             if 0 < len(words) <= 3 and all(w.isalpha() for w in words):
                 city = " ".join(words)
         if city:

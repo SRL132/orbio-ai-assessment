@@ -376,6 +376,7 @@ SayTemplate = Literal[
     "qualified_no_slots",
     "slot_taken",
     "no_slot_fits",
+    "retype_hint",
 ]
 
 

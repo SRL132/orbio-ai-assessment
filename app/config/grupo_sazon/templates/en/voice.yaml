@@ -24,3 +24,4 @@ slot_format: "{weekday} the {day} at {time}"
 slot_ordinals: the first,the second,the third,the fourth,the fifth
 months: January,February,March,April,May,June,July,August,September,October,November,December
 date_format: "{month} {day}"
+retype_hint: Sorry, by voice I sometimes mishear names and places. Could you type it in the text box below?

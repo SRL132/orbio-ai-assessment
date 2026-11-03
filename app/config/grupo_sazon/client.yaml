@@ -52,6 +52,10 @@ known_platforms:
 geo_review_radius_km: 30
 # Values the model is less sure of than this are confirmed with the candidate (yes/no) first.
 confirm_below_confidence: 0.5
+# On a call, speech recognition mishears names and towns ("Gostivar" -> "Ghost") and the model
+# can't tell, so these are always read back, knockouts included. A "no" asks them to type it.
+always_confirm:
+  voice: [full_name, location]
 
 locations:
   - id: es-madrid

@@ -95,15 +95,28 @@ function bubble(direction, text) {
 }
 
 // --- Speaking -----------------------------------------------------------------------------------
+// Chrome sometimes never fires onend/onerror (long texts, voices not loaded yet), which would leave
+// the call stuck on "Lucía está hablando…" with the mic disabled. A watchdog sized to the text ends
+// the turn anyway, and a periodic resume() keeps Chrome from silently pausing long utterances.
 function browserSpeak(text) {
   return new Promise((resolve) => {
+    let done = false, keepAlive = null, watchdog = null;
+    const finish = () => {
+      if (done) return;
+      done = true; clearInterval(keepAlive); clearTimeout(watchdog);
+      if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+      resolve();
+    };
     const u = new SpeechSynthesisUtterance(text);
     u.lang = language === "en" ? "en-US" : "es-ES";
     const voice = speechSynthesis.getVoices().find(v => v.lang.startsWith(language));
     if (voice) u.voice = voice;
     u.rate = 1.05;
-    u.onend = resolve; u.onerror = resolve;
+    u.onend = finish; u.onerror = finish;
+    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();  // clear a wedged queue
     speechSynthesis.speak(u);
+    keepAlive = setInterval(() => { if (speechSynthesis.speaking) speechSynthesis.resume(); }, 10000);
+    watchdog = setTimeout(finish, 4000 + text.length * 90);
   });
 }
 
@@ -157,7 +170,12 @@ async function send(text) {
   if (!text || !conversationId) return;
   caption.textContent = "";
   setState(language === "en" ? "Thinking…" : "Un momento…");
-  await api(`/api/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+  try {
+    await api(`/api/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+  } catch {
+    setState(language === "en" ? "Couldn't send, try again" : "No se pudo enviar, inténtalo de nuevo");
+    return;
+  }
   await poll();
 }
 

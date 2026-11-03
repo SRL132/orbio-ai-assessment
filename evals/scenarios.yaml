@@ -188,7 +188,7 @@
   description: Voice call, cooperative caller who reads out a postal code.
   channel: voice
   persona: Ana López on a voice call. Lives in Madrid, postal code 28010. Moto license. Full time, evenings. Two years on Glovo. Starts tomorrow. Speaks Spanish casually.
-  steps: [sí, ana lópez, de moto, vivo en madrid código postal veintiocho cero uno cero, jornada completa, por las noches, dos años en glovo, mañana, sí]
+  steps: [sí, ana lópez, sí, de moto, vivo en madrid código postal veintiocho cero uno cero, sí, jornada completa, por las noches, dos años en glovo, mañana, sí]
   expect:
     status: qualified
     fields: {full_name: Ana López, vehicle: moto, location_id: es-madrid, postal_code: "28010", experience_years: 2, platforms: [Glovo]}
@@ -197,7 +197,7 @@
   description: Voice call, no license; spoken knockout and keep-on-file question.
   channel: voice
   persona: Luis Pérez on a voice call. Has no driving license. Doesn't want his details kept.
-  steps: [sí, luis pérez, no tengo carnet, "no"]
+  steps: [sí, luis pérez, sí, no tengo carnet, "no"]
   expect:
     status: disqualified
     disqualify_reason: no_license
@@ -207,11 +207,25 @@
   description: Voice call that ends by booking an interview slot by saying "la segunda".
   channel: voice
   persona: Diego Navarro on a voice call. Has moto and car licenses. Lives in Condesa (Mexico City). Weekends, flexible hours, one year on Rappi, starts the day after tomorrow. Picks the second interview time.
-  steps: [vale, diego navarro, las dos, cdmx en la condesa, fines de semana, flexible, un año en rappi, pasado mañana, correcto, la segunda]
+  steps: [vale, diego navarro, sí, las dos, cdmx en la condesa, sí, fines de semana, flexible, un año en rappi, pasado mañana, correcto, la segunda]
   expect:
     status: qualified
     interview_booked: true
     fields: {vehicle: both, location_id: mx-cdmx, experience_years: 1, start_date: "2026-11-04"}
+
+- id: voice_misheard_name
+  description: Voice call where speech recognition garbles a foreign name. The name is read back; after a no she types it. "empezamos" is consent, not a start date. Her town is read back before the outside-area knockout.
+  channel: voice
+  persona: Aleksandra Zdravkovic on a voice call, lives in Bilbao. Car license. The recogniser mishears her name, so she says no when it's read back and types it instead. Doesn't want her details kept.
+  steps: [empezamos, alexandras lazkoz, "no", Aleksandra Zdravkovic, sí, tengo de coche, vivo en bilbao, sí, "no"]
+  expect:
+    status: disqualified
+    disqualify_reason: outside_area
+    keep_on_file: false
+    events_include: [confirmation_asked]
+    reply_contains: [cuadro de texto]
+    fields: {full_name: Aleksandra Zdravkovic}
+    field_status: {start_date: missing}
 
 # --- Edge-case ladders (docs/process-design.md, "Edge cases"). Each one goes from mild to
 # extreme. `requires_llm` scenarios need a real model to understand the candidate, so the offline
@@ -497,9 +511,9 @@
   description: On a voice call, asks to continue in English; every spoken reply follows.
   channel: voice
   persona: Marta Ruiz on a voice call. Tetuán (Madrid), car. Asks for English right after her name. Full time, flexible, never delivered, starts next week.
-  steps: [sí, marta ruiz, sorry can we continue in english, i have a car, madrid tetuan, full time, flexible, never, next week, "yes"]
+  steps: [sí, marta ruiz, sí, sorry can we continue in english, i have a car, madrid tetuan, "yes", full time, flexible, never, next week, "yes"]
   expect:
     status: qualified
     language: en
-    reply_languages: [es, es, en, en, en, en, en, en, en, en]
+    reply_languages: [es, es, es, en, en, en, en, en, en, en, en, en]
     fields: {vehicle: car, location_id: es-madrid, start_date: "2026-11-09"}

@@ -199,6 +199,8 @@ def test_channel_filter_and_analytics(logged_in: TestClient, container: Containe
     container.service.process_pending(voice)
     container.service.receive(voice, "carla soto")
     container.service.process_pending(voice)
+    container.service.receive(voice, "sí")  # voice reads the name back before it counts
+    container.service.process_pending(voice)
     chat(container, "sí", "Pablo Gil")
     page = logged_in.get("/dashboard?channel=voice").text
     assert "Carla Soto" in page

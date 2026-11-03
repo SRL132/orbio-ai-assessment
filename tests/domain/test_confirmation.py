@@ -19,6 +19,7 @@ from app.domain.models import (
     ReAsk,
     Reason,
     ReviewReason,
+    Say,
     Stage,
     Status,
     Vehicle,
@@ -247,3 +248,84 @@ def test_confirming_in_the_recap_shows_the_recap_again(chat: Chat) -> None:
     assert chat.state.candidate.full_name == "Ana María López"
     chat.say(ex(yes_no=True))
     assert chat.state.status == Status.QUALIFIED
+
+
+# --- Voice: names and places are always read back ------------------------------------------------
+
+
+@pytest.fixture
+def voice_chat(config: ClientConfig, ports: Ports, extractor: ScriptedExtractor) -> Chat:
+    state = ConversationState(client_id=config.client_id, channel="voice")
+    chat = Chat(state, config, ports, extractor)
+    chat.say(ex(yes_no=True))
+    return chat
+
+
+def test_voice_reads_back_a_name_the_model_is_sure_of(voice_chat: Chat) -> None:
+    # Speech recognition heard "Aleksandra Zdravkovic" as this; the model can't tell.
+    voice_chat.say(ex(full_name="Alexandras Lazkoz"))
+    assert voice_chat.state.candidate.full_name is None
+    assert ConfirmField(field=FieldName.FULL_NAME) in voice_chat.result.actions
+    asked = [e for e in voice_chat.result.events if e.type == EventType.CONFIRMATION_ASKED]
+    assert asked[0].data == {"field": "full_name", "why": "channel"}
+
+
+def test_voice_does_not_reject_a_misheard_town_without_a_check(voice_chat: Chat) -> None:
+    voice_chat.say(ex(full_name="Aleksandra Zdravkovic"))
+    voice_chat.say(ex(yes_no=True))
+    voice_chat.say(ex(has_license=True, vehicle=Vehicle.CAR))
+    voice_chat.say(ex(city="Ghost"))  # "Gostivar", misheard: not a served city
+    assert voice_chat.state.status == Status.IN_PROGRESS
+    assert ConfirmField(field=FieldName.LOCATION) in voice_chat.result.actions
+    voice_chat.say(ex(yes_no=True))  # now it's their answer, not the recogniser's
+    assert voice_chat.state.status == Status.DISQUALIFIED
+    assert voice_chat.state.disqualify_reason == Reason.OUTSIDE_AREA
+
+
+def test_voice_no_to_a_read_back_asks_to_type_it(voice_chat: Chat) -> None:
+    voice_chat.say(ex(full_name="Alexandras Lazkoz"))
+    voice_chat.say(ex(yes_no=False))
+    assert Say(template="retype_hint") in voice_chat.result.actions
+    [hint] = voice_chat.result.replies  # the hint is the question: no second "Perdona…"
+    assert "cuadro de texto" in hint
+    assert voice_chat.state.awaiting == FieldName.FULL_NAME
+    voice_chat.say(ex(full_name="Aleksandra Zdravkovic"))  # typed in the box: read back too
+    assert ConfirmField(field=FieldName.FULL_NAME) in voice_chat.result.actions
+    voice_chat.say(ex(yes_no=True))
+    assert voice_chat.state.candidate.full_name == "Aleksandra Zdravkovic"
+
+
+def test_voice_applies_other_sure_answers_at_once(voice_chat: Chat) -> None:
+    voice_chat.say(ex(full_name="Ana López"))
+    voice_chat.say(ex(yes_no=True))
+    voice_chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
+    assert voice_chat.state.candidate.vehicle == Vehicle.MOTO
+    assert voice_chat.state.confirming is None
+
+
+def test_chat_no_to_a_read_back_just_asks_again(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(unsure(full_name="Ana López"))
+    chat.say(ex(yes_no=False))
+    assert Say(template="retype_hint") not in chat.result.actions
+
+
+def test_answering_the_next_question_is_not_a_no_to_the_read_back(voice_chat: Chat) -> None:
+    voice_chat.say(ex(full_name="Luis Pérez"))
+    no_license = ex(has_license=False)
+    no_license.fields.has_license.quote = "no tengo carnet"  # type: ignore[union-attr]
+    voice_chat.say(no_license, text="no tengo carnet")
+    assert Say(template="retype_hint") not in voice_chat.result.actions
+    assert voice_chat.state.status == Status.DISQUALIFIED
+    assert voice_chat.state.disqualify_reason == Reason.NO_LICENSE
+
+
+def test_voice_never_applies_a_place_unchecked_while_another_is_pending(
+    voice_chat: Chat,
+) -> None:
+    voice_chat.say(ex(full_name="Aleksandra Zdravkovic"))
+    voice_chat.say(ex(has_license=True, vehicle=Vehicle.CAR, city="Ghost"))
+    assert voice_chat.state.status == Status.IN_PROGRESS  # not rejected on an unchecked place
+    assert voice_chat.state.candidate.vehicle == Vehicle.CAR
+    assert voice_chat.state.candidate.city is None
+    assert ConfirmField(field=FieldName.FULL_NAME) in voice_chat.result.actions

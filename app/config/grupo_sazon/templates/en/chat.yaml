@@ -48,6 +48,7 @@ offer_slots: |-
 interview_booked: Done! Your interview is on {when}. We'll send you the restaurant's address. See you soon!
 slot_taken: Oops, that time was just taken. Here are some others.
 no_slot_fits: No problem, a recruiter will write to you to find another time.
+retype_hint: Sorry, I got that wrong. Could you write it again?
 weekdays: Mon,Tue,Wed,Thu,Fri,Sat,Sun
 slot_format: "{weekday} {day}/{month} {time}"
 needs_review: Thanks, {name}! A recruiter will review your application and write to you within 2 working days.

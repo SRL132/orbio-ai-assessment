@@ -53,6 +53,7 @@ from app.domain.policy import (
     apply_confirmed,
     apply_extraction,
     has_words,
+    must_confirm,
     next_missing_field,
     progress,
     register_failed_attempt,
@@ -289,6 +290,11 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
     # Code decides: a "yes" only confirms if the candidate actually wrote something.
     said_yes = extraction.yes_no is True and has_words(t.message)
     corrected = not said_yes and any(getattr(extraction.fields, attr) is not None for attr in group)
+    others = [a for a in type(extraction.fields).model_fields if a not in group]
+    if not said_yes and not corrected and any(getattr(extraction.fields, a) for a in others):
+        # They answered the next question instead ("no tengo carnet" after "Luis Pérez,
+        # ¿correcto?"): that "no" isn't about our value. Apply the answer, keep ours pending.
+        return extraction.fields
     if said_yes:
         applied = apply_confirmed(t.state)
         t.events.extend(applied.events)
@@ -310,6 +316,13 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
             t.actions.append(Recap())  # keep the answer they had before the correction
             return None
         t.state.awaiting = pending.field
+        # Misheard by speech recognition: ask them to type it (still one attempt), so saying it
+        # again doesn't loop. Once the field gives up, _ask_next moves on as usual.
+        if must_confirm(pending.field, t.state, t.config) and _count_unusable_answer(
+            t, extraction, ApplyResult()
+        ):
+            t.say("retype_hint")
+            return None
         _ask_next(t, extraction, ApplyResult())  # counts the attempt and asks again
         return None
     if extraction.intent in _ANSWER_INTENTS:

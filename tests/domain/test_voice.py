@@ -76,15 +76,20 @@ def test_voice_conversation_end_to_end(
 
     state = engine.start(voice_state, config, ports).state
     replies: list[str] = []
-    for extraction in [
-        ex(yes_no=True),
-        ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO),
-        ex(city="Sevilla", availability=[Availability.WEEKENDS], schedule=[Schedule.MORNING]),
-        ex(experience_years=0, start_date=date(2026, 11, 5)),
+    for text, extraction in [
+        ("sí", ex(yes_no=True)),
+        ("ana lópez, de moto", ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO)),
+        ("sí", ex(yes_no=True)),  # voice reads the name back
+        (
+            "sevilla, fines de semana, mañanas",
+            ex(city="Sevilla", availability=[Availability.WEEKENDS], schedule=[Schedule.MORNING]),
+        ),
+        ("sí", ex(yes_no=True)),  # and the place
+        ("nunca, el jueves", ex(experience_years=0, start_date=date(2026, 11, 5))),
     ]:
         extractor.push(extraction)
         message = InboundMessage(
-            conversation_id=UUID(int=1), text="...", received_at=ports.clock.now()
+            conversation_id=UUID(int=1), text=text, received_at=ports.clock.now()
         )
         result = engine.turn(state, message, config, ports)
         state = result.state

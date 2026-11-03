@@ -73,6 +73,12 @@ class ClientConfig(BaseModel):
         description="A value the model is less sure of than this is confirmed with the "
         "candidate (yes/no) before it counts, including a knockout.",
     )
+    always_confirm: dict[Channel, list[FieldName]] = Field(
+        default_factory=dict,
+        description="Fields confirmed on this channel whatever the model's confidence. On voice "
+        "the model only sees the transcript, so it can be sure of a name or place that speech "
+        "recognition got wrong. If the candidate says no, they're asked to type it instead.",
+    )
     geo_review_radius_km: float = Field(
         default=30.0,
         description="A place not in the config but this close to a served city goes to review "

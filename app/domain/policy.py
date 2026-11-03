@@ -161,10 +161,28 @@ def _snapshot(candidate: Candidate, name: FieldName) -> tuple[object, ...]:
     return tuple(getattr(candidate, attr) for attr in FIELD_GROUPS[name])
 
 
-def _unsure(outcome: Outcome, confidence: float, config: ClientConfig) -> bool:
-    """Confirm with the candidate before this counts: the model wasn't sure, or the place came
-    from the geocoder (so they see which place we understood)."""
-    return outcome.note == "geocoded" or confidence < config.confirm_below_confidence
+def must_confirm(name: FieldName, state: ConversationState, config: ClientConfig) -> bool:
+    """This channel always reads the field back (voice: the transcript may be wrong)."""
+    return name in config.always_confirm.get(state.channel, [])
+
+
+def _why_confirm(
+    name: FieldName,
+    outcome: Outcome,
+    confidence: float,
+    state: ConversationState,
+    config: ClientConfig,
+) -> str | None:
+    """Why to confirm with the candidate before this counts, or None if it counts now: the place
+    came from the geocoder (so they see which place we understood), the channel always confirms
+    this field, or the model wasn't sure."""
+    if outcome.note == "geocoded":
+        return "geocoded"
+    if must_confirm(name, state, config):
+        return "channel"
+    if confidence < config.confirm_below_confidence:
+        return "low_confidence"
+    return None
 
 
 def _knock_out(
@@ -260,11 +278,16 @@ def apply_extraction(
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
         quote, confidence = _evidence(fields, name)
 
-        if (
-            outcome.kind != "invalid"
-            and state.confirming is None
-            and _unsure(outcome, confidence, config)
-        ):
+        why = (
+            _why_confirm(name, outcome, confidence, state, config)
+            if outcome.kind != "invalid"
+            else None
+        )
+        if why == "channel" and state.confirming is not None:
+            # Another value is being confirmed: this one isn't applied unchecked (on voice a
+            # misheard place could reject them). It stays missing and is asked for later.
+            continue
+        if why is not None and state.confirming is None:
             place = geo.found.label() if geo and geo.found and outcome.note == "geocoded" else None
             state.confirming = PendingConfirmation(
                 field=name,
@@ -277,7 +300,6 @@ def apply_extraction(
                 place=place,
             )
             result.confirm = name
-            why = "geocoded" if outcome.note == "geocoded" else "low_confidence"
             result.events.append(
                 DomainEvent(
                     type=EventType.CONFIRMATION_ASKED, data={"field": name.value, "why": why}
