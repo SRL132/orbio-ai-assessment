@@ -4,8 +4,8 @@ import pytest
 
 from app.adapters.config.yaml_loader import load_client_config
 from app.domain.config import ClientConfig
-from app.domain.models import Reason
-from app.domain.render import required_templates, template_problems
+from app.domain.models import Candidate, FieldName, Reason, Vehicle
+from app.domain.render import field_values, required_templates, template_problems
 from app.domain.summary import REASON_TEXT
 
 
@@ -50,3 +50,18 @@ def test_missing_template_stops_the_config_from_loading(tmp_path, config: Client
 
 def test_every_reason_has_a_description_for_recruiters() -> None:
     assert set(REASON_TEXT) == set(Reason)
+
+
+def test_recap_shows_the_license_type_and_years(config: ClientConfig) -> None:
+    candidate = Candidate(has_license=True, vehicle=Vehicle.MOTO, license_type="B", license_years=1)
+    values = field_values(candidate, config, "es")
+    assert values[FieldName.LICENSE] == "moto (tipo B, 1 año)"
+    candidate.license_years = None
+    assert field_values(candidate, config, "en")[FieldName.LICENSE] == "moto (B license)"
+
+
+def test_no_experience_reads_as_words_not_zero_years(config: ClientConfig) -> None:
+    candidate = Candidate(experience_years=0)
+    assert field_values(candidate, config, "es")[FieldName.EXPERIENCE] == "sin experiencia"
+    candidate.platforms = ["Glovo"]
+    assert field_values(candidate, config, "es")[FieldName.EXPERIENCE] == "0 años · Glovo"

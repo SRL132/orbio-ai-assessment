@@ -254,9 +254,54 @@ def test_confirming_the_recap_qualifies_even_if_known_answers_are_repeated(chat:
 
 
 def test_closed_conversation_gets_closing_message(chat: Chat) -> None:
-    chat.say(ex(yes_no=False))
+    chat.say(ex(yes_no=True))
+    chat.say(ex(intent="human_request"))
     chat.say(ex(full_name="Ana López"))
     assert chat.result.replies == [chat.config.template("es", "closed")]
+
+
+def test_closed_after_a_knockout_does_not_promise_a_recruiter(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=False))  # don't keep my details
+    chat.say(ex(intent="other"), text="vale")
+    assert chat.result.replies == [chat.config.template("es", "closed_disqualified")]
+
+
+def test_a_corrected_location_after_a_knockout_is_checked_again(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Bilbao"))
+    assert chat.state.status == Status.DISQUALIFIED
+    chat.say(ex(city="Madrid", zone="Chamberí"))
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.disqualify_reason is None
+    assert chat.state.candidate.city == "Madrid"
+    assert chat.state.awaiting == FieldName.AVAILABILITY
+    reopened = {
+        "from": "disqualified",
+        "to": "in_progress",
+        "reason": "knockout_corrected:outside_area",
+    }
+    assert reopened in [e.data for e in chat.result.events]
+
+
+def test_a_correction_that_is_still_outside_knocks_out_again(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Bilbao"))
+    chat.say(ex(city="Zaragoza"))
+    assert chat.state.status == Status.DISQUALIFIED
+    assert chat.state.stage == Stage.KEEP_ON_FILE
+    assert chat.state.candidate.city == "Zaragoza"
+
+
+def test_the_same_answer_after_a_knockout_is_not_a_correction(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True, has_license=False))  # "sí, guardadlos; no tengo carnet"
+    assert chat.state.status == Status.DISQUALIFIED
+    assert chat.state.keep_on_file is True
 
 
 def test_reminders_then_abandoned(chat: Chat, clock: FakeClock) -> None:
@@ -317,11 +362,24 @@ def test_reply_after_silence_at_consent_asks_for_consent_again(
     assert chat.state.awaiting == FieldName.FULL_NAME
 
 
-def test_declined_consent_is_not_resumed(chat: Chat) -> None:
+def test_declined_consent_can_be_given_later(chat: Chat) -> None:
+    # The decline message says "if you change your mind, write to us": writing back reopens
+    # the consent question, and nothing is collected until they say yes.
     chat.say(ex(yes_no=False))
+    chat.say(ex(intent="question", question="¿Qué hacéis con mis datos?"))
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.stage == Stage.CONSENT
+    assert chat.config.template("es", "consent_reask") in chat.result.replies
     chat.say(ex(yes_no=True))
+    assert chat.state.stage == Stage.COLLECTING
+    assert chat.state.awaiting == FieldName.FULL_NAME
+
+
+def test_declining_twice_stays_declined(chat: Chat) -> None:
+    chat.say(ex(yes_no=False))
+    chat.say(ex(yes_no=False))
     assert chat.state.status == Status.ABANDONED
-    assert chat.result.replies == [chat.config.template("es", "closed")]
+    assert chat.result.replies == [chat.config.template("es", "consent_declined")]
 
 
 def test_reply_resets_reminders(chat: Chat, clock: FakeClock) -> None:

@@ -360,6 +360,7 @@ class ConfirmField(BaseModel):
 SayTemplate = Literal[
     "greeting_consent",
     "closed",
+    "closed_disqualified",
     "technical_retry",
     "technical_hold",
     "technical_unavailable",
@@ -377,6 +378,7 @@ SayTemplate = Literal[
     "slot_taken",
     "no_slot_fits",
     "retype_hint",
+    "slot_unclear",
 ]
 
 
@@ -465,6 +467,7 @@ class EventType(StrEnum):
     FIELD_CHANGED = "field_changed"
     FIELD_GAVE_UP = "field_gave_up"
     KNOCKOUT = "knockout"
+    KNOCKOUT_CORRECTED = "knockout_corrected"
     STATUS_CHANGED = "status_changed"
     KEEP_ON_FILE = "keep_on_file"
     SLOTS_OFFERED = "slots_offered"

@@ -2,8 +2,8 @@
 
 greeting_consent: >-
   Hi! I'm {persona}, {company}'s virtual assistant 👋 I'll ask you 7 quick questions about the
-  delivery driver job (about 3 minutes). We only use your answers for this process:
-  [privacy notice]. Shall we start?
+  delivery driver job (about 3 minutes). We only use your answers for this process
+  (privacy notice: {privacy_url}). Shall we start?
 consent_reask: To continue I need your OK to use your answers for this process. Shall we start? (yes / no)
 consent_declined: Understood, we won't keep anything. If you change your mind, just write to us.
 
@@ -61,6 +61,7 @@ offer_human: If you'd rather talk to a person from the team, just tell me.
 reminder_1: Hi again! Only {missing_count} questions left for your application. Shall we continue?
 reminder_2: We're keeping your spot a bit longer, {missing_count} questions left. Shall we finish them?
 closed: Your application is already registered. If you need anything, a recruiter will get in touch.
+closed_disqualified: Thanks for writing. This application is closed, but you're welcome to apply again any time.
 technical_retry: Sorry, I didn't catch that. Could you say it again?
 technical_hold: Give me a moment, I'm looking at your answer. I'll be right back.
 technical_unavailable: Sorry, we're having a technical problem and I couldn't read your answer. Could you send it again in a little while?
@@ -85,4 +86,9 @@ value_evening: evening
 value_flexible: flexible
 experience_value: "{years} years · {platforms}"
 experience_value_one: "{years} year · {platforms}"
+experience_none: no experience
+license_with_type: "{vehicle} ({license_type} license)"
+license_with_years: "{vehicle} ({license_type} license, {years} years)"
+license_with_years_one: "{vehicle} ({license_type} license, {years} year)"
+slot_unclear: Sorry, I didn't get that. Reply with the number of one of these times, or say "none".
 text_only: For now I can only read text messages. Could you type it?

@@ -129,6 +129,25 @@ license_rules:
         min_years: 3
   MX: {}
 
+# Linked from the consent message. The web chat serves the notice below at /privacy; for
+# WhatsApp set an absolute URL. Demo text, to be confirmed by the client's legal team.
+privacy_url: /privacy
+privacy_notice:
+  es: >-
+    Grupo Sazón usa los datos que nos das en este chat (nombre, carnet, zona, disponibilidad,
+    horario, experiencia y fecha de inicio) solo para valorar tu candidatura al puesto de
+    repartidor. No pedimos documentos de identidad ni datos de salud. Si no sigues en el proceso,
+    borramos tus datos a los 6 meses, salvo que aceptes que los guardemos para futuras ofertas.
+    Puedes pedir acceso, rectificación o borrado de tus datos en cualquier momento escribiendo a
+    privacidad@gruposazon.example.
+  en: >-
+    Grupo Sazón uses the details you give in this chat (name, license, area, availability,
+    schedule, experience and start date) only to assess your application as a delivery driver.
+    We don't ask for ID documents or health data. If you don't continue in the process, we
+    delete your details after 6 months, unless you agree that we keep them for future openings.
+    You can ask to access, correct or delete your data at any time by writing to
+    privacy@gruposazon.example.
+
 faq:
   - question: Am I talking to a person or a bot?
     keywords: [bot, robot, persona, humano, person, human, ia, ai, automatico, automated, real]

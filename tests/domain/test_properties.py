@@ -175,8 +175,15 @@ def test_no_extraction_can_break_the_rules(
             ], "a value the candidate never wrote is not accepted"
             if before.status != Status.DISQUALIFIED:
                 assert state.status != Status.DISQUALIFIED
-        if was_terminal:
-            assert state.status in TERMINAL_STATUSES, "a final status is never reopened"
+        if was_terminal and state.status not in TERMINAL_STATUSES:
+            # Only two ways back: writing again after declining consent (asked again, nothing
+            # collected without a yes), or a different answer to the field that knocked them out.
+            declined = before.status == Status.ABANDONED and before.dropped_at == "consent"
+            corrected = before.status == Status.DISQUALIFIED and before.stage == Stage.KEEP_ON_FILE
+            assert declined or corrected, "a final status is never reopened"
+            if declined and extraction.yes_no is not True:
+                assert state.stage == Stage.CONSENT, "nothing goes past consent without a yes"
+                assert state.candidate.full_name is None
         was_terminal = state.status in TERMINAL_STATUSES
         assert (state.ended_at is not None) == was_terminal
         if state.status == Status.QUALIFIED:

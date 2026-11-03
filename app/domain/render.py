@@ -159,14 +159,29 @@ def field_values(
 
     years = candidate.experience_years
     experience = None
-    if years is not None:
+    if years == 0 and not candidate.platforms:
+        experience = label("experience_none")
+    elif years is not None:
         experience = label("experience_value_one" if years == 1 else "experience_value").format(
             years=f"{years:g}", platforms=", ".join(candidate.platforms) or "-"
         )
+    license_text = None
+    if candidate.vehicle:
+        license_text = label(f"value_{candidate.vehicle.value}")
+        held = candidate.license_years
+        if candidate.license_type and held is not None:
+            key = "license_with_years_one" if held == 1 else "license_with_years"
+            license_text = label(key).format(
+                vehicle=license_text, license_type=candidate.license_type, years=f"{held:g}"
+            )
+        elif candidate.license_type:
+            license_text = label("license_with_type").format(
+                vehicle=license_text, license_type=candidate.license_type
+            )
     location = ", ".join(p for p in (candidate.zone, candidate.city, candidate.postal_code) if p)
     return {
         FieldName.FULL_NAME: candidate.full_name,
-        FieldName.LICENSE: label(f"value_{candidate.vehicle.value}") if candidate.vehicle else None,
+        FieldName.LICENSE: license_text,
         FieldName.LOCATION: location or None,
         FieldName.AVAILABILITY: listed(candidate.availability),
         FieldName.SCHEDULE: listed(candidate.schedule),
@@ -205,6 +220,7 @@ def _fill(template: str, state: ConversationState, config: ClientConfig, **extra
         persona=config.persona.name,
         company=config.persona.company,
         missing_count=str(missing_count(state.candidate)),
+        privacy_url=config.privacy_url,
         **extra,
     )
 
@@ -262,7 +278,7 @@ def _fallback_key(action: AskField | ReAsk | AnswerQuestion) -> str:
 
 # --- Config check ---------------------------------------------------------------------------------
 
-_COMMON = frozenset({"name", "persona", "company", "missing_count"})
+_COMMON = frozenset({"name", "persona", "company", "missing_count", "privacy_url"})
 _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "recap": _COMMON | {"summary"},
     "confirm_value": _COMMON | {"value"},
@@ -272,6 +288,9 @@ _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "date_format": frozenset({"day", "month", "year"}),
     "experience_value": frozenset({"years", "platforms"}),
     "experience_value_one": frozenset({"years", "platforms"}),
+    "license_with_type": frozenset({"vehicle", "license_type"}),
+    "license_with_years": frozenset({"vehicle", "license_type", "years"}),
+    "license_with_years_one": frozenset({"vehicle", "license_type", "years"}),
 }
 # Comma-separated lists and how many items each needs.
 _LISTS = {"weekdays": 7, "months": 12, "slot_ordinals": 0}
@@ -302,6 +321,10 @@ def required_templates(config: ClientConfig) -> set[str]:
         "weekdays",
         "experience_value",
         "experience_value_one",
+        "experience_none",
+        "license_with_type",
+        "license_with_years",
+        "license_with_years_one",
         "text_only",
     }
 

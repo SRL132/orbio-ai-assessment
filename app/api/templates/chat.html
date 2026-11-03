@@ -85,10 +85,21 @@ async function newConversation() {
   if (source) listen();  // follow the new conversation
 }
 
+// Links in the agent's messages (e.g. the privacy notice) become clickable. Built from text
+// nodes, never innerHTML, so a candidate's message can't inject markup.
+const LINK = /(https?:\/\/[^\s)]+|(?<![\w\/])\/[a-z][\w\-\/]*)/g;
 function bubble(direction, text) {
   const div = document.createElement("div");
   div.className = "msg " + direction;
-  div.textContent = text;
+  let last = 0;
+  for (const m of direction === "out" ? text.matchAll(LINK) : []) {
+    div.append(text.slice(last, m.index));
+    const a = document.createElement("a");
+    a.href = m[0]; a.textContent = m[0]; a.target = "_blank"; a.rel = "noopener";
+    div.append(a);
+    last = m.index + m[0].length;
+  }
+  div.append(text.slice(last));
   log.appendChild(div);
 }
 

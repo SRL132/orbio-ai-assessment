@@ -18,6 +18,7 @@ keep_on_file_reask: Shall we keep your details for future openings? Just say yes
 recap: "Let's recap. {summary}. Is everything correct?"
 qualified: Great, {name}! You meet the requirements.
 offer_slots: "Pick a time for your interview: {slots}. Tell me which one, or say none if none works."
+slot_unclear: Sorry, I didn't catch that.
 interview_booked: Done. Your interview is on {when}. We'll send you the restaurant's address. See you soon!
 weekdays: Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
 slot_format: "{weekday} the {day} at {time}"

@@ -517,3 +517,51 @@
     language: en
     reply_languages: [es, es, es, en, en, en, en, en, en, en, en, en]
     fields: {vehicle: car, location_id: es-madrid, start_date: "2026-11-09"}
+
+# --- Found by adversarial testing in the browser (2026-11-03) ---------------------------------
+
+- id: consent_declined_then_given
+  description: Declines consent, then writes back. The decline message invites that, so consent is asked again and the screening goes on.
+  persona: Ana López, first says no, then changes her mind. Retiro (Madrid), moto, full time, evenings, no experience, starts tomorrow.
+  steps: ["no", "vale, sí", Ana López, Moto, "Madrid, Retiro", Jornada completa, Noches, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    fields: {full_name: Ana López, vehicle: moto}
+
+- id: knockout_corrected_right_after
+  description: Says Bilbao, is turned away, then corrects it to Madrid. The new answer is checked and the screening reopens.
+  persona: Laura Gil, moto. Says (and confirms) Bilbao by mistake, she lives in Chamberí (Madrid). Full time, evenings, no experience, starts tomorrow.
+  steps: [Sí, Laura Gil, Moto, Bilbao, sí, "Perdón, me he confundido: Madrid, Chamberí", Jornada completa, Noches, nunca, mañana, Sí]
+  expect:
+    status: qualified
+    events_include: [knockout, knockout_corrected]
+    fields: {location_id: es-madrid}
+
+- id: weekdays_is_not_part_time
+  description: '"Entre semana, mañanas" names days and a schedule, not full or part time: availability is asked again, never guessed.'
+  requires_llm: true
+  persona: Carlos Hernández, Roma (CDMX), moto. Available on weekdays in the mornings.
+  steps: [Sí, Carlos Hernández, Moto, "CDMX, Roma", "entre semana, mañanas"]
+  expect:
+    status: in_progress
+    field_status: {availability: missing}
+    fields: {schedule: [morning]}
+
+- id: start_date_yesterday
+  description: '"Puedo empezar ayer" is a date in the past: asked again, not silently moved to today.'
+  requires_llm: true
+  persona: Pedro Gómez, Chamberí (Madrid), moto. Jokes that he could start yesterday.
+  steps: [Sí, Pedro Gómez, Moto, "Madrid, Chamberí", Jornada completa, Noches, "1 año en Glovo", puedo empezar ayer]
+  expect:
+    status: in_progress
+    field_status: {start_date: missing}
+
+- id: no_greeting_mid_conversation
+  description: Only the opening says hello; later questions don't greet again or say "para empezar".
+  requires_llm: true
+  persona: Jorge Martín, Gràcia (Barcelona), car. Answers one question at a time.
+  steps: [sí, Jorge Martín, coche, "Barcelona, Gràcia", jornada completa, tardes, sin experiencia, el lunes que viene]
+  expect:
+    status: in_progress
+    later_replies_avoid: ["^\\W*(hola|hi|hello)\\b", "para empezar"]
+

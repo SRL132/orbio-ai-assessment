@@ -27,6 +27,7 @@ from app.domain.models import (
     EventType,
     ExtractedFields,
     ExtractionResult,
+    FieldName,
     FieldStatus,
     GeoLookup,
     HandOff,
@@ -62,6 +63,9 @@ from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
 from app.domain.validators import final_review_reasons, is_known_place, nearest_location
+
+# The field each knockout comes from: a different answer to it reopens the screening.
+_KNOCKOUT_FIELDS = {Reason.NO_LICENSE: FieldName.LICENSE, Reason.OUTSIDE_AREA: FieldName.LOCATION}
 
 # Intents that count as a (possibly failed) attempt at answering the awaited question.
 _ANSWER_INTENTS = frozenset({"answer", "other"})
@@ -111,10 +115,12 @@ def turn(
 ) -> TurnResult:
     t = _Turn.begin(state, config, ports)
     t.event(EventType.MESSAGE_RECEIVED, stage=t.state.stage.value)
-    if t.state.status == Status.ABANDONED and t.state.went_silent:
-        _resume(t)
+    if t.state.status == Status.ABANDONED and (
+        t.state.went_silent or t.state.dropped_at == Stage.CONSENT.value
+    ):
+        _resume(t)  # silent, or declined consent and was told to write back if they changed mind
     if t.state.stage == Stage.CLOSED:
-        t.say("closed")
+        t.say("closed_disqualified" if t.state.status == Status.DISQUALIFIED else "closed")
         return _finish(t)
 
     t.message = message.text
@@ -181,9 +187,11 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
 
 
 def _resume(t: _Turn) -> None:
-    """A candidate abandoned for silence writes again: reopen at the stage they stopped at, so
-    this message is read as their answer and the flow carries on with the missing fields."""
+    """A candidate abandoned for silence (or who declined consent) writes again: reopen at the
+    stage they stopped at, so this message is read as their answer and the flow carries on with
+    the missing fields."""
     state = t.state
+    why = "resumed_after_silence" if state.went_silent else "resumed_after_decline"
     if state.dropped_at == Stage.CONSENT.value:
         state.stage = Stage.CONSENT
     elif state.dropped_at == Stage.RECAP.value:
@@ -201,7 +209,7 @@ def _resume(t: _Turn) -> None:
             data={
                 "from": Status.ABANDONED.value,
                 "to": Status.IN_PROGRESS.value,
-                "reason": f"resumed_after_silence:{state.dropped_at}",
+                "reason": f"{why}:{state.dropped_at}",
             },
         )
     )
@@ -418,6 +426,11 @@ def _count_unusable_answer(
 
 
 def _on_keep_on_file(t: _Turn, extraction: ExtractionResult) -> None:
+    knocked_out = _corrected_knockout(t, extraction)
+    if knocked_out is not None:  # "sorry, I meant Madrid": check the new answer instead
+        _reopen_after_knockout(t, knocked_out)
+        _on_answers(t, extraction)
+        return
     if extraction.yes_no is None:
         t.say("keep_on_file_reask")
         return
@@ -425,6 +438,45 @@ def _on_keep_on_file(t: _Turn, extraction: ExtractionResult) -> None:
     t.state.stage = Stage.CLOSED
     t.event(EventType.KEEP_ON_FILE, value=extraction.yes_no)
     t.say("keep_on_file_yes" if extraction.yes_no else "keep_on_file_no")
+
+
+def _corrected_knockout(t: _Turn, extraction: ExtractionResult) -> FieldName | None:
+    """The field that knocked the candidate out, if this message gives a different answer for it.
+    Code still decides: the new answer goes through the same validators."""
+    reason = t.state.disqualify_reason
+    name = _KNOCKOUT_FIELDS.get(reason) if reason else None
+    if name is None:
+        return None
+    candidate = t.state.candidate
+    for attr in FIELD_GROUPS[name]:
+        proposed = getattr(extraction.fields, attr)
+        if proposed is not None and proposed.value != getattr(candidate, attr):
+            return name
+    return None
+
+
+def _reopen_after_knockout(t: _Turn, name: FieldName) -> None:
+    state = t.state
+    reason = state.disqualify_reason
+    for attr in FIELD_GROUPS[name]:  # forget the answer that knocked them out
+        setattr(state.candidate, attr, None)
+    state.disqualify_reason = None
+    state.status = Status.IN_PROGRESS
+    state.stage = Stage.COLLECTING
+    state.awaiting = name
+    state.ended_at = None
+    state.summary = None
+    t.event(EventType.KNOCKOUT_CORRECTED, field=name.value)
+    t.events.append(
+        DomainEvent(
+            type=EventType.STATUS_CHANGED,
+            data={
+                "from": Status.DISQUALIFIED.value,
+                "to": Status.IN_PROGRESS.value,
+                "reason": f"knockout_corrected:{reason}",
+            },
+        )
+    )
 
 
 def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
@@ -451,6 +503,8 @@ def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
         t.event(EventType.NO_SLOT_FITS)
         t.say("no_slot_fits")
         return
+    if choice is not None or extraction.intent in _ANSWER_INTENTS:
+        t.say("slot_unclear")  # "7", or a time that isn't on the list: say why we ask again
     t.actions.append(OfferSlots(slots=state.offered_slots, location_id=location_id))
 
 

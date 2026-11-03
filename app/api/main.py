@@ -31,7 +31,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
-from app.domain.models import Channel
+from app.domain.models import Channel, Language
 from app.worker.service import MAX_MESSAGE_CHARS, ScreeningService
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -42,6 +42,8 @@ logger = logging.getLogger("app.api")
 # not be enough to read a transcript. Longer than a screening can last (reminders, abandonment).
 CHAT_COOKIE = "sazon_chat"
 CHAT_COOKIE_MAX_AGE = 7 * 24 * 3600
+# Conversations one browser can follow at once (e.g. a chat tab and a voice tab).
+MAX_OWNED_CONVERSATIONS = 5
 # How long the chat link the ATS sends to a new applicant stays valid.
 INVITE_MAX_AGE = 7 * 24 * 3600
 
@@ -124,11 +126,25 @@ def create_app(container: Container | None = None) -> FastAPI:
         c: Container = request.app.state.container
         return c
 
-    def give_ownership(response: Response, conversation_id: str) -> None:
-        """This browser may now read and write the conversation (see `require_owner`)."""
+    def owned_conversations(request: Request) -> list[str]:
+        """The conversations this browser started, newest first (see `give_ownership`)."""
+        try:
+            owned = chat_signer.loads(
+                request.cookies.get(CHAT_COOKIE, ""), max_age=CHAT_COOKIE_MAX_AGE
+            )
+        except BadSignature:
+            return []
+        if isinstance(owned, str):  # a cookie from when it named a single conversation
+            return [owned]
+        return [i for i in owned if isinstance(i, str)] if isinstance(owned, list) else []
+
+    def give_ownership(request: Request, response: Response, conversation_id: str) -> None:
+        """This browser may now read and write the conversation (see `require_owner`). It keeps
+        its earlier ones too, so a second tab (say, chat and voice) doesn't lock out the first."""
+        earlier = [i for i in owned_conversations(request) if i != conversation_id]
         response.set_cookie(
             CHAT_COOKIE,
-            chat_signer.dumps(conversation_id),
+            chat_signer.dumps([conversation_id, *earlier][:MAX_OWNED_CONVERSATIONS]),
             max_age=CHAT_COOKIE_MAX_AGE,
             httponly=True,
             samesite="lax",
@@ -137,13 +153,7 @@ def create_app(container: Container | None = None) -> FastAPI:
 
     def require_owner(request: Request, conversation_id: UUID) -> None:
         """404, not 403, for someone else's conversation: don't confirm that it exists."""
-        try:
-            owned = chat_signer.loads(
-                request.cookies.get(CHAT_COOKIE, ""), max_age=CHAT_COOKIE_MAX_AGE
-            )
-        except BadSignature:
-            owned = None
-        if owned != str(conversation_id):
+        if str(conversation_id) not in owned_conversations(request):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "conversation not found")
 
     @app.get("/health")
@@ -184,14 +194,14 @@ def create_app(container: Container | None = None) -> FastAPI:
         return {"id": str(conversation_id), "chat_url": f"/chat/invite/{invite}"}
 
     @app.get("/chat/invite/{invite}")
-    def accept_invite(invite: str) -> RedirectResponse:
+    def accept_invite(request: Request, invite: str) -> RedirectResponse:
         """The candidate opens the link from the ATS: this browser now owns the conversation."""
         try:
             conversation_id = invite_signer.loads(invite, max_age=INVITE_MAX_AGE)
         except BadSignature as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found") from exc
         response = RedirectResponse(f"/chat?conversation={conversation_id}", status_code=303)
-        give_ownership(response, conversation_id)
+        give_ownership(request, response, conversation_id)
         return response
 
     @app.get("/")
@@ -218,7 +228,7 @@ def create_app(container: Container | None = None) -> FastAPI:
         ):
             raise too_many("chat_start", HOUR)
         conversation_id = await asyncio.to_thread(c.service.start_conversation, channel)
-        give_ownership(response, str(conversation_id))
+        give_ownership(request, response, str(conversation_id))
         return {"id": str(conversation_id)}
 
     @app.get("/api/conversations/{conversation_id}/messages")
@@ -283,6 +293,19 @@ def create_app(container: Container | None = None) -> FastAPI:
             c.runner.notify(conversation_id)
         # role "web": a worker process picks it up once the debounce has passed
         return {"accepted": True}
+
+    @app.get("/privacy", response_class=HTMLResponse)
+    def privacy_page(request: Request, lang: Language = "es") -> HTMLResponse:
+        """The privacy notice the consent message links to (client config)."""
+        config = get(request).config
+        notice = config.privacy_notice.get(lang) or next(iter(config.privacy_notice.values()), "")
+        if not notice:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+        return TEMPLATES.TemplateResponse(
+            request,
+            "privacy.html",
+            {"company": config.persona.company, "notice": notice, "lang": lang},
+        )
 
     @app.get("/voice", response_class=HTMLResponse)
     def voice_page(request: Request) -> HTMLResponse:

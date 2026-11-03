@@ -71,6 +71,9 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
 
     where = ", ".join(p for p in (c.zone, c.city) if p) or "location unknown"
     vehicle = f"{c.vehicle.value} license" if c.vehicle else "license unknown"
+    if c.vehicle and c.license_type:
+        held = f", {c.license_years:g} years" if c.license_years is not None else ""
+        vehicle += f" ({c.license_type}{held})"
     lines = [headline, f"{c.full_name or 'Name unknown'} · {where} · {vehicle}"]
 
     if c.availability or c.schedule or c.start_date:

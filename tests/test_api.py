@@ -1,15 +1,17 @@
 """End-to-end through HTTP with the offline keyword extractor (LLM_PROVIDER=fake)."""
 
 import json
+import secrets
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy import delete
 
 from app.adapters.storage.sql import ConversationRow, MessageRow
-from app.api.main import create_app
+from app.api.main import MAX_OWNED_CONVERSATIONS, create_app
 from app.bootstrap import build
 from app.settings import Settings
 
@@ -85,10 +87,40 @@ def test_only_the_browser_that_started_a_conversation_can_read_it(client: TestCl
     assert stranger.get(f"/api/conversations/{cid}/messages").status_code == 404
 
 
-def test_a_new_conversation_replaces_the_old_one(client: TestClient) -> None:
+def test_a_second_tab_does_not_lock_out_the_first(client: TestClient) -> None:
+    # A chat tab and a voice tab share the cookie: starting the second keeps the first readable.
     first = client.post("/api/conversations").json()["id"]
-    client.post("/api/conversations")
-    assert client.get(f"/api/conversations/{first}/messages").status_code == 404
+    second = client.post("/api/conversations", json={"channel": "voice"}).json()["id"]
+    assert client.get(f"/api/conversations/{first}/messages").status_code == 200
+    assert client.get(f"/api/conversations/{second}/messages").status_code == 200
+    reply = client.post(f"/api/conversations/{first}/messages", json={"text": "sí"})
+    assert reply.status_code == 202
+
+
+def test_the_browser_keeps_only_its_latest_conversations(client: TestClient) -> None:
+    oldest = client.post("/api/conversations").json()["id"]
+    for _ in range(MAX_OWNED_CONVERSATIONS):
+        client.post("/api/conversations")
+    assert client.get(f"/api/conversations/{oldest}/messages").status_code == 404
+
+
+def test_a_single_conversation_cookie_still_works(tmp_path: Path) -> None:
+    # Cookies issued before the cookie held a list named one conversation as a plain string.
+    secret = secrets.token_urlsafe(16)
+    settings = Settings(
+        _env_file=None,
+        llm_provider="fake",
+        database_url=f"sqlite:///{tmp_path / 'legacy.db'}",
+        debounce_seconds=0,
+        demo_mode=True,
+        session_secret=secret,
+    )
+    with TestClient(create_app(build(settings))) as client:
+        cid = client.post("/api/conversations").json()["id"]
+        signer = URLSafeTimedSerializer(secret, salt="chat-conversation")
+        client.cookies.clear()
+        client.cookies.set("sazon_chat", signer.dumps(cid))
+        assert client.get(f"/api/conversations/{cid}/messages").status_code == 200
 
 
 def test_empty_message_is_rejected(client: TestClient) -> None:
@@ -201,3 +233,14 @@ def test_application_endpoint_refuses(
 
 def test_a_forged_invite_is_404(client: TestClient) -> None:
     assert client.get("/chat/invite/not-a-token", follow_redirects=False).status_code == 404
+
+
+def test_consent_message_links_to_a_privacy_notice_that_exists(client: TestClient) -> None:
+    cid = client.post("/api/conversations").json()["id"]
+    greeting = client.get(f"/api/conversations/{cid}/messages").json()["messages"][0]["text"]
+    assert "[" not in greeting  # no unfilled placeholder
+    assert "/privacy" in greeting
+    page = client.get("/privacy")
+    assert page.status_code == 200
+    assert "6 meses" in page.text
+    assert "6 months" in client.get("/privacy?lang=en").text

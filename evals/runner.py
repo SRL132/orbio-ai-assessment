@@ -61,6 +61,8 @@ class Expect(BaseModel):
     max_turns: int | None = None
     interview_booked: bool | None = None
     reply_contains: list[str] = Field(default_factory=list)
+    # Regexes (case-insensitive) no agent message after the opening may match, e.g. a greeting.
+    later_replies_avoid: list[str] = Field(default_factory=list)
     dropped_at: str | None = None
     # Per field: its status ("valid", "needs_review", "missing") and/or note ("surname_missing").
     field_status: dict[str, str] = Field(default_factory=dict)
@@ -265,6 +267,10 @@ class Harness:
         all_replies = " ".join(m.text for m in messages if m.direction == "out")
         for needle in expect.reply_contains:
             check(needle in all_replies, f"no reply contains {needle!r}")
+        later = [m.text for m in messages if m.direction == "out"][1:]
+        for pattern in expect.later_replies_avoid:
+            hits = [t for t in later if re.search(pattern, t, re.IGNORECASE)]
+            check(not hits, f"{len(hits)} replies match {pattern!r}, e.g. {hits[:1]}")
         if expect.dropped_at is not None:
             check(state.dropped_at == expect.dropped_at, f"dropped_at {state.dropped_at}")
         for name, status in expect.field_status.items():

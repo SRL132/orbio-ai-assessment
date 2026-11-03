@@ -19,6 +19,7 @@ keep_on_file_reask: ¿Guardamos tus datos para futuras ofertas? Dime sí o no.
 recap: "Repasemos. {summary}. ¿Es todo correcto?"
 qualified: ¡Genial, {name}! Cumples los requisitos.
 offer_slots: "Elige un horario para tu entrevista: {slots}. Dime cuál prefieres, o ninguno si no te va."
+slot_unclear: No te he entendido bien.
 interview_booked: Hecho. Tu entrevista es el {when}. Te enviaremos la dirección del local. ¡Hasta pronto!
 weekdays: lunes,martes,miércoles,jueves,viernes,sábado,domingo
 slot_format: "{weekday} {day} a las {time}"

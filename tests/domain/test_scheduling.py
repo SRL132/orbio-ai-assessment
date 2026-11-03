@@ -118,6 +118,14 @@ def test_unclear_answer_repeats_the_offer(run) -> None:
     assert "1)" in result.replies[-1]
 
 
+def test_a_number_not_on_the_list_says_why_the_offer_repeats(run) -> None:
+    run(ex(yes_no=True))
+    result = run(ExtractionWithSlot(7))
+    assert result.state.stage == Stage.SCHEDULING
+    assert result.replies[0].startswith("No te he entendido")
+    assert "1)" in result.replies[-1]
+
+
 def ExtractionWithSlot(n: int):
     extraction = ex()
     extraction.slot_choice = n

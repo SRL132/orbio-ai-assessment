@@ -1,11 +1,11 @@
 # Spanish chat templates. Fixed texts (consent, disqualification, recap) and fallbacks used when
 # the LLM's reply fails the output check. Placeholders: {name} {persona} {company}
-# {missing_count} {summary}. Tone rules: docs/process-design.md, "Message tone and length".
+# {missing_count} {summary} {privacy_url}. Tone rules: docs/process-design.md, "Message tone and length".
 
 greeting_consent: >-
   ¡Hola! Soy {persona}, la asistente virtual de {company} 👋 Te hago 7 preguntas rápidas sobre
-  el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso:
-  [aviso de privacidad]. ¿Empezamos?
+  el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso
+  (aviso de privacidad: {privacy_url}). ¿Empezamos?
 consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos? (sí / no)
 consent_declined: Entendido, no guardaremos nada. Si cambias de opinión, escríbenos cuando quieras.
 
@@ -63,6 +63,7 @@ offer_human: Si lo prefieres, puedo pasarte con una persona del equipo. Solo dí
 reminder_1: ¡Hola de nuevo! Solo nos faltan {missing_count} preguntas para tu candidatura. ¿Seguimos?
 reminder_2: Te guardamos el sitio un poco más, quedan {missing_count} preguntas. ¿Las terminamos?
 closed: Tu candidatura ya está registrada. Si necesitas algo, un reclutador se pondrá en contacto.
+closed_disqualified: Gracias por escribirnos. Esta candidatura ya está cerrada, pero puedes volver a presentarte cuando quieras.
 technical_retry: Perdona, no te he entendido bien. ¿Me lo repites?
 technical_hold: Dame un momento, estoy revisando tu respuesta. Te escribo enseguida.
 technical_unavailable: Perdona, estamos teniendo un problema técnico y no he podido leer tu respuesta. ¿Me la vuelves a escribir en un rato?
@@ -87,4 +88,9 @@ value_evening: noche
 value_flexible: flexible
 experience_value: "{years} años · {platforms}"
 experience_value_one: "{years} año · {platforms}"
+experience_none: sin experiencia
+license_with_type: "{vehicle} (tipo {license_type})"
+license_with_years: "{vehicle} (tipo {license_type}, {years} años)"
+license_with_years_one: "{vehicle} (tipo {license_type}, {years} año)"
+slot_unclear: No te he entendido. Responde con el número de uno de estos horarios, o dime «ninguno».
 text_only: Por ahora solo puedo leer mensajes de texto. ¿Me lo escribes?

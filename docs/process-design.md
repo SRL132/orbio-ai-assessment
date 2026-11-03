@@ -77,7 +77,7 @@ The quote must be the candidate's own words. Python checks that it appears in th
 | **Rude or nonsense input** | One calm reply; if it continues, end politely and flag for review. |
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed. |
 | **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. |
-| **Changes an earlier answer** | Take the latest value, re-validate, log the change. |
+| **Changes an earlier answer** | Take the latest value, re-validate, log the change. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks. |
 | **The AI provider is down** | Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate. |
 
 ## Outcomes
@@ -89,7 +89,7 @@ Every conversation ends in exactly one status, set by code, plus a summary for t
 | **Qualified** | All fields valid, no knockout | Thanks, a recap, interview slots to book in the chat (a callback would bring back the 60% no-answer problem) | Top of the dashboard, with summary and transcript |
 | **Disqualified** | No license, or clearly outside the area | A warm, honest reason and an offer to keep their details for future roles | Filtered list, kept for audit |
 | **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour | A recruiter will contact them, with a timeframe | Review queue with the reason |
-| **Abandoned** | No reply 24 h after the last reminder, or consent declined | Nothing more (or a short acknowledgement if they declined) | Drop-off stage, for analytics |
+| **Abandoned** | No reply 24 h after the last reminder, or consent declined | Nothing more (or a short acknowledgement if they declined). If they write again, consent is asked again; nothing is collected without a yes | Drop-off stage, for analytics |
 
 Disqualification only comes from the two knockout rules. "Qualified" means the hard requirements are met; a person decides who is hired after the interview.
 
@@ -104,7 +104,7 @@ Chat messages read on a phone between deliveries: short beats complete.
 
 Examples:
 
-- Opening: *¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: \[aviso de privacidad\]. ¿Empezamos?*
+- Opening: *¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?*
 - Re-ask: *No me quedó claro — ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.*
 - Disqualified: *Gracias, Marta. Para este puesto necesitamos carnet de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?*
 

@@ -115,6 +115,14 @@ class ClientConfig(BaseModel):
         default_factory=dict, description="Spoken overrides; missing keys fall back to chat."
     )
     faq: list[FaqEntry] = Field(default_factory=list)
+    privacy_url: str = Field(
+        default="/privacy",
+        description="Where the consent message points ({privacy_url}). The app serves "
+        "`privacy_notice` at /privacy; WhatsApp needs an absolute URL here.",
+    )
+    privacy_notice: dict[Language, str] = Field(
+        default_factory=dict, description="The privacy notice shown at /privacy, per language."
+    )
 
     def template(self, language: Language, key: str, channel: Channel = "chat") -> str:
         if channel == "voice" and key in self.voice_templates.get(language, {}):
