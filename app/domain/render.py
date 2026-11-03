@@ -167,9 +167,13 @@ def field_values(
     experience = None
     if years == 0 and not candidate.platforms:
         experience = label("experience_none")
+    elif years is not None and not candidate.platforms:
+        experience = label("experience_years_one" if years == 1 else "experience_years").format(
+            years=f"{years:g}"
+        )
     elif years is not None:
         experience = label("experience_value_one" if years == 1 else "experience_value").format(
-            years=f"{years:g}", platforms=", ".join(candidate.platforms) or "-"
+            years=f"{years:g}", platforms=", ".join(candidate.platforms)
         )
     license_text = None
     if candidate.has_license is False:
@@ -300,6 +304,8 @@ _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "date_format": frozenset({"day", "month", "year"}),
     "experience_value": frozenset({"years", "platforms"}),
     "experience_value_one": frozenset({"years", "platforms"}),
+    "experience_years": frozenset({"years"}),
+    "experience_years_one": frozenset({"years"}),
     "license_with_type": frozenset({"vehicle", "license_type"}),
     "license_with_years": frozenset({"vehicle", "license_type", "years"}),
     "license_with_years_one": frozenset({"vehicle", "license_type", "years"}),
@@ -333,6 +339,8 @@ def required_templates(config: ClientConfig) -> set[str]:
         "weekdays",
         "experience_value",
         "experience_value_one",
+        "experience_years",
+        "experience_years_one",
         "experience_none",
         "value_no_license",
         "license_with_type",

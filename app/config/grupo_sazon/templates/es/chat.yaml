@@ -91,6 +91,8 @@ value_evening: noche
 value_flexible: flexible
 experience_value: "{years} años · {platforms}"
 experience_value_one: "{years} año · {platforms}"
+experience_years: "{years} años"
+experience_years_one: "{years} año"
 experience_none: sin experiencia
 license_with_type: "{vehicle} (tipo {license_type})"
 license_with_years: "{vehicle} (tipo {license_type}, {years} años)"

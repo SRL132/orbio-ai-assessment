@@ -21,10 +21,10 @@ from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
     json_instruction,
+    json_object_text,
     responder_system,
     responder_user,
     strict_schema,
-    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -94,7 +94,7 @@ class OpenRouterLLM:
             max_tokens=2000,
             response_format=response_format,
         )
-        return ExtractionResult.model_validate_json(strip_code_fence(content))
+        return ExtractionResult.model_validate_json(json_object_text(content))
 
     def compose(
         self,

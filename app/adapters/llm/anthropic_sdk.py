@@ -20,9 +20,9 @@ from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
     json_instruction,
+    json_object_text,
     responder_system,
     responder_user,
-    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -76,7 +76,7 @@ class AnthropicLLM:
         if response.stop_reason == "refusal":
             raise RefusalError("refusal")
         text = "".join(block.text for block in response.content if block.type == "text")
-        return ExtractionResult.model_validate_json(strip_code_fence(text))
+        return ExtractionResult.model_validate_json(json_object_text(text))
 
     def compose(
         self,

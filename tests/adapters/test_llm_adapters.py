@@ -16,10 +16,10 @@ from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
     json_instruction,
+    json_object_text,
     responder_system,
     responder_user,
     strict_schema,
-    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -366,11 +366,13 @@ def test_openrouter_server_error_raises_after_retry(
         ('{"a": 1}', '{"a": 1}'),
         ('```json\n{"a": 1}\n```', '{"a": 1}'),
         ('```\n{"a": 1}\n```\n', '{"a": 1}'),
-        ("```", ""),
+        ('Today is Monday, so "el lunes" means the 9th.\n{"a": 1}', '{"a": 1}'),
+        ("no object here", "no object here"),
+        ("}{", "}{"),
     ],
 )
-def test_strip_code_fence(text: str, expected: str) -> None:
-    assert strip_code_fence(text) == expected
+def test_json_object_text(text: str, expected: str) -> None:
+    assert json_object_text(text) == expected
 
 
 def test_extractor_is_told_when_the_question_was_a_confirmation(state: ConversationState) -> None:

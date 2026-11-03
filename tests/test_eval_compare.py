@@ -159,3 +159,23 @@ def test_per_run_reasoning_reaches_the_models(
     )
     assert efforts
     assert all(e == {"effort": "none", "exclude": True} for e in efforts)
+
+
+def test_a_run_can_have_its_own_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(compare, "RESULTS", tmp_path / "results")
+    matrix = tmp_path / "m.yaml"
+    matrix.write_text(
+        "budget_usd: 100\n"
+        "simulator_model: s/sim\n"
+        "runs:\n"
+        "  - {name: A, model: a/one, cap_usd: 0.001}\n"
+        "  - {name: B, model: b/two}\n"
+    )
+    transport = fake_openrouter(cost=0.01, models=("a/one", "b/two", "s/sim"))
+    only = ["--scenario", "cooperative_es", "--scenario", "no_license"]
+    assert compare.main(["--config", str(matrix), *only], transport) == 0
+    results = next((tmp_path / "results").glob("compare-*.json"))
+    rows = {r["run"]["name"]: r["summary"] for r in json.loads(results.read_text())}
+    assert rows["A"]["complete"] is False  # stopped at its cap, after one scenario
+    assert rows["B"]["complete"] is True

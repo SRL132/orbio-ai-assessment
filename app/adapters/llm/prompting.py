@@ -71,13 +71,12 @@ def json_instruction(model: type[BaseModel]) -> str:
     )
 
 
-def strip_code_fence(text: str) -> str:
-    """Some models wrap JSON in ```json fences even when asked not to."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
-        stripped = stripped.rsplit("```", 1)[0]
-    return stripped.strip()
+def json_object_text(text: str) -> str:
+    """The JSON object in a model's answer. Even when asked for only JSON, some wrap it in a code
+    fence, and Sonnet 5.5 sometimes reasons in plain text first ("Today is Monday..."). Pydantic
+    still validates what's found: nothing here can turn a bad answer into a good one."""
+    start, end = text.find("{"), text.rfind("}")
+    return text[start : end + 1] if start != -1 and end > start else text
 
 
 def extractor_system(config: ClientConfig) -> str:

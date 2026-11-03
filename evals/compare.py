@@ -39,6 +39,7 @@ class Run(BaseModel):
     responder_model: str | None = None
     simulate: bool = False
     reasoning: str | None = "low"  # OpenRouter reasoning effort: none, minimal, low, …
+    cap_usd: float | None = None  # this run's spending cap; default: an equal share of the budget
 
 
 class Matrix(BaseModel):
@@ -130,7 +131,7 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             simulator.reasoning_effort = matrix.simulator_reasoning
         harness = Harness(config, FastPathExtractor(extractor), responder, meter)
         results, complete = run_suite(
-            harness, scenarios, simulator if run.simulate else None, share
+            harness, scenarios, simulator if run.simulate else None, run.cap_usd or share
         )
         summary = summarize(results, complete)
         print(f"{run.name}: {summary['passed']}/{summary['total']} · ${spent():.3f} so far")

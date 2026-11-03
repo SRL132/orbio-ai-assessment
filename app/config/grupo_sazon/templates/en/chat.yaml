@@ -89,6 +89,8 @@ value_evening: evening
 value_flexible: flexible
 experience_value: "{years} years · {platforms}"
 experience_value_one: "{years} year · {platforms}"
+experience_years: "{years} years"
+experience_years_one: "{years} year"
 experience_none: no experience
 license_with_type: "{vehicle} ({license_type} license)"
 license_with_years: "{vehicle} ({license_type} license, {years} years)"
