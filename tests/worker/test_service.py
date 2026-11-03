@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 
@@ -242,3 +243,24 @@ def test_start_records_when_the_candidate_applied(
     assert state.applied_at == applied
     with pytest.raises(ValueError, match="future"):
         service.start_conversation(applied_at=clock.now() + timedelta(minutes=1))
+
+
+def test_opening_an_invite_that_no_longer_exists_does_nothing(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = make_service(config, ports, clock)
+    service.recruiter_wait_seconds = 0
+    service.open_invite(uuid4())  # erased long ago: the chat page answers 404 from here
+
+
+def test_opening_an_invite_while_a_turn_runs_keeps_it_pending(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = make_service(config, ports, clock)
+    service.recruiter_wait_seconds = 0
+    cid = service.start_conversation(invited_by="ats")
+    assert service.repo.try_lease(cid, "other-worker", timedelta(minutes=1))
+    service.open_invite(cid)
+    state = service.repo.get(cid)
+    assert state is not None
+    assert state.invite_pending is True

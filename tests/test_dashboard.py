@@ -370,6 +370,7 @@ def test_a_number_makes_that_many_links(logged_in: TestClient) -> None:
         (b"\xff\xfe\x00bad", {}, "CSV UTF-8"),
         (b"applied_at\n" + b"2026-01-05T09:00:00+00:00\n" * 1001, {}, "1000 rows"),
         (b"applied_at\n" + b"x" * (1024 * 1024 + 1), {}, "too big"),
+        (b'applied_at\n"' + b"x" * 140_000 + b"\n", {}, "readable CSV"),
     ],
 )
 def test_bad_upload_is_explained_and_creates_nothing(

@@ -101,7 +101,7 @@ branch = true
 
 [tool.coverage.report]
 # Ratchet: raise with every change that increases coverage, never lower.
-fail_under = 97.8
+fail_under = 97.9
 show_missing = true
 skip_covered = true
 

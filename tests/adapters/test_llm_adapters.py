@@ -19,6 +19,7 @@ from app.adapters.llm.prompting import (
     responder_system,
     responder_user,
     strict_schema,
+    strip_code_fence,
 )
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
@@ -28,6 +29,7 @@ from app.domain.models import (
     ExtractedFields,
     ExtractionResult,
     FieldName,
+    PendingConfirmation,
     ReAsk,
     Vehicle,
 )
@@ -356,3 +358,40 @@ def test_openrouter_server_error_raises_after_retry(
     )
     with pytest.raises(httpx.HTTPStatusError):
         llm.compose(AskField(field=FieldName.FULL_NAME), state, config)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('{"a": 1}', '{"a": 1}'),
+        ('```json\n{"a": 1}\n```', '{"a": 1}'),
+        ('```\n{"a": 1}\n```\n', '{"a": 1}'),
+        ("```", ""),
+    ],
+)
+def test_strip_code_fence(text: str, expected: str) -> None:
+    assert strip_code_fence(text) == expected
+
+
+def test_extractor_is_told_when_the_question_was_a_confirmation(state: ConversationState) -> None:
+    state.confirming = PendingConfirmation(
+        field=FieldName.LOCATION, values={"city": "Móstoles"}, outcome="review"
+    )
+    user = extractor_user(state, "sí", TODAY)
+    assert "confirming the location we understood" in user
+
+
+def test_voice_prompts_say_the_text_is_spoken(
+    config: ClientConfig, state: ConversationState
+) -> None:
+    state.channel = "voice"
+    assert "speech-to-text" in extractor_user(state, "sí", TODAY)
+    assert "read aloud" in responder_user(AskField(field=FieldName.LICENSE), state, config)
+
+
+def test_openrouter_free_text_completion(config: ClientConfig) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"message": {"content": "hola"}}]})
+
+    llm = OpenRouterLLM("k", "m", transport=httpx.MockTransport(handler))
+    assert llm.complete("system", "user") == "hola"
