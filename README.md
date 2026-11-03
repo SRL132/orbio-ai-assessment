@@ -21,14 +21,14 @@ uv run uvicorn --factory app.api.main:create_app --reload
 
 The database schema is managed with Alembic migrations, which run automatically at startup. A demo database created before migrations existed is refused with a clear message: delete `data/sazon.db` once.
 
-### WhatsApp (free with Meta's test number)
+### WhatsApp (with Meta's test number)
 
-1. Create an app at developers.facebook.com, add the **WhatsApp** product, and use the free test number. Add your own phone as a recipient (up to 5).
+1. Create an app at developers.facebook.com, add the **WhatsApp** product, and use the test number. Add your own phone as a recipient (up to 5).
 2. In `.env`, set `WHATSAPP_ACCESS_TOKEN` (the temporary token from the WhatsApp setup page, or a system-user token), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` (App settings → Basic) and a `WHATSAPP_VERIFY_TOKEN` of your choice.
 3. Expose the app: `ngrok http 8000`. In WhatsApp → Configuration, set the callback URL to `https://<ngrok-host>/webhooks/whatsapp` with the same verify token, and subscribe to the `messages` field.
 4. Send "hola" to the test number from your phone.
 
-Replies and reminders go out through an outbox (`messages.delivered`), so a reminder created hours later reaches the phone like any reply. WhatsApp allows free-form messages only within 24 h of the candidate's last message, so on WhatsApp the reminders go out at 2 h and 23 h. Anything later needs an approved template (`WHATSAPP_REMINDER_TEMPLATE`, paid) or is skipped and logged.
+Replies and reminders go out through an outbox (`messages.delivered`), so a reminder created hours later reaches the phone like any reply. Since 1 October 2026 [Meta charges per delivered service message](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages), replies included, and needs a payment method on file; its docs don't say how that applies to test numbers. WhatsApp allows free-form messages only within 24 h of the candidate's last message, so on WhatsApp the reminders go out at 2 h and 23 h. Anything later needs an approved template (`WHATSAPP_REMINDER_TEMPLATE`, paid) or is skipped and logged.
 
 ### Docker
 
@@ -117,4 +117,4 @@ The offline result shows the engine and policy behave as designed. It says littl
 
 ## Docs
 
-[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md)
+[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md) · [Pilot plan](docs/pilot-plan.md)

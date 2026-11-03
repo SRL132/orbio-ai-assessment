@@ -257,7 +257,8 @@ The production channel, built on the WhatsApp Cloud API (Meta). It uses the same
 - **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one.
 - **Outbound, through an outbox:** agent replies on external channels are stored as undelivered messages, and a dispatcher sends them in order every second. Only one process dispatches at a time (a renewable job lease in `job_leases`; another process takes over 30 s after the holder stops renewing), so nothing is sent twice. Up to 3 options become reply buttons, longer lists a list message. Errors are retried (429 and 5xx) and given up after 5 attempts. Because reminders are just outbound messages, re-engagement now reaches the candidate's phone.
 - **The 24-hour rule:** free-form messages are only allowed within 24 h of the candidate's last message. The client config schedules WhatsApp reminders at 2 h and 23 h; later messages need an approved (paid) template or are skipped and logged.
-- **Demo:** Meta's free test number (up to 5 recipients) and an ngrok tunnel for the webhook. Code: `app/adapters/channels/whatsapp.py`, `app/worker/whatsapp.py`, `app/api/whatsapp.py`.
+- **Cost:** since 1 October 2026 Meta charges per delivered service message, so replies inside the 24-hour window are no longer free, and it stops delivering them without a payment method. Add this to the LLM costs below.
+- **Demo:** Meta's test number (up to 5 recipients) and an ngrok tunnel for the webhook. Code: `app/adapters/channels/whatsapp.py`, `app/worker/whatsapp.py`, `app/api/whatsapp.py`.
 
 ## Voice channel
 

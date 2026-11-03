@@ -12,7 +12,7 @@ Screening results flow **out** to the client's ATS through signed webhooks fed b
 | --- | --- | --- |
 | Us → ATS | A candidate reaches a final status, is overridden, or books an interview | Webhook from the outbox, retried until acknowledged |
 | ATS → us | The ATS hires, rejects, or marks an interview no-show | `POST /api/v1/candidates/{id}/ats-status` |
-| ATS → us | A new application arrives | `POST /api/v1/applications` with the application time; we start the conversation (WhatsApp or a chat link) with `applied_at` set, so "screened within 24 h" counts from the application. Built so far: `ScreeningService.start_conversation(applied_at=…)`; the endpoint is design only |
+| ATS → us | A new application arrives | `POST /api/v1/applications` with the application time; we start the conversation (WhatsApp or a chat link) with `applied_at` set, so "screened within 24 h" counts from the application. Built: this endpoint, which returns a signed chat link for the ATS to send (web chat only, not WhatsApp). The rest of this spec is design only. Without an ATS, recruiters make the same links at `/dashboard/invite` |
 | ATS → us | Backfill or reconciliation | `GET /api/v1/candidates?updated_since=…` (paginated) |
 
 ## Outbox (why not call the ATS directly)
