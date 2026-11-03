@@ -6,6 +6,7 @@
 <div class="counters">
   <div class="counter"><b>{{ '%.0f%%'|format(a.screened_on_time_rate * 100) if a.screened_on_time_rate is not none else '—' }}</b><span>Screened within {{ '%g'|format(a.target_hours) }} h of applying ({{ a.screened_on_time }} of {{ a.screening_due }})</span></div>
   <div class="counter"><b>{{ a.started }}</b><span>Conversations started</span></div>
+  <div class="counter"><b>{{ a.invites_unopened }}</b><span>Invited, not opened</span></div>
   <div class="counter"><b>{{ '%.0f%%'|format(a.completion_rate * 100) }}</b><span>Completion rate</span></div>
   <div class="counter"><b>{{ a.median_minutes if a.median_minutes is not none else '—' }}{% if a.median_minutes is not none %} min{% endif %}</b><span>Median time to finish</span></div>
   <div class="counter"><b>{{ a.interviews_booked }}</b><span>Interviews booked</span></div>

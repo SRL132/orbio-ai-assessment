@@ -46,6 +46,7 @@ class Filters:
     channel: str | None = None
     search: str | None = None
     start_before: date | None = None
+    asked_for_human: bool = False
 
 
 PER_PAGE = 50
@@ -87,6 +88,12 @@ _STATUS_ORDER = case(
 )
 
 
+# Rejected, then asked for a person: the rejection stands until a recruiter looks at it.
+_ASKED_FOR_HUMAN = ConversationRow.human_after_knockout.is_(True) & (
+    ConversationRow.status == Status.DISQUALIFIED.value
+)
+
+
 class DashboardQueries:
     def __init__(self, engine: Engine, client_id: str) -> None:
         self._engine = engine
@@ -96,7 +103,11 @@ class DashboardQueries:
     def candidates(self, filters: Filters, page: int = 1, per_page: int = PER_PAGE) -> Page:
         """One page of the filtered list, recruiters' priorities first; every filter is SQL, so
         the total and the pages agree."""
-        query = select(ConversationRow).where(ConversationRow.client_id == self._client_id)
+        query = select(ConversationRow).where(
+            ConversationRow.client_id == self._client_id, ConversationRow.invite_pending.is_(False)
+        )
+        if filters.asked_for_human:
+            query = query.where(_ASKED_FOR_HUMAN)
         if filters.status:
             query = query.where(ConversationRow.status == filters.status)
         if filters.location_id:
@@ -147,6 +158,7 @@ class DashboardQueries:
         the projected columns: a handful of small queries, whatever the number of candidates."""
         row = ConversationRow
         mine = row.client_id == self._client_id
+        opened = row.invite_pending.is_(False)
         completed = row.status.in_([s.value for s in COMPLETED])
         # Screened on time: an outcome within the target after applying. Counted against
         # everyone whose window has closed, so candidates still inside it don't drag it down.
@@ -163,22 +175,31 @@ class DashboardQueries:
             for i in range(1, len(field_order) + 1)
         ]
         totals = select(
-            func.count(),
+            func.count().filter(opened),
             func.count().filter(consented),
             func.count().filter(completed),
             func.count().filter(row.interview_at.is_not(None)),
             func.count().filter(timed),
             func.count().filter(on_time),
             func.count().filter(due),
+            func.count().filter(row.invite_pending.is_(True)),
             *steps,
         ).where(mine)
         with Session(self._engine) as session:
-            (started, n_consented, n_completed, booked, n_timed, n_on_time, n_due, *reached) = (
-                session.execute(totals).one()
-            )
+            (
+                started,
+                n_consented,
+                n_completed,
+                booked,
+                n_timed,
+                n_on_time,
+                n_due,
+                n_unopened,
+                *reached,
+            ) = session.execute(totals).one()
             outcomes = dict(
                 session.execute(
-                    select(row.status, func.count()).where(mine).group_by(row.status)
+                    select(row.status, func.count()).where(mine, opened).group_by(row.status)
                 ).all()
             )
             drop_off = session.execute(
@@ -202,7 +223,7 @@ class DashboardQueries:
                         func.count(),
                         func.count().filter(completed),
                     )
-                    .where(mine)
+                    .where(mine, opened)
                     .group_by(column)
                 ).all()
                 return {label: (total, done) for label, total, done in sorted(rows)}
@@ -231,6 +252,7 @@ class DashboardQueries:
             screened_on_time=n_on_time,
             screening_due=n_due,
             screened_on_time_rate=round(n_on_time / n_due, 3) if n_due else None,
+            invites_unopened=n_unopened,
         )
 
     def backlog(self) -> dict[str, tuple[int, datetime | None]]:
@@ -262,14 +284,18 @@ class DashboardQueries:
             func.count().filter(ConversationRow.status == "qualified"),
             func.count().filter(ConversationRow.status == "needs_review"),
             func.count().filter(ConversationRow.status == "in_progress"),
-        ).where(ConversationRow.client_id == self._client_id)
+            func.count().filter(_ASKED_FOR_HUMAN),
+        ).where(
+            ConversationRow.client_id == self._client_id, ConversationRow.invite_pending.is_(False)
+        )
         with Session(self._engine) as session:
-            new, qualified, review, in_progress = session.execute(query).one()
+            new, qualified, review, in_progress, asked = session.execute(query).one()
         return {
             "new_today": new,
             "qualified": qualified,
             "needs_review": review,
             "in_progress": in_progress,
+            "asked_for_human": asked,
         }
 
 
@@ -297,6 +323,7 @@ class Analytics(BaseModel):
     screened_on_time: int
     screening_due: int  # applicants whose window has closed, or who were already screened
     screened_on_time_rate: float | None
+    invites_unopened: int
 
 
 # Reached a final outcome through the conversation (not dropped off).

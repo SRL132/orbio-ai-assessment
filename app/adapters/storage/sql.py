@@ -31,6 +31,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     delete,
+    false,
     func,
     select,
     true,
@@ -109,6 +110,10 @@ class ConversationRow(Base):
     hours_to_outcome: Mapped[float | None] = mapped_column(Float)
     interview_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     keep_on_file: Mapped[bool | None] = mapped_column(Boolean)  # retention: kept if True
+    human_after_knockout: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
+    invite_pending: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     next_reminder_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
     # conversation (webhook inbound, worker reply) queue up instead of colliding.
@@ -679,6 +684,8 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.hours_to_outcome = _hours_to_outcome(state)
     row.interview_at = state.interview_at
     row.keep_on_file = state.keep_on_file
+    row.human_after_knockout = state.human_after_knockout
+    row.invite_pending = state.invite_pending
     row.next_reminder_at = state.next_reminder_at
     row.updated_at = now
     row.state = state.model_dump(mode="json")

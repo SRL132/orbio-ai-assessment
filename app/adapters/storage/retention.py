@@ -12,7 +12,7 @@ import logging
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import Engine, delete, or_, select
+from sqlalchemy import Engine, and_, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.adapters.storage.sql import (
@@ -55,10 +55,15 @@ class SqlRetention:
                 select(conv.id, conv.status, conv.updated_at)
                 .where(
                     conv.client_id == self._config.client_id,
-                    conv.status.in_(ERASABLE),
                     conv.updated_at < cutoff,  # last activity, so a late reply restarts the clock
-                    # Staying on file for future roles is a separate consent: those are kept.
-                    or_(conv.keep_on_file.is_(None), conv.keep_on_file.is_(False)),
+                    or_(
+                        conv.invite_pending.is_(True),  # the link expired long ago, never opened
+                        and_(
+                            conv.status.in_(ERASABLE),
+                            # Staying on file for future roles is a separate consent: kept.
+                            or_(conv.keep_on_file.is_(None), conv.keep_on_file.is_(False)),
+                        ),
+                    ),
                 )
                 .limit(_BATCH)
             ).all()

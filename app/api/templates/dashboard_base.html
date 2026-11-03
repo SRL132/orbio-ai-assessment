@@ -56,6 +56,7 @@
   <a href="/dashboard" class="{{ 'active' if active == 'list' }}">Candidates</a>
   <a href="/dashboard/review" class="{{ 'active' if active == 'review' }}">Review queue</a>
   <a href="/dashboard/analytics" class="{{ 'active' if active == 'analytics' }}">Analytics</a>
+  <a href="/dashboard/invite" class="{{ 'active' if active == 'invite' }}">Invite</a>
   <span class="right">{{ user }}
     <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="secondary" type="submit">Log out</button></form>
   </span>

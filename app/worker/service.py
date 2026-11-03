@@ -77,20 +77,44 @@ class ScreeningService:
             self.repo.release_lease(conversation_id, owner)
 
     def start_conversation(
-        self, channel: Channel = "chat", applied_at: datetime | None = None
+        self,
+        channel: Channel = "chat",
+        applied_at: datetime | None = None,
+        invited_by: str | None = None,
     ) -> UUID:
-        """Open a conversation. `applied_at` comes from the ATS when it invites the candidate, so
-        time to screen counts from the application, not from the first message."""
+        """Open a conversation. `applied_at` comes from the ATS or the recruiter who invites the
+        candidate, so time to screen counts from the application, not from the first message.
+        With `invited_by`, it waits for the candidate to open their link (see `open_invite`)."""
         if applied_at is not None and applied_at > self.ports.clock.now():
             raise ValueError("applied_at is in the future")
         state = ConversationState(
-            client_id=self.config.client_id, channel=channel, applied_at=applied_at
+            client_id=self.config.client_id,
+            channel=channel,
+            applied_at=applied_at,
+            invite_pending=invited_by is not None,
         )
         result = engine.start(state, self.config, self.ports)
-        self.repo.create(result.state, result.events, result.replies)
-        metrics.record_events(result.events)
+        events = result.events
+        if invited_by is not None:
+            events = [
+                *events,
+                DomainEvent(type=EventType.INVITE_CREATED, data={"actor": invited_by}),
+            ]
+        self.repo.create(result.state, events, result.replies)
+        metrics.record_events(events)
         logger.info("conversation_started id=%s channel=%s", state.conversation_id, channel)
         return state.conversation_id
+
+    def open_invite(self, conversation_id: UUID) -> None:
+        """The candidate opened their invite link: start the reminder clock."""
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            state = self.repo.get(conversation_id)
+            if owner is None or state is None:
+                return
+            result = engine.on_invite_opened(state, self.config, self.ports)
+            if result is not None:
+                self.repo.save_turn(result.state, result.events, [], [], lease_owner=owner)
+                metrics.record_events(result.events)
 
     def receive(
         self, conversation_id: UUID, text: str, channel_message_id: str | None = None

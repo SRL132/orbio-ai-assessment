@@ -11,7 +11,7 @@ Today 13 recruiters make about 975 calls a week for about 1,000 applications. Wi
 1. **Async first.** Candidates reply when it suits them, so a missed call no longer loses a candidate.
 2. **Knockouts early.** License and service area come right after the name, so nobody spends 5 minutes before being turned away.
 3. **Code decides, the LLM talks.** Python owns every pass/fail rule. The LLM only extracts answers into structured fields and writes the next message.
-4. **A human is always reachable.** Unclear cases go to a review queue, never an automatic rejection.
+4. **A human is always reachable.** Unclear cases go to a review queue, never an automatic rejection. A rejected candidate who asks for a person is put in front of a recruiter too, who can overturn the rejection.
 
 ## Conversation stages
 
@@ -76,7 +76,7 @@ The quote must be the candidate's own words. Python checks that it appears in th
 | **Job questions** ("How much does it pay?") | Answer from the approved FAQ, otherwise say a recruiter will confirm. Then return to the current question. |
 | **Rude or nonsense input** | One calm reply; if it continues, end politely and flag for review. Numbers and symbols alone ("000") never count as "no license". After two unclear answers to the keep-on-file question, nothing is kept and the conversation closes (no yes, no keeping). |
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed. |
-| **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. After a knockout the rejection stands (otherwise any rejected candidate could skip it): the request is logged, shown in the recruiter summary, and the candidate is told the team will write if there's anything to review. |
+| **Asks for a human** | Hand off right away (`human_requested`) and say when a recruiter will reach out. After a knockout the rejection stands (otherwise any rejected candidate could skip it), but the request gets its own dashboard filter and counter, and the candidate is told a person will review the case. A recruiter can overturn it with a reason. |
 | **Changes an earlier answer** | Take the latest value, re-validate, log the change. A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks. |
 | **The AI provider is down** | Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate. |
 

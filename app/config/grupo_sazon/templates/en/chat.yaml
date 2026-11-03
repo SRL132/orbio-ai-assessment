@@ -49,7 +49,7 @@ interview_booked: Done! Your interview is on {when}. We'll send you the restaura
 slot_taken: Oops, that time was just taken. Here are some others.
 no_slot_fits: No problem. Which days and times would suit you? I'll pass it on to the recruiter.
 preferred_times_noted: Noted. A recruiter will write to you to set up the interview.
-handoff_disqualified: I've noted it for the recruiting team. If there's anything to review, they'll write to you.
+handoff_disqualified: I've noted it. A person on the recruiting team will review your case and write to you if anything changes.
 retype_hint: Sorry, I got that wrong. Could you write it again?
 weekdays: Mon,Tue,Wed,Thu,Fri,Sat,Sun
 slot_format: "{weekday} {day}/{month} {time}"

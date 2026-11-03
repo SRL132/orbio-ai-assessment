@@ -51,7 +51,7 @@ interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la direcci�
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
 no_slot_fits: Sin problema. ¿Qué días y horas te irían mejor? Se lo paso al reclutador.
 preferred_times_noted: Apuntado. Un reclutador te escribirá para fijar la entrevista.
-handoff_disqualified: Lo he anotado para el equipo de selección. Si ven algo que revisar, te escribirán.
+handoff_disqualified: Lo he anotado. Una persona del equipo de selección revisará tu caso y te escribirá si hay algún cambio.
 retype_hint: Perdona, lo había entendido mal. ¿Me lo escribes otra vez?
 weekdays: lun,mar,mié,jue,vie,sáb,dom
 slot_format: "{weekday} {day}/{month} {time}"

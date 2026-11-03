@@ -63,3 +63,13 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - Per-location permissions (all recruiters see all locations).
 - Bulk actions and CSV export (only JSON export per candidate is in scope).
 - Messaging the candidate from the dashboard (shown as a disabled "contact" action).
+
+## Inviting candidates
+
+`/dashboard/invite` makes one signed chat link per applicant, from a CSV with an `applied_at` column or from a number. The download keeps the upload's other columns (a phone number, say) so links can be matched to people, and they're never stored or logged. Recruiters send the links with their own SMS or email tool, so a pilot doesn't need an ATS. Links expire after 7 days.
+
+An invited conversation has no reminders until the link is opened, and it stays out of the candidate list and counters until then. Analytics shows "Invited, not opened", and those applicants still count against "screened on time", so the agent's reach isn't flattered. Unopened invites are erased after the retention period.
+
+## Rejected candidates who ask for a human
+
+A knockout stands when the candidate asks for a person, so asking can't skip it. The list has a "Rejected, asked for a human" counter and an "Asked for a human" filter (rejected candidates only), and a recruiter can overturn the rejection with the usual override and a required reason.

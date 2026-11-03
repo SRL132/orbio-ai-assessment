@@ -233,6 +233,11 @@ class ConversationState(BaseModel):
     no_slot_fits: bool = False
     preferred_times: str | None = None  # their words, after no offered slot fit
     human_after_knockout: bool = False  # asked for a person after a knockout (status stands)
+    invite_pending: bool = Field(
+        default=False,
+        description="Invited by link and not opened yet: no reminders (nobody is there to read "
+        "them) and not a candidate in the lists until the link is opened.",
+    )
     keep_on_file_reasks: int = 0  # unclear answers to "shall we keep your details?"
     recent_messages: list[tuple[Literal["in", "out"], str]] = Field(
         default_factory=list,
@@ -475,6 +480,8 @@ class EventType(StrEnum):
     """Everything the event log can record. Analytics and the dashboard read these."""
 
     CONVERSATION_STARTED = "conversation_started"
+    INVITE_CREATED = "invite_created"
+    INVITE_OPENED = "invite_opened"
     MESSAGE_RECEIVED = "message_received"
     CONSENT_GIVEN = "consent_given"
     CONSENT_DECLINED = "consent_declined"

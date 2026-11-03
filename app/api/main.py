@@ -28,6 +28,7 @@ from app import metrics, tracing
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
+from app.api.invites import InviteLinks
 from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
@@ -45,7 +46,6 @@ CHAT_COOKIE_MAX_AGE = 7 * 24 * 3600
 # Conversations one browser can follow at once (e.g. a chat tab and a voice tab).
 MAX_OWNED_CONVERSATIONS = 5
 # How long the chat link the ATS sends to a new applicant stays valid.
-INVITE_MAX_AGE = 7 * 24 * 3600
 
 
 class MessageIn(BaseModel):
@@ -92,7 +92,8 @@ def create_app(container: Container | None = None) -> FastAPI:
         logger.warning("SESSION_SECRET not set: using a random one, logins reset on restart")
     secret_key = secret.get_secret_value() if secret else secrets.token_urlsafe(32)
     chat_signer = URLSafeTimedSerializer(secret_key, salt="chat-conversation")
-    invite_signer = URLSafeTimedSerializer(secret_key, salt="chat-invite")
+    invites = InviteLinks(secret_key)
+    app.state.invites = invites
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret_key,
@@ -188,18 +189,18 @@ def create_app(container: Container | None = None) -> FastAPI:
                 status.HTTP_422_UNPROCESSABLE_CONTENT, "applied_at is in the future"
             )
         conversation_id = await asyncio.to_thread(
-            c.service.start_conversation, "chat", body.applied_at
+            c.service.start_conversation, "chat", body.applied_at, "ats"
         )
-        invite = invite_signer.dumps(str(conversation_id))
-        return {"id": str(conversation_id), "chat_url": f"/chat/invite/{invite}"}
+        return {"id": str(conversation_id), "chat_url": invites.path(conversation_id)}
 
     @app.get("/chat/invite/{invite}")
     def accept_invite(request: Request, invite: str) -> RedirectResponse:
-        """The candidate opens the link from the ATS: this browser now owns the conversation."""
+        """The candidate opens their link: this browser now owns the conversation."""
         try:
-            conversation_id = invite_signer.loads(invite, max_age=INVITE_MAX_AGE)
+            conversation_id = invites.read(invite)
         except BadSignature as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found") from exc
+        get(request).service.open_invite(UUID(conversation_id))
         response = RedirectResponse(f"/chat?conversation={conversation_id}", status_code=303)
         give_ownership(request, response, conversation_id)
         return response

@@ -114,3 +114,16 @@ def test_other_clients_are_untouched(setup, config: ClientConfig, clock: FakeClo
     clock.advance(days=config.retention_days + 1)
     assert SqlRetention(engine, config, clock).erase_expired() == 0
     assert count(engine, MessageRow, cid) == 2  # the greeting and the reply
+
+
+def test_invite_never_opened_is_erased_after_the_retention_period(
+    setup, config: ClientConfig, clock: FakeClock
+) -> None:
+    engine, repo, retention = setup
+    state = ConversationState(client_id=config.client_id, invite_pending=True)
+    repo.create(state, [], ["hola"])
+    clock.advance(days=config.retention_days - 1)
+    assert retention.erase_expired() == 0
+    clock.advance(days=2)
+    assert retention.erase_expired() == 1
+    assert count(engine, MessageRow, str(state.conversation_id)) == 0

@@ -15,14 +15,23 @@ from typing import Annotated, Any
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import SecretStr
 
 from app import metrics
 from app.adapters.storage.dashboard import Filters
 from app.api.auth import parse_users, verify_password
+from app.api.invites import (
+    INVITE_MAX_AGE,
+    MAX_INVITE_ROWS,
+    MAX_UPLOAD_BYTES,
+    InviteError,
+    InviteLinks,
+    links_csv,
+    parse_applications,
+)
 from app.api.limits import QUARTER_HOUR, client_ip
 from app.bootstrap import Container
 from app.domain.config import ClientConfig
@@ -151,6 +160,7 @@ def candidate_list(
         channel=params.get("channel") or None,
         search=params.get("q") or None,
         start_before=_date(params.get("start_before")),
+        asked_for_human=params.get("human") == "1",
     )
     today = datetime.combine(c.clock.now().date(), time.min, tzinfo=c.clock.now().tzinfo)
     page = c.queries.candidates(filters, page=_page_number(params.get("page")))
@@ -213,6 +223,85 @@ async def candidate_detail(
             "interview": local_time(state.interview_at, state, c.config)
             if state.interview_at
             else None,
+        },
+    )
+
+
+@router.get("/dashboard/invite", response_class=HTMLResponse)
+def invite_page(request: Request, c: App, user: Recruiter) -> HTMLResponse:
+    return _invite_page(request, c, user)
+
+
+def _invite_page(
+    request: Request, c: Container, user: str, error: str | None = None, code: int = 200
+) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request,
+        "dashboard_invite.html",
+        {
+            "user": user,
+            "active": "invite",
+            "error": error,
+            "max_rows": MAX_INVITE_ROWS,
+            "max_age_days": INVITE_MAX_AGE // (24 * 3600),
+            "base_url": _public_base(request, c),
+        },
+        status_code=code,
+    )
+
+
+def _public_base(request: Request, c: Container) -> str:
+    """Links leave the building, so they need the public address. Only a local demo may guess."""
+    base = c.settings.public_base_url or (str(request.base_url) if c.settings.demo_mode else "")
+    return base.rstrip("/")
+
+
+@router.post("/dashboard/invite", response_model=None)
+async def create_invites(
+    request: Request,
+    c: App,
+    user: Recruiter,
+    _: Csrf,
+    count: Annotated[int | None, Form()] = None,
+    applications: Annotated[UploadFile | None, File()] = None,
+) -> Response:
+    """Signed chat links as a CSV, in the order given. Other columns in the upload (a phone, say)
+    come back as they were, for the recruiter's mail merge: they're never stored or logged."""
+    base = _public_base(request, c)
+    if not base:
+        return _invite_page(request, c, user, "Set PUBLIC_BASE_URL first.", 400)
+    now = c.clock.now()
+    raw = await applications.read(MAX_UPLOAD_BYTES + 1) if applications else b""
+    try:
+        if raw:
+            rows = parse_applications(raw, now)
+        elif count is not None and 1 <= count <= MAX_INVITE_ROWS:
+            rows = [{"applied_at": now.isoformat()} for _ in range(count)]
+        else:
+            raise InviteError(f"Upload a CSV, or enter a number from 1 to {MAX_INVITE_ROWS}.")
+    except InviteError as exc:
+        return _invite_page(request, c, user, str(exc), 400)
+
+    links: InviteLinks = request.app.state.invites
+
+    def create() -> list[str]:
+        return [
+            base
+            + links.path(
+                c.service.start_conversation(
+                    "chat", datetime.fromisoformat(row["applied_at"]), invited_by=user
+                )
+            )
+            for row in rows
+        ]
+
+    urls = await asyncio.to_thread(create)
+    return Response(
+        links_csv(rows, urls),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="chat-links.csv"',
+            "Cache-Control": "no-store",
         },
     )
 

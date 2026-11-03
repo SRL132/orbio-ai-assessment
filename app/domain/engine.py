@@ -115,6 +115,20 @@ def start(state: ConversationState, config: ClientConfig, ports: Ports) -> TurnR
     t.state.stage = Stage.CONSENT
     t.say("greeting_consent")
     t.event(EventType.CONVERSATION_STARTED)
+    return _finish(t, schedule_reminder=not t.state.invite_pending)
+
+
+def on_invite_opened(
+    state: ConversationState, config: ClientConfig, ports: Ports
+) -> TurnResult | None:
+    """The candidate opened their invite link: the conversation really starts now, so its
+    duration and its reminders count from here. Opening it again changes nothing."""
+    if not state.invite_pending:
+        return None
+    t = _Turn.begin(state, config, ports)
+    t.state.invite_pending = False
+    t.state.started_at = t.now
+    t.event(EventType.INVITE_OPENED)
     return _finish(t)
 
 

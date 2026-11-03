@@ -1,0 +1,17 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Invite candidates{% endblock %}
+{% block content %}
+<h1>Invite candidates</h1>
+<p class="muted">Make one signed chat link per applicant, then send the links with your own SMS or email tool. Links expire after {{ max_age_days }} days. Reminders start when a candidate opens their link, and unopened links show up under Analytics.</p>
+{% if error %}<p class="card low" role="alert">{{ error }}</p>{% endif %}
+{% if not base_url %}<p class="card low" role="alert">Set PUBLIC_BASE_URL first: links need the app's public address.</p>{% endif %}
+<form method="post" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <h2>From a CSV</h2>
+  <label>File with an <code>applied_at</code> column, for example 2026-11-03T09:00:00+01:00 <input type="file" name="applications" accept=".csv,text/csv"></label>
+  <p class="muted">Other columns, such as a phone number, come back in the download so you can match links to people. They aren't stored.</p>
+  <h2>Or just a number</h2>
+  <label>Links to make, up to {{ max_rows }}. They count as applying now. <input type="number" name="count" min="1" max="{{ max_rows }}"></label>
+  <p><button type="submit">Download links</button></p>
+</form>
+{% endblock %}
