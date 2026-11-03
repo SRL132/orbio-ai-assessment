@@ -86,31 +86,33 @@ dashboard ──▶ read model over the projected state; writes go back through 
 - **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length), or the template is used instead.
 - **No callback at the end.** Qualified candidates book the interview in the chat, because a callback would bring back the 60% no-answer problem at the last step.
 - **Built to scale without a rewrite:** webhooks only store and acknowledge, one conversation is processed at a time, reminders live in the database, and the event log is the source of truth. See the "Demo vs production" and "Deployment and monitoring" sections of the architecture doc.
-- **LLM choice is provisional and decided by evals.** The default is `claude-opus-5-5` at low effort, with structured outputs, prompt caching and refusal fallbacks. The [provider comparison](docs/architecture.md#llm-provider) covers Anthropic, OpenAI, Google, Mistral, Grok and DeepSeek on quality, data protection, cost and latency.
+- **LLM choice is decided by evals, and the production model is still open.** Out of the box `LLM_PROVIDER=fake` needs no key. The best live run so far is `google/gemini-3.5-flash-lite` through OpenRouter, which is for synthetic data only. For real candidates, the Anthropic adapter (`claude-opus-5-5` at low effort, with structured outputs, prompt caching and refusal fallbacks) is built but hasn't been through the evals yet. The [provider comparison](docs/architecture.md#llm-provider) covers Anthropic, OpenAI, Google, Mistral, Grok and DeepSeek on quality, data protection, cost and latency, and [where the choice stands](docs/architecture.md#where-the-choice-stands) has the measured results.
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 300+ tests (property tests included) with a coverage ratchet (≥ 96.3%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 500+ tests (property tests included) with a coverage ratchet (≥ 97.5%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
-`uv run python -m evals` runs 21 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, language switch, code-switching, both knockouts, borderline zone, human request, abuse, ID number, silence, invalid date, prompt injection, job question, bot question, interview booking, and three voice calls with speech-to-text-style input. Each run is scored on outcome, field accuracy, turns and the output check, and compared against `evals/baseline.json`.
+The suite has 64 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 55 that work offline; the other 9 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
-| Offline (`fake/keyword/scripted`, in CI) | 21/21 | 100% |
-| Live models | not run yet: needs an API key (`--provider openrouter --model …` or `--provider anthropic`, optionally `--simulate`) |
+| Offline (`fake/keyword/scripted`, in CI) | 55/55 | 100% |
+| Live scripted, `google/gemini-3.5-flash-lite` (2026-11-03, 3 runs) | 187/192 (97%) | 99% |
+| Live simulated, `qwen/qwen3.7-plus` (2026-10-30, older 21-scenario suite) | 13/20 | 99% |
 
-The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure.
+The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure, with limits: results vary between runs (62, 62 and 63 of 64, with five different scenarios failing, and one earlier run reached 64/64); the suite isn't held out from the fixes it prompted; and live scores aren't in the baseline, so nothing fails automatically if they drop.
 
 [`samples/`](samples/README.md) has one transcript per scenario.
 
 ## Potential improvements
 
-- **Run the live evals** on the shortlisted models, pick the provider on accuracy, then latency, then cost, and record the baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set.
+- **Finish the model choice:** run the current suite several times on each shortlisted model, including Claude through its own SDK, skipping models whose median turn is over 5 s. Pick the provider on accuracy, then latency, then cost, and record live baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set (the last simulated runs used the older 21-scenario suite).
 - **WhatsApp in production:** a permanent system-user token, approved reminder templates, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
 - **Smarter re-engagement:** reminder timing by time of day and channel, and A/B tests on reminder wording, measured with the drop-off analytics.
+- **An admin area so recruiters can iterate quickly:** an editing layer over the client config, not free-text prompts. Recruiters change structured settings directly (FAQ answers, service areas, reminder timing, tone options), while knockout rules and consent or legal text need extra sign-off. Every change goes draft → automatic eval run → review what changed → publish, with rollback, and each conversation records the config version it ran under.
 
 ## Docs
 

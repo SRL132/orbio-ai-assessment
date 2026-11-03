@@ -60,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.simulate and args.provider == "fake":
         parser.error("--simulate needs a real provider (openrouter or anthropic)")
+    if args.write_baseline and args.scenario:
+        parser.error("--write-baseline needs the full suite: a subset would shrink the ratchet")
 
     overrides: dict[str, Any] = {"llm_provider": args.provider}
     if args.model:

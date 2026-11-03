@@ -1,9 +1,11 @@
 """The eval harness itself: offline scripted run, scoring, and the regression ratchet."""
 
+import pytest
+
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.domain.config import ClientConfig
-from evals.__main__ import _regressions, main, summarize
+from evals.__main__ import BASELINE, _regressions, main, summarize
 from evals.runner import Expect, Harness, Scenario, load_scenarios
 
 
@@ -76,3 +78,12 @@ def test_regressions_ratchet(config: ClientConfig) -> None:
 
 def test_cli_check_against_baseline() -> None:
     assert main(["--check"]) == 0
+
+
+def test_cli_refuses_a_baseline_from_a_subset(capsys: pytest.CaptureFixture[str]) -> None:
+    before = BASELINE.read_text()
+    with pytest.raises(SystemExit) as refused:
+        main(["--write-baseline", "--scenario", "no_license"])
+    assert refused.value.code == 2
+    assert "full suite" in capsys.readouterr().err
+    assert BASELINE.read_text() == before

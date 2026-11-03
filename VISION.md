@@ -77,7 +77,7 @@ A **modular monolith with a lightweight hexagonal core**. Full detail: [`docs/ar
 
 ## Open decisions
 
-- **LLM choice.** Provisional default `claude-opus-5-5`; final choice by evals across a shortlist (Anthropic, OpenAI, Google, optionally Mistral). Criteria, scorecard, cost estimates and selection process: [architecture → LLM provider](docs/architecture.md#llm-provider).
+- **LLM choice.** Still open: final choice by evals across a shortlist (Anthropic, OpenAI, Google, optionally Mistral). The best live run so far is `google/gemini-3.5-flash-lite` through OpenRouter (synthetic data only); `claude-opus-5-5` is the Anthropic adapter's default and hasn't been through the evals. Criteria, scorecard, cost estimates, selection process and results: [architecture → LLM provider](docs/architecture.md#llm-provider).
 - **Service areas.** The brief doesn't list the 45 locations, so we invent a plausible set in config.
 - **License rules.** One question in the conversation; detailed per-country rules in config ([appendix A](docs/process-design-appendix.md#a-license-rules-config-not-conversation)).
 - **FAQ knowledge base.** The RAG bonus mentions a "provided FAQ", but none was attached; we write our own or ask for theirs.

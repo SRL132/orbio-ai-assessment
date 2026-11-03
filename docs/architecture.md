@@ -107,7 +107,7 @@ A client config holds locations and service areas, license rules per country, fi
 Prompt caching for the system prompt and config; token usage and cost logged per call and added up per conversation. A smaller model can take over extraction if the evals show it's accurate enough. For a provider that is slow, rate-limited or down (`app/adapters/llm/resilient.py`, wired in `bootstrap.make_resilient_llm`):
 
 - **Retry with backoff.** Each call is retried `LLM_MAX_RETRIES` times on rate limits, server errors and failed connections, with full-jitter exponential backoff (so workers that failed together don't retry together) and the provider's `Retry-After` when it sends one. A read timeout isn't retried on the same provider: it already cost the whole timeout.
-- **Fallback provider behind the same interface.** `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL` (e.g. another vendor's model through OpenRouter). When the primary fails, the same call goes to the fallback, and a circuit breaker sends calls straight to the fallback for 30 s before trying the primary again. The engine sees one `Extractor` and one `Responder` either way. Only synthetic data has been evaluated on a fallback model; pick one that passes the same evals. The chosen fallback is `openrouter` / `qwen/qwen3.7-plus`, second in the provider comparison (19/21 scripted, 97% field accuracy, p95 8.5 s/turn; `evals/results/compare-20261030T221305Z.md`). The top run splits extraction and replies across two models, which a single fallback setting can't express. It sits behind a different vendor from the intended Anthropic primary, so one outage doesn't take out both.
+- **Fallback provider behind the same interface.** `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL` (e.g. another vendor's model through OpenRouter). When the primary fails, the same call goes to the fallback, and a circuit breaker sends calls straight to the fallback for 30 s before trying the primary again. The engine sees one `Extractor` and one `Responder` either way. Only synthetic data has been evaluated on a fallback model; pick one that passes the same evals. The chosen fallback is `openrouter` / `qwen/qwen3.7-plus`, second in the [provider comparison](#where-the-choice-stands) (19/21 scripted, 97% field accuracy, p95 8.5 s/turn, on the older 21-scenario suite). The top run splits extraction and replies across two models, which a single fallback setting can't express. It sits behind a different vendor from both Gemini, the best live run so far, and Anthropic, the intended production path, so one outage doesn't take out both.
 - **Concurrency cap.** At most `LLM_MAX_CONCURRENCY` calls in flight per process, so a peak queues in our process instead of turning into a burst of 429s. Fleet-wide the cap is replicas × that number: size it to the provider's rate limit. A call that can't get a slot in time counts as unavailable.
 - **Hold, don't drop.** If no provider answers, the adapter raises `LLMUnavailable` and the engine keeps the candidate's message instead of consuming it: one holding message ("give me a moment…", template `technical_hold`), then retries after 20 s, 1, 3 and 10 minutes (`llm_retry_seconds` in the client config). Messages the candidate sends meanwhile join the retry. When the retries run out, the candidate is told there's a technical problem and asked to write again (`technical_unavailable`), and the usual reminders follow, so a conversation is never dropped silently. Every attempt is an `extractor_failed` event with its attempt number.
 - **A bad answer isn't an outage.** Unparseable output or a refusal is not retried later (it would likely fail the same way): the candidate is asked again at once (`technical_retry`), as before. A failed reply (the responder) falls back to the fixed template for that action.
@@ -265,7 +265,7 @@ Limits and the production path: browser speech recognition only works in Chrome 
 
 ## LLM provider
 
-> **Status: provisional.** The final choice is made by the eval suite (accuracy → p50/p95 latency → cost), not by reputation. Prices and capabilities below change often: verify against each provider's official pricing page before quoting them.
+> **Status: provisional.** The final choice is made by the eval suite (accuracy → p50/p95 latency → cost), not by reputation, and it hasn't been made yet: see [where the choice stands](#where-the-choice-stands). Prices and capabilities below change often: verify against each provider's official pricing page before quoting them.
 
 ### Approach
 
@@ -298,12 +298,12 @@ Assumptions (estimates, to replace with measured `usage`): 10 turns per conversa
 
 | Provider | Model (tier) | Input / cached / output ($ per 1M) | ≈ $ / week | Notes |
 | --- | --- | --- | --- | --- |
-| Anthropic | `claude-opus-5-5` (top) | 4.00 / 0.20 / 20.00 | ~1,100 | Current default |
+| Anthropic | `claude-opus-5-5` (top) | 4.00 / 0.20 / 20.00 | ~1,100 | Anthropic adapter's default; not evaluated yet |
 | Anthropic | `claude-sonnet-5-5` (mid) | 2.00 / 0.20 / 10.00 | ~570 | |
 | Anthropic | `claude-haiku-5-5` (small) | 0.10 / ? / 0.50 | ~30–50 | Cache-read price not confirmed |
 | Google | `gemini-4-argon` (top) | 2.00 / 0.10 / 10.00 | ~540 | Doubles on 1 Dec 2026 → ~1,090 |
 | Google | `gemini-3.8-flash` (mid) | 0.75 / 0.075 / 3.75 | ~210 | Doubles on 1 Jan 2027 → ~430 |
-| Google | `gemini-3.5-flash-lite` (small) | 0.30 / 0.03 / 2.50 | ~125 | |
+| Google | `gemini-3.5-flash-lite` (small) | 0.30 / 0.03 / 2.50 | ~125 | Best live run so far |
 | Google | `gemini-3.1-flash-lite` (small) | 0.25 / 0.025 / 1.50 | ~80 | |
 | OpenAI | GPT-5.6 Sol (high) | 5.00 / 0.50 / 30.00 | ~1,620 | Third-party source; verify |
 | OpenAI | GPT-5.6 Terra (mid) | 2.00 / 0.20 / 12.00 | ~650 | Third-party source; verify |
@@ -318,7 +318,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 ### Latency and voice
 
-- No latency figures are quoted here on purpose: they depend on region, load and reasoning effort. The eval run measures **p50/p95 time-to-first-token from an EU region with our real prompts**.
+- No published latency figures are quoted here on purpose: they depend on region, load and reasoning effort. The eval run measures **p50/p95 seconds per candidate turn with our real prompts**, including both LLM calls; results are under [where the choice stands](#where-the-choice-stands).
 - Small and mid tiers are much faster than flagships, and they suit one short question per message.
 - **Voice:** Google publishes per-minute prices for its live audio models (`gemini-3.8-live`: ~$0.005/min audio in, ~$0.018/min audio out, so ~$0.05 for a 4-minute screening). OpenAI's Realtime pricing was not confirmed. Both run their own conversation loop, so our engine would plug in as tools; the preferred voice design (push-to-talk → STT → `engine.turn()` → TTS) keeps the engine in control.
 
@@ -328,3 +328,30 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 2. Through the OpenRouter eval adapter, run the same suite on one mid tier per shortlisted provider (`claude-sonnet-5-5`, `gemini-3.8-flash`, GPT-5.6 Terra), plus one small model each for extraction only (`claude-haiku-5-5`, Flash-Lite, Luna).
 3. Rank by extraction and knockout accuracy, then p50/p95 latency, then cost (using post-increase prices).
 4. Confirm the winner through its own SDK, record the results in `evals/baseline.json`, and present them as the justification for the choice.
+
+### Where the choice stands
+
+Steps 2 to 4 aren't finished, so no production model has been chosen. As of 2026-11-03:
+
+- **No settings:** `LLM_PROVIDER=fake`, the offline mode.
+- **Best live run:** `google/gemini-3.5-flash-lite` through OpenRouter. OpenRouter is for synthetic data only, and there's no direct Gemini adapter yet.
+- **Intended path for real candidates:** the Anthropic adapter (default `claude-opus-5-5`). It's built, but no Claude model has been through the evals, and neither has any OpenAI model.
+
+Results, all with synthetic candidates. Run files are in `evals/results/`, which is gitignored, so the numbers are copied here.
+
+| Run | Date | Suite | Mode | Pass rate | Field accuracy | p50 / p95 s per turn | $ per conversation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Gemini 3.5 Flash-Lite (3 runs) | 11-03 | 64 | scripted | 187/192 (62, 62, 63 of 64) | 99% | 2.02–2.19 / 4.03–4.22 | 0.0136 |
+| Qwen 3.8 Flash extract, Qwen 3.7 Plus replies | 10-30 | 21 | scripted | 20/21 | 99% | 3.75 / 8.36 | 0.0395 |
+| Qwen 3.7 Plus | 10-30 | 21 | scripted | 19/21 | 97% | 5.95 / 8.49 | 0.0570 |
+| Mistral Large 4 | 10-30 | 21 | scripted | 8/21 | 68% | 13.0 / 19.53 | 0.0948 |
+| Mistral Small extract, Mistral Large 4 replies | 10-30 | 21 | scripted | 6/21 | 67% | 4.25 / 8.49 | 0.0434 |
+| DeepSeek V4.1 Flash extract, DeepSeek V4 Pro replies | 10-30 | 21 | scripted | 4/21 | 57% | 5.16 / 9.45 | 0.0512 |
+| DeepSeek V4 Pro | 10-30 | 21 | scripted | 2/21 | 61% | 16.41 / 45.53 | 0.1286 |
+| Qwen 3.7 Plus | 10-30 | 20 | simulated | 13/20 | 99% | 5.86 / 7.35 | 0.0840 |
+| Mistral Large 4 | 10-30 | 20 | simulated | 9/20 | 83% | 12.87 / 20.43 | 0.1394 |
+| DeepSeek V4 Pro | 10-30 | 20 | simulated | 3/20 | 71% | 20.16 / 45.81 | 0.1764 |
+
+Don't read this as a ranking across dates. The Gemini runs used a bigger suite and a later version of the engine; the three ran at the same time, and five different scenarios failed across them, so the same model and code don't always give the same result. An earlier single run reached 64/64. The other rows are single runs. The 10-30 comparison only covered open-weight models, because the OpenRouter account was restricted from closed-weight ones at the time. A fair comparison means re-running every candidate, Claude included, on the current suite several times.
+
+Models with a median turn over 5 s are out of consideration, so they won't be re-run. That rules out Qwen 3.7 Plus (5.95 s), the fallback named under resilience above, so a replacement still has to be chosen and pass the same evals.

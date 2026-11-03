@@ -35,10 +35,11 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 
 ## Discussion (10 min): be ready for
 
-- **"What would you do with more time?"** Live evals and prompt tuning, the WhatsApp adapter, voice, Postgres with migrations, SSO, the real calendar and ATS integration.
+- **"What would you do with more time?"** Finish the model choice (repeated live evals on the current suite, Claude included) and tune the prompts, WhatsApp and voice in production, SSO, the real calendar and ATS integration.
+  - **An admin area so recruiters can iterate quickly.** The rules already live in client config, so this is an editing layer over it, not a rewrite. Recruiters change structured settings directly (FAQ answers, service areas, reminder timing, tone options); knockout rules and consent or legal text need extra sign-off. Every change goes draft → automatic eval run → review what changed → publish, with rollback, and each conversation records the config version it ran under. No free-text prompt box: that would change the agent's behaviour without passing the evals, and could undermine "code decides, the LLM talks". Not built now because a half-finished version would weaken traceability, and one bad edit would reach 1,000 applications a week.
 - **"10K candidates a week?"** Swap in a real queue and Postgres and run N workers; the engine doesn't change. The limits are LLM rate limits and cost, not infrastructure.
 - **"What would you do differently?"** Be honest: the offline keyword extractor makes the offline evals look perfect; only live evals measure extraction. Field editing in the dashboard was cut in favour of overrides plus notes.
-- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 180+ tests, and the eval suite. "I can walk you through any file."
+- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 500+ tests, and the eval suite. "I can walk you through any file."
 
 ## 5–10 min video
 
