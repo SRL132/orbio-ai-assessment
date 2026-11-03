@@ -14,7 +14,6 @@ from app.adapters.llm.openrouter import MAX_BACKOFF_SECONDS, OpenRouterLLM, _bac
 from app.adapters.llm.resilient import LLMBusy, Pair, ResilientLLM
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     ConversationState,
     ExtractionResult,
@@ -42,7 +41,7 @@ class Stub:
 
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str:

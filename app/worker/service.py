@@ -12,6 +12,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from app import metrics, tracing
@@ -37,6 +38,9 @@ MAX_MESSAGE_CHARS = 2000
 # holding a lease blocks its conversation for at most this long.
 LEASE = timedelta(minutes=3)
 LEASE_POLL_SECONDS = 0.05
+# LLM context per turn: enough for "lo mismo" or a follow-up question, without long prompts.
+RECENT_MESSAGES = 6
+RECENT_MESSAGE_CHARS = 300
 
 
 class ConversationBusy(RuntimeError):
@@ -127,6 +131,7 @@ class ScreeningService:
             text="\n".join(m.text for m in pending),
             received_at=pending[-1].created_at,
         )
+        state.recent_messages = self._recent_messages(conversation_id, pending)
         started = time.monotonic()
         attributes = {"conversation.id": str(conversation_id), "channel": state.channel}
         with tracing.tracer.start_as_current_span("turn", attributes=attributes) as span:
@@ -161,6 +166,14 @@ class ScreeningService:
             result.state.stage.value,
         )
         return result
+
+    def _recent_messages(
+        self, conversation_id: UUID, pending: list[StoredMessage]
+    ) -> list[tuple[Literal["in", "out"], str]]:
+        """The messages before this turn, as stored: redacted text stays redacted."""
+        waiting = {m.id for m in pending}
+        earlier = [m for m in self.repo.messages(conversation_id) if m.id not in waiting]
+        return [(m.direction, m.text[:RECENT_MESSAGE_CHARS]) for m in earlier[-RECENT_MESSAGES:]]
 
     def waiting(self, debounce: timedelta) -> list[UUID]:
         """Conversations whose messages have waited out the debounce (the worker's queue)."""

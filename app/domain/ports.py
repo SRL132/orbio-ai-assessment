@@ -11,7 +11,6 @@ from uuid import UUID
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     ConversationState,
     DomainEvent,
@@ -39,7 +38,7 @@ class Extractor(Protocol):
 class Responder(Protocol):
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str:

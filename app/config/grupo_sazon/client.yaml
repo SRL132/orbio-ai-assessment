@@ -155,24 +155,66 @@ privacy_notice:
     You can ask to access, correct or delete your data at any time by writing to
     privacy@gruposazon.example.
 
+# Sent word for word: the LLM only picks the entry (faq_id). Demo content: the brief attached no
+# FAQ, so these need the client's confirmation (docs/process-design-appendix.md, D). No pay figures.
 faq:
-  - question: Am I talking to a person or a bot?
+  - id: bot
+    question: Am I talking to a person or a bot?
     keywords: [bot, robot, persona, humano, person, human, ia, ai, automatico, automated, real]
     answer:
       es: Soy Lucía, una asistente virtual automatizada. Si prefieres hablar con una persona, dímelo.
       en: I'm Lucía, an automated virtual assistant. If you'd rather talk to a person, just tell me.
-  - question: What is Grupo Sazón?
+  - id: company
+    question: What is Grupo Sazón?
     keywords: [empresa, sazon, company, quienes, who]
     answer:
       es: Grupo Sazón es una cadena de restaurantes con locales en España y México.
       en: Grupo Sazón is a restaurant chain with locations in Spain and Mexico.
-  - question: What does the delivery driver job involve?
+  - id: job
+    question: What does the delivery driver job involve?
     keywords: [trabajo, puesto, consiste, tareas, job, role, involve, hacer]
     answer:
       es: Repartir pedidos de nuestros restaurantes a clientes de tu zona.
       en: Delivering orders from our restaurants to customers in your area.
-  - question: What happens after the questions?
+  - id: next_steps
+    question: What happens after the questions?
     keywords: [despues, siguiente, entrevista, next, after, interview, proceso, process]
     answer:
       es: Si cumples los requisitos, reservas una entrevista aquí mismo en el chat.
       en: If you meet the requirements, you book an interview right here in the chat.
+  - id: pay
+    question: How much does the job pay?
+    keywords: [pagan, paga, pago, cobra, cobrar, sueldo, salario, gana, ganar, pay, paid, salary, wage, money]
+    answer:
+      es: El sueldo depende de la ciudad y de las horas. Un reclutador te dará la cifra exacta.
+      en: Pay depends on the city and the hours. A recruiter will give you the exact figure.
+  - id: hours
+    question: What are the hours and shifts?
+    keywords: [horario, horarios, horas, turno, turnos, hours, shift, shifts]
+    answer:
+      es: Hay turnos de mañana, tarde y noche, a jornada completa, media jornada o fines de semana. Cada local fija los turnos exactos.
+      en: There are morning, afternoon and evening shifts, full time, part time or weekends. Each location sets the exact shifts.
+  - id: vehicle
+    question: Do I need my own vehicle, and who pays for fuel?
+    keywords: [vehiculo, propio, gasolina, vehicle, own, fuel, petrol, gas]
+    answer:
+      es: Un reclutador te confirmará en la entrevista quién pone el vehículo y cómo se cubren los gastos en tu local.
+      en: At the interview, a recruiter will confirm who provides the vehicle and how costs are covered at your location.
+  - id: contract
+    question: What kind of contract is it?
+    keywords: [contrato, autonomo, empleado, contract, freelance, employee]
+    answer:
+      es: Un reclutador te confirmará el tipo de contrato en la entrevista, porque depende del país y del local.
+      en: A recruiter will confirm the type of contract at the interview, because it depends on the country and location.
+  - id: areas
+    question: Which cities and areas do you hire in?
+    keywords: [ciudad, ciudades, zona, zonas, donde, city, cities, area, areas, where]
+    answer:
+      es: Contratamos en las zonas de reparto de nuestros 45 locales de España y México. Con tu ciudad y tu barrio compruebo si hay servicio.
+      en: We hire in the delivery areas of our 45 locations in Spain and Mexico. With your city and neighbourhood I can check if we cover it.
+  - id: data_use
+    question: What do you do with my data?
+    keywords: [datos, privacidad, borrar, data, privacy, delete]
+    answer:
+      es: Usamos tus respuestas solo para valorar tu candidatura. Si no sigues en el proceso, las borramos a los 6 meses salvo que aceptes que las guardemos.
+      en: We use your answers only to assess your application. If you don't continue, we delete them after 6 months unless you agree that we keep them.

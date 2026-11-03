@@ -227,6 +227,24 @@ def test_job_question_is_answered_then_flow_continues(chat: Chat) -> None:
     assert chat.state.candidate.meta[FieldName.FULL_NAME].attempts == 0
 
 
+def test_faq_answer_is_the_approved_text(chat: Chat, config: ClientConfig) -> None:
+    chat.say(ex(yes_no=True))
+    picked = ex(intent="question", question="¿Cuánto pagan?")
+    chat.say(picked.model_copy(update={"faq_id": "pay"}))
+    assert config.faq_answer("pay", "es") in chat.result.replies
+
+
+@pytest.mark.parametrize("faq_id", [None, "made_up", "Pagamos 3.000 € al mes"])
+def test_question_without_a_real_faq_entry_gets_the_fixed_reply(
+    chat: Chat, config: ClientConfig, faq_id: str | None
+) -> None:
+    """A model that invents an id or writes an answer there can't reach the candidate."""
+    chat.say(ex(yes_no=True))
+    picked = ex(intent="question", question="¿Cuánto pagan?")
+    chat.say(picked.model_copy(update={"faq_id": faq_id}))
+    assert chat.result.replies[0] == config.template("es", "answer_unknown")
+
+
 def test_frustration_offers_a_human_once(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", sentiment="frustrated"))

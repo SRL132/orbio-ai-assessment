@@ -83,7 +83,11 @@ def render(
                 replies.append(fill(f"reminder_{number}"))
             case AskField(offer_options=False) if channel in config.template_questions_on:
                 replies.append(fill(_fallback_key(action)))
-            case AskField() | ReAsk() | AnswerQuestion():
+            case AnswerQuestion(faq_id=faq_id):
+                # Approved text only: the LLM picks the entry but can't write the answer, and an
+                # id the config doesn't know gets the "a recruiter will confirm" template.
+                replies.append(config.faq_answer(faq_id, lang) or fill("answer_unknown"))
+            case AskField() | ReAsk():
                 text: str | None
                 try:
                     text = ports.responder.compose(action, state, config)
@@ -276,14 +280,12 @@ def _slot_text(
     )
 
 
-def _fallback_key(action: AskField | ReAsk | AnswerQuestion) -> str:
+def _fallback_key(action: AskField | ReAsk) -> str:
     match action:
         case AskField(field=name):
             return f"ask_{name.value}"
         case ReAsk(field=name):
             return f"reask_{name.value}"
-        case AnswerQuestion():
-            return "answer_unknown"
 
 
 # --- Config check ---------------------------------------------------------------------------------

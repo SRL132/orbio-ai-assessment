@@ -56,17 +56,22 @@ This gives us fast, deterministic tests and evals; "code decides, the LLM talks"
 
 ```
 candidate message
-  → Extractor (LLM, strict output schema):
-      fields found (value, quote, confidence), language, intent, sentiment, confused
+  → Extractor (LLM, strict output schema, with the last 6 messages as context):
+      fields found (value, quote, confidence), language, intent, sentiment, confused, faq_id
   → validators (Python, rules from client config)
   → policy picks the next action:
       ask next missing field | re-ask | disqualify | hand off | recap | offer slots
   → Responder (LLM) writes the message in the persona and candidate's language
       — consent, disqualification and recap use fixed templates
-  → output check (one question, length, no promises) → else fallback template
+      — a job question gets the approved FAQ text for `faq_id`, word for word, or "a recruiter will confirm"
+  → output check (one question, length) → else fallback template
 ```
 
 The flow is **slot-filling**, not a rigid state machine: the next question is the highest-priority field still missing, so answers can arrive in any order.
+
+**Context, not memory.** The structured state carries what the conversation has established. The LLM also gets the last 6 stored messages (up to 300 characters each) to understand a follow-up ("¿y los turnos?") and to avoid repeating itself. They're read from storage each turn, so redacted text stays redacted, and they're never saved with the state. Values still have to quote the current message: the context can't fill a field.
+
+**FAQ answers aren't written by the LLM.** It picks an entry id and code sends that entry's approved text. An unknown id gets the fixed reply, so an invented salary can't reach a candidate. The cost is less natural wording, and one question per message gets one entry.
 
 The extractor schema includes `language`, `intent`, `sentiment` and `confused` **from day one**, even before the policy uses all of them. That keeps the bonus features cheap.
 
@@ -104,7 +109,7 @@ A client config holds locations and service areas, license rules per country, fi
 
 ### 8. LLM calls are hardened
 
-Fewer calls first. `FastPathExtractor` (`app/adapters/llm/fast_path.py`) sits in front of the real extractor: a message that is exactly one of the current question's options ("sí", "Moto", "la segunda") is read by code, and anything else, however close ("¿sí?", "sí, pero solo los lunes"), goes to the LLM. Validators and policy still decide what the answer means. On the channels in `template_questions_on` (voice), a plain next question uses its template; re-asks, questions after confusion and FAQ answers still use the LLM. On the voice scenarios (3 repeats, sequential, LLM time only: no speech recognition or text-to-speech) this took p50 from 1.83 s to 0.01 s, p95 from 2.62 s to 1.92 s and LLM cost by 61%, with all 15 runs passing before and after. Scripted answers are more often closed than real ones may be, so the real gain will be smaller.
+Fewer calls first. `FastPathExtractor` (`app/adapters/llm/fast_path.py`) sits in front of the real extractor: a message that is exactly one of the current question's options ("sí", "Moto", "la segunda") is read by code, and anything else, however close ("¿sí?", "sí, pero solo los lunes"), goes to the LLM. Validators and policy still decide what the answer means. On the channels in `template_questions_on` (voice), a plain next question uses its template; re-asks and questions after confusion still use the LLM. On the voice scenarios (3 repeats, sequential, LLM time only: no speech recognition or text-to-speech) this took p50 from 1.83 s to 0.01 s, p95 from 2.62 s to 1.92 s and LLM cost by 61%, with all 15 runs passing before and after. Scripted answers are more often closed than real ones may be, so the real gain will be smaller.
 
 Prompt caching for the system prompt and config; token usage and cost logged per call and added up per conversation. A smaller model can take over extraction if the evals show it's accurate enough. For a provider that is slow, rate-limited or down (`app/adapters/llm/resilient.py`, wired in `bootstrap.make_resilient_llm`):
 
@@ -123,7 +128,7 @@ Prompt caching for the system prompt and config; token usage and cost logged per
 | `Repository`, `EventLog` | SQLite → Postgres |
 | `CalendarProvider` | mock slots → Google Calendar |
 | `Geocoder` | fixed list (fake) → Nominatim (OpenStreetMap) → self-hosted Nominatim |
-| `KnowledgeBase` | FAQ in prompt → embeddings |
+| `KnowledgeBase` | FAQ id list in prompt → embeddings |
 | `Clock` | system → fake |
 
 What we deliberately **don't** do:
@@ -238,7 +243,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Sentiment | `sentiment` / `confused` from the extractor; the policy rephrases with options or offers a human. Never used for qualification | Low |
 | Tests and evals | Pure engine + fake adapters; simulated candidates against the real engine | Low–Med |
 | Guardrails | Input: `intent` drives the policy. Output: a Python check on every reply, with a template fallback. Data: personal data redacted before logging | Low–Med |
-| RAG | `KnowledgeBase` port; a small FAQ goes in the cached prompt, embeddings only if it grows. Answers come only from the FAQ | Low–Med |
+| RAG | `KnowledgeBase` port; the extractor picks from a small FAQ id list in the cached prompt, embeddings only if it grows. Code sends the approved text | Low–Med |
 | Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `InterviewBooked` actions; a database constraint prevents double-booking. Booking is idempotent per candidate, so a turn that booked but failed to save can be retried (an external calendar can't join our transaction anyway). A periodic job releases bookings the conversation never recorded, after a 10-minute grace period | Med |
 | Location lookup | Done: a `Geocoder` port, called by the engine only for places the config doesn't list (only the place name is sent). The validator decides by distance to the nearest served city (`geo_review_radius_km`), and the candidate confirms the place first. Nominatim adapter: in-memory cache, one request per second and an identifying User-Agent (its usage policy); at volume, self-host it or swap the adapter. A failed lookup sends the candidate to review, never to a knockout | Low–Med |
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |

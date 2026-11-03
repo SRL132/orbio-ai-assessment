@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 55,
+    "passed": 57,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -81,6 +81,18 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 9
+      },
+      "faq_covered_english": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "faq_not_covered": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
       },
       "goes_silent": {
         "field_accuracy": 1.0,
@@ -335,6 +347,6 @@
         "turns": 5
       }
     },
-    "total": 55
+    "total": 57
   }
 }

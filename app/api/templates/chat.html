@@ -34,6 +34,9 @@
 </head>
 <body>
 <div class="phone">
+  {% if offline %}
+  <div class="demo" id="offline-notice"><span>Offline mode: keyword rules, no LLM. Set LLM_PROVIDER for the real agent.</span></div>
+  {% endif %}
   {% if demo_mode %}
   <div class="demo">
     <span>Demo</span>

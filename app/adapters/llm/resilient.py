@@ -25,7 +25,7 @@ from typing import Protocol
 from app import metrics
 from app.adapters.llm.anthropic_sdk import RefusalError
 from app.domain.config import ClientConfig
-from app.domain.models import AnswerQuestion, AskField, ConversationState, ExtractionResult, ReAsk
+from app.domain.models import AskField, ConversationState, ExtractionResult, ReAsk
 from app.domain.ports import Extractor, LLMUnavailable, Responder
 
 logger = logging.getLogger("app.llm")
@@ -40,7 +40,7 @@ class LLM(Protocol):
 
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str: ...
@@ -60,7 +60,7 @@ class Pair:
 
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str:
@@ -105,7 +105,7 @@ class ResilientLLM:
 
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str:

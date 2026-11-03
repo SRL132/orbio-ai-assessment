@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 from typing import Any
 
+from app.adapters.kb.faq import match_faq
 from app.domain.config import ClientConfig
 from app.domain.models import (
     Availability,
@@ -284,6 +285,7 @@ class KeywordExtractor:
             yes_no=yes_no,
             sensitive_data=bool(_SENSITIVE.search(t)),
             question=text.strip() if intent == "question" else None,
+            faq_id=match_faq(text, config) if intent == "question" else None,
             sentiment="frustrated"
             if _has(t, "harto", "pesado", "annoying", "already told")
             else "neutral",

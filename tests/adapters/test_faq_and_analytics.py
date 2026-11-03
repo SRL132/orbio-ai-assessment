@@ -1,13 +1,14 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from pydantic import ValidationError
+
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.kb.faq import match_faq
-from app.adapters.llm.fake import TemplateResponder
 from app.adapters.storage.dashboard import Analytics, DashboardQueries
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     ConversationState,
     FieldName,
     FieldStatus,
@@ -15,26 +16,38 @@ from app.domain.models import (
     Status,
 )
 from app.domain.policy import progress
+from app.domain.render import check_reply
 
 START = datetime(2026, 11, 2, 10, tzinfo=UTC)
 
 
 def test_faq_matches_keywords(config: ClientConfig) -> None:
-    assert match_faq("¿Eres un bot?", config, "es").startswith("Soy Lucía")
-    assert match_faq("what happens after this?", config, "en").startswith("If you meet")
-    assert match_faq("¿Cuánto pagan?", config, "es") is None
+    assert match_faq("¿Eres un bot?", config) == "bot"
+    assert match_faq("what happens after this?", config) == "next_steps"
+    assert match_faq("¿Cuánto pagan?", config) == "pay"
+    assert match_faq("¿Dais seguro médico privado?", config) is None
 
 
-def test_template_responder_answers_from_faq(
-    config: ClientConfig, state: ConversationState
-) -> None:
-    responder = TemplateResponder()
-    assert "asistente virtual" in responder.compose(
-        AnswerQuestion(question="¿eres un robot?"), state, config
-    )
-    assert responder.compose(AnswerQuestion(question="¿cuánto pagan?"), state, config) == (
-        config.template("es", "answer_unknown")
-    )
+def test_every_faq_answer_can_be_sent_as_written(config: ClientConfig) -> None:
+    """They reach candidates word for word, on chat and read aloud on voice."""
+    assert len(config.faq) >= 10
+    for entry in config.faq:
+        for language in ("es", "en"):
+            assert check_reply(entry.answer[language], config, "voice"), entry.id
+            assert "?" not in entry.answer[language], entry.id
+
+
+def test_pay_answer_has_no_figure(config: ClientConfig) -> None:
+    """The demo client gave no pay data, so no number may be promised."""
+    pay = next(entry for entry in config.faq if entry.id == "pay")
+    assert not any(ch.isdigit() for text in pay.answer.values() for ch in text)
+
+
+def test_faq_ids_must_be_unique(config: ClientConfig) -> None:
+    data = config.model_dump()
+    data["faq"][1]["id"] = data["faq"][0]["id"]
+    with pytest.raises(ValidationError, match="unique"):
+        ClientConfig.model_validate(data)
 
 
 def _state(

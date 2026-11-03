@@ -26,7 +26,6 @@ from app.adapters.llm.prompting import (
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     ConversationState,
     ExtractionResult,
@@ -90,7 +89,7 @@ class OpenRouterLLM:
 
     def compose(
         self,
-        action: AskField | ReAsk | AnswerQuestion,
+        action: AskField | ReAsk,
         state: ConversationState,
         config: ClientConfig,
     ) -> str:

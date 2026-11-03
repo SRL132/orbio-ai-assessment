@@ -214,7 +214,11 @@ def create_app(container: Container | None = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(
             request,
             "chat.html",
-            {"company": c.config.persona.company, "demo_mode": c.settings.demo_mode},
+            {
+                "company": c.config.persona.company,
+                "demo_mode": c.settings.demo_mode,
+                "offline": c.settings.llm_provider == "fake",
+            },
         )
 
     @app.post("/api/conversations", status_code=status.HTTP_201_CREATED)
@@ -316,6 +320,7 @@ def create_app(container: Container | None = None) -> FastAPI:
             {
                 "company": c.config.persona.company,
                 "demo_mode": c.settings.demo_mode,
+                "offline": c.settings.llm_provider == "fake",
                 "server_tts": c.tts is not None,
             },
         )

@@ -234,6 +234,12 @@ class ConversationState(BaseModel):
     preferred_times: str | None = None  # their words, after no offered slot fit
     human_after_knockout: bool = False  # asked for a person after a knockout (status stands)
     keep_on_file_reasks: int = 0  # unclear answers to "shall we keep your details?"
+    recent_messages: list[tuple[Literal["in", "out"], str]] = Field(
+        default_factory=list,
+        exclude=True,
+        description="The last messages before this turn, oldest first, as context for the LLM. "
+        "Filled from the stored (redacted) messages each turn and never persisted.",
+    )
     dropped_at: str | None = Field(
         default=None, description="Where an abandoned candidate stopped (for drop-off analytics)."
     )
@@ -307,6 +313,9 @@ class ExtractionResult(BaseModel):
     sensitive_data: bool = Field(
         default=False, description="The message contains an ID number, health data or similar."
     )
+    faq_id: str | None = Field(
+        default=None, description="The approved FAQ entry that answers the question, if any."
+    )
     question: str | None = Field(default=None, description="A question the candidate asked.")
     slot_choice: int | None = Field(
         default=None, description="Number of the interview slot the candidate picked (1-based)."
@@ -332,6 +341,7 @@ class ReAsk(BaseModel):
 class AnswerQuestion(BaseModel):
     kind: Literal["answer_question"] = "answer_question"
     question: str
+    faq_id: str | None = None  # the approved answer to send; None: a recruiter will confirm
 
 
 class Disqualify(BaseModel):

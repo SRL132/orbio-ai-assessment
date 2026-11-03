@@ -4,7 +4,9 @@ Everything client-specific lives in config (see CLAUDE.md, "Rules live in config
 from YAML is an adapter concern; the domain only defines and reads this schema.
 """
 
-from pydantic import BaseModel, Field
+from typing import Self
+
+from pydantic import BaseModel, Field, model_validator
 
 from app.domain.models import Channel, FieldName, Language, Vehicle
 
@@ -62,6 +64,7 @@ class Persona(BaseModel):
 
 
 class FaqEntry(BaseModel):
+    id: str
     question: str
     answer: dict[Language, str]
     keywords: list[str] = Field(
@@ -91,7 +94,7 @@ class ClientConfig(BaseModel):
     template_questions_on: list[Channel] = Field(
         default_factory=list,
         description="Channels where a plain next question uses its template instead of the LLM. "
-        "Re-asks, questions with options after confusion and FAQ answers still use the LLM.",
+        "Re-asks and questions with options after confusion still use the LLM.",
     )
     geo_review_radius_km: float = Field(
         default=30.0,
@@ -138,6 +141,18 @@ class ClientConfig(BaseModel):
     privacy_notice: dict[Language, str] = Field(
         default_factory=dict, description="The privacy notice shown at /privacy, per language."
     )
+
+    @model_validator(mode="after")
+    def _faq_ids_are_unique(self) -> Self:
+        ids = [entry.id for entry in self.faq]
+        if len(ids) != len(set(ids)):
+            raise ValueError("FAQ ids must be unique")
+        return self
+
+    def faq_answer(self, faq_id: str | None, language: Language) -> str | None:
+        """The approved answer for this id; None for no id or one the config doesn't know."""
+        entry = next((e for e in self.faq if e.id == faq_id), None)
+        return entry.answer[language] if entry else None
 
     def template(self, language: Language, key: str, channel: Channel = "chat") -> str:
         if channel == "voice" and key in self.voice_templates.get(language, {}):

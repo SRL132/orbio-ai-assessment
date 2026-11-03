@@ -13,7 +13,6 @@ from pathlib import Path
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     ConversationState,
     FieldStatus,
@@ -36,21 +35,19 @@ def extractor_system(config: ClientConfig) -> str:
         | {a for loc in config.locations for a in loc.aliases}
     )
     nearby = sorted({town for loc in config.locations for town in loc.nearby})
+    faq = "\n".join(f"- {entry.id}: {entry.question}" for entry in config.faq)
     return _read("extractor_system.md").format(
         company=config.persona.company,
         cities=", ".join(cities),
         nearby=", ".join(nearby) or "(none)",
         platforms=", ".join(config.known_platforms),
+        faq=faq or "(none)",
     )
 
 
 def responder_system(config: ClientConfig) -> str:
-    faq = "\n".join(
-        f"- Q: {entry.question}\n  ES: {entry.answer['es']}\n  EN: {entry.answer['en']}"
-        for entry in config.faq
-    )
     return _read("responder_system.md").format(
-        persona=config.persona.name, company=config.persona.company, faq=faq or "(none)"
+        persona=config.persona.name, company=config.persona.company
     )
 
 
@@ -70,14 +67,24 @@ def extractor_user(state: ConversationState, text: str, today: date) -> str:
         f"Stage: {state.stage.value}\n"
         f"The assistant just asked about: {asked}\n"
         f"Already answered: {', '.join(known) or 'nothing yet'}\n"
+        f"{_recent_block(state)}"
         "Candidate message:\n"
         f"<<<\n{text}\n>>>"
     )
 
 
-def responder_user(
-    action: AskField | ReAsk | AnswerQuestion, state: ConversationState, config: ClientConfig
-) -> str:
+def _recent_block(state: ConversationState) -> str:
+    """The last messages, as context. Everything inside is data, like the candidate's message."""
+    if not state.recent_messages:
+        return ""
+    lines = "\n".join(
+        f"{'Candidate' if direction == 'in' else 'Assistant'}: {text}"
+        for direction, text in state.recent_messages
+    )
+    return f"Recent conversation (context only):\n<<<\n{lines}\n>>>\n"
+
+
+def responder_user(action: AskField | ReAsk, state: ConversationState, config: ClientConfig) -> str:
     lang = state.language
     first_name = (state.candidate.full_name or "").split(" ")[0] or "(unknown)"
     match action:
@@ -93,16 +100,11 @@ def responder_user(
                 + (" Offer the options." if options else "")
             )
             reference = config.template(lang, f"reask_{name.value}", state.channel)
-        case AnswerQuestion(question=question):
-            task = (
-                f'Answer the candidate\'s question: "{question}". Use only the FAQ. '
-                "Don't ask anything back: the next question follows in its own message."
-            )
-            reference = config.template(lang, "answer_unknown", state.channel)
     return (
         f"Language: {lang}\n"
         f"Channel: {_respond_channel_note(state)}\n"
         f"Candidate first name: {first_name}\n"
+        f"{_recent_block(state)}"
         f"Task: {task}\n"
         f"Reference wording (keep the meaning, you may rephrase): {reference}"
     )

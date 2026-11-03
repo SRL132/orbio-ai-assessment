@@ -284,14 +284,14 @@ def _on_consent(t: _Turn, extraction: ExtractionResult) -> None:
         t.say("consent_declined")
     else:
         if extraction.question:
-            t.actions.append(AnswerQuestion(question=extraction.question))
+            t.actions.append(AnswerQuestion(question=extraction.question, faq_id=extraction.faq_id))
         t.say("consent_reask")
 
 
 def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
     """Collecting and recap: apply the extracted fields, then ask, recap or finish."""
     if extraction.intent == "question" and extraction.question:
-        t.actions.append(AnswerQuestion(question=extraction.question))
+        t.actions.append(AnswerQuestion(question=extraction.question, faq_id=extraction.faq_id))
     fields = extraction.fields
     if t.state.confirming is not None:
         rest = _on_confirmation(t, extraction)

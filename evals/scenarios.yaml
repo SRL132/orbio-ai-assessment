@@ -162,6 +162,48 @@
     status: in_progress
     awaiting: license
     fields: {full_name: Nuria Gil}
+    reply_contains: ["El sueldo depende de la ciudad y de las horas."]
+
+- id: faq_covered_english
+  description: A question the FAQ covers gets its approved answer, word for word.
+  persona: Tom Reed, who asks if he needs his own vehicle and then gives his name.
+  steps: ["Yes", "Do I need my own vehicle?", Tom Reed]
+  expect:
+    status: in_progress
+    language: en
+    awaiting: license
+    fields: {full_name: Tom Reed}
+    reply_contains: ["At the interview, a recruiter will confirm who provides the vehicle"]
+
+- id: faq_not_covered
+  description: A question the FAQ doesn't cover gets the fixed "a recruiter will confirm" reply.
+  persona: Nuria Gil, who asks whether there is private health insurance and then gives her name.
+  steps: [Sí, "¿Dais seguro médico privado?", Nuria Gil]
+  expect:
+    status: in_progress
+    awaiting: license
+    fields: {full_name: Nuria Gil}
+    reply_contains: ["un reclutador te lo confirmará"]
+
+- id: context_follow_up_question
+  description: A follow-up question only makes sense with the previous message; the recent conversation resolves it.
+  requires_llm: true
+  persona: Nuria Gil, who asks about pay, then "and the shifts?".
+  steps: [Sí, "¿Cuánto se cobra?", "¿y los turnos?"]
+  expect:
+    status: in_progress
+    awaiting: full_name
+    reply_contains: ["Hay turnos de mañana, tarde y noche"]
+
+- id: context_back_reference
+  description: '"Lo mismo que te dije antes" states no value: nothing is invented and the field is asked again.'
+  requires_llm: true
+  persona: Ana López, Retiro (Madrid), moto, full time, who answers the schedule question by pointing back.
+  steps: [Sí, Ana López, Moto, "Madrid, Retiro", Jornada completa, "lo mismo que te dije antes"]
+  expect:
+    status: in_progress
+    awaiting: schedule
+    fields: {availability: [full_time]}
 
 - id: books_interview
   description: Qualified candidate picks one of the offered interview slots in the chat.

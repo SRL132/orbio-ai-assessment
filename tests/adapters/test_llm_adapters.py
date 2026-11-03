@@ -20,7 +20,6 @@ from app.adapters.llm.prompting import (
 from app.adapters.llm.usage import UsageMeter
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     ConversationState,
     ExtractionResult,
@@ -222,11 +221,27 @@ class TestResponderPrompt:
         assert "in_past" in user
         assert config.template("es", "reask_start_date") in user
 
-    def test_answer_question_uses_faq_only(
+    def test_extractor_picks_faq_ids_but_no_prompt_holds_the_answers(
+        self, config: ClientConfig
+    ) -> None:
+        system = extractor_system(config)
+        pay = next(entry for entry in config.faq if entry.id == "pay")
+        assert "- pay: How much does the job pay?" in system
+        for prompt in (system, responder_system(config)):
+            assert pay.answer["es"] not in prompt
+
+    def test_recent_conversation_is_context_for_both_prompts(
         self, config: ClientConfig, state: ConversationState
     ) -> None:
-        user = responder_user(AnswerQuestion(question="¿Cuánto pagan?"), state, config)
-        assert "Use only the FAQ" in user
+        state.recent_messages = [("out", "¿Cómo te llamas?"), ("in", "Ana López")]
+        expected = "<<<\nAssistant: ¿Cómo te llamas?\nCandidate: Ana López\n>>>"
+        assert expected in extractor_user(state, "hola", date(2026, 11, 2))
+        assert expected in responder_user(AskField(field=FieldName.LICENSE), state, config)
+
+    def test_no_recent_block_without_messages(
+        self, config: ClientConfig, state: ConversationState
+    ) -> None:
+        assert "Recent conversation" not in extractor_user(state, "hola", date(2026, 11, 2))
 
     def test_confused_candidate_gets_options(
         self, config: ClientConfig, state: ConversationState

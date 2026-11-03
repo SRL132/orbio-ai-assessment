@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import ScriptedExtractor, TemplateResponder
-from app.adapters.storage.sql import SqlRepository, make_engine
+from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
     ConversationState,
@@ -16,7 +17,7 @@ from app.domain.models import (
     StoredMessage,
 )
 from app.domain.ports import Ports
-from app.worker.service import ScreeningService
+from app.worker.service import RECENT_MESSAGE_CHARS, RECENT_MESSAGES, ScreeningService
 from tests.conftest import ex
 
 _ENGINES = []
@@ -51,6 +52,81 @@ def test_burst_of_messages_is_one_turn(
     texts = [m.text for m in service.repo.messages(cid)]
     assert texts[0].startswith("¡Hola! Soy Lucía")
     assert texts[-1] == config.template("es", "ask_license")
+
+
+class ContextSpy(ScriptedExtractor):
+    """Records the conversation context each extraction was given."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.contexts: list[list[tuple[str, str]]] = []
+
+    def extract(self, state, text, config, today):  # type: ignore[no-untyped-def]
+        self.contexts.append(list(state.recent_messages))
+        return super().extract(state, text, config, today)
+
+
+def test_llm_gets_earlier_messages_as_context_but_not_the_one_being_read(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    spy = ContextSpy()
+    service = make_service(config, replace(ports, extractor=spy), clock)
+    cid = service.start_conversation()
+    service.receive(cid, "sí")
+    spy.push(ex(yes_no=True))
+    service.process_pending(cid)
+    service.receive(cid, "Ana López")
+    spy.push(ex(full_name="Ana López"))
+    service.process_pending(cid)
+
+    assert [d for d, _ in spy.contexts[0]] == ["out"]  # only the greeting
+    assert ("in", "sí") in spy.contexts[1]
+    assert not any("Ana López" in text for _, text in spy.contexts[1])
+
+
+def test_context_is_short_and_recent(config: ClientConfig, ports: Ports, clock: FakeClock) -> None:
+    spy = ContextSpy()
+    service = make_service(config, replace(ports, extractor=spy), clock)
+    cid = service.start_conversation()
+    for text in ("primero", "x" * 1000, "tercero", "cuarto", "quinto"):
+        service.receive(cid, text)
+        service.process_pending(cid)
+
+    last = spy.contexts[-1]
+    assert len(last) == RECENT_MESSAGES
+    assert all(len(text) <= RECENT_MESSAGE_CHARS for _, text in last)
+    assert ("in", "x" * RECENT_MESSAGE_CHARS) in spy.contexts[2]
+
+
+def test_context_never_brings_redacted_data_back(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    spy = ContextSpy()
+    service = make_service(config, replace(ports, extractor=spy), clock)
+    cid = service.start_conversation()
+    service.receive(cid, "mi DNI es 12345678Z")
+    spy.push(ex(sensitive_data=True))
+    service.process_pending(cid)
+    service.receive(cid, "sí")
+    service.process_pending(cid)
+
+    assert not any("12345678Z" in text for _, text in spy.contexts[1])
+    assert ("in", REDACTED) in spy.contexts[1]
+
+
+def test_context_is_not_saved_with_the_state(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = make_service(config, ports, clock)
+    cid = service.start_conversation()
+    service.receive(cid, "sí")
+    result = service.process_pending(cid)
+    assert result is not None
+    assert result.state.recent_messages  # the turn had it
+    assert "recent_messages" not in result.state.model_dump()
+    stored = service.repo.get(cid)
+    assert stored is not None
+    assert stored.recent_messages == []
 
 
 def test_reminders_are_sent_then_abandoned(

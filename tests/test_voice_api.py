@@ -94,3 +94,21 @@ def test_empty_settings_mean_unset() -> None:
     settings = Settings(_env_file=None, session_secret="", elevenlabs_api_key="  ")
     assert settings.session_secret is None
     assert settings.elevenlabs_api_key is None
+
+
+@pytest.mark.parametrize("page", ["/chat", "/voice"])
+def test_offline_mode_says_so(client: TestClient, page: str) -> None:
+    assert "Offline mode: keyword rules, no LLM" in client.get(page).text
+
+
+@pytest.mark.parametrize("page", ["/chat", "/voice"])
+def test_no_offline_notice_with_a_real_llm(tmp_path: Path, page: str) -> None:
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'live.db'}",
+        llm_provider="openrouter",
+        openrouter_api_key="test",
+        openrouter_model="test/model",
+    )
+    with TestClient(create_app(build(settings))) as live:
+        assert "Offline mode" not in live.get(page).text

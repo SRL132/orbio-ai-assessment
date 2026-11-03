@@ -8,7 +8,6 @@ import pytest
 from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
-    AnswerQuestion,
     AskField,
     Availability,
     ConversationState,
@@ -43,14 +42,13 @@ def test_voice_uses_spoken_templates_with_chat_fallback(config: ClientConfig) ->
         (AskField(field=FieldName.LICENSE), False),
         (AskField(field=FieldName.LICENSE, offer_options=True), True),  # they seem confused
         (ReAsk(field=FieldName.LICENSE, reason="unclear"), True),
-        (AnswerQuestion(question="¿Cuánto pagan?"), True),
     ],
 )
 def test_only_plain_next_questions_skip_the_llm_on_voice(
     voice_state: ConversationState,
     config: ClientConfig,
     ports: Ports,
-    action: AskField | ReAsk | AnswerQuestion,
+    action: AskField | ReAsk,
     uses_llm: bool,
 ) -> None:
     calls: list[object] = []
