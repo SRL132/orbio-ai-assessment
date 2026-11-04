@@ -32,7 +32,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 
 - The `needs_review` candidates, oldest first, so nobody waits too long.
 - Each item shows its **reason**: `human_requested`, `borderline_zone`, `field_failed_twice:<field>`, `ungrounded_answer:<field>` (the extracted value isn't in the candidate's words), `location_unverified:location` (the place lookup failed), `license_unclear`, `flagged_behaviour`, `data_request` (stop or delete their data), `interview_change` (a booked interview stays until you act), `recap_unconfirmed` (kept refusing the recap).
-- Actions: mark qualified, mark disqualified (reason required), or contact the candidate.
+- Actions: mark qualified or mark disqualified (reason required). To contact the candidate, the detail page shows how (below).
 
 ### 3. Candidate detail
 
@@ -62,11 +62,13 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - Editing a field value from the dashboard (a recruiter overrides the status and explains why in the reason or a note instead).
 - Per-location permissions (all recruiters see all locations).
 - Bulk actions and CSV export (only JSON export per candidate is in scope).
-- Messaging the candidate from the dashboard (shown as a disabled "contact" action).
+- Messaging the candidate from the dashboard. The detail page shows how to reach them instead: the WhatsApp number on that channel, the `application_ref` for an invited candidate, or a plain statement that a candidate from the open chat link has no contact details.
 
 ## Inviting candidates
 
-`/dashboard/invite` makes one signed chat link per applicant, from a CSV with an `applied_at` column or from a number. The download keeps the upload's other columns (a phone number, say) so links can be matched to people, and they're never stored or logged. Recruiters send the links with their own SMS or email tool, so a pilot doesn't need an ATS. Links expire after 7 days.
+`/dashboard/invite` makes one signed chat link per applicant, from a CSV with an `applied_at` column or from a number. The download keeps the upload's other columns (a phone number, say) so links can be matched to people, and they're never stored or logged. Recruiters send the links with their own SMS or email tool, so a pilot doesn't need an ATS. Links expire after 7 days. An optional `application_ref` column (letters, digits and `. _ -`) is the one thing kept: the recruiter's own id, which points back to the person in their file.
+
+"Download unfinished applications" lists everyone with a reference who is still in progress or was abandoned for silence, with a fresh link, because web chat can't reach someone who closed the tab. Candidates who declined consent aren't on it.
 
 An invited conversation has no reminders until the link is opened, and it stays out of the candidate list and counters until then. Analytics shows "Invited, not opened", and those applicants still count against "screened on time", so the agent's reach isn't flattered. Unopened invites are erased after the retention period.
 

@@ -66,9 +66,8 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | **Asks for a human** | Hand off right away. After a knockout the rejection stands, or anyone could skip it, but the request gets its own dashboard filter and they're told a person will review it |
 | **Asks to stop or to delete their data** (at any point, even after the chat has closed) | Stop asking and send it to the review queue with its own reason. The candidate is told a recruiter will reply within 2 working days, and given the privacy address. If no LLM can read the message, it's kept and retried, as in an open conversation. After a knockout the reason stays on record |
 | **Changes an earlier answer** | Take the latest value, re-validate, log the change. A valid new answer clears the review flag on that field. A corrected knockout reopens the screening |
-| **Keeps refusing the recap** | After 3 replies in a row that neither confirm nor change it (`max_recap_rounds`), hand off to a recruiter (`recap_unconfirmed`) instead of repeating it |
-| **Writes after the outcome** | Asking to move the interview or to talk to a person reaches the review queue, and any booking stands until a recruiter acts. After a knockout the rejection stands, as above. Anything else gets the closing message |
-| **The AI provider is down** | Try the fallback, then keep the message and retry. Never counted against the candidate |
+
+Rarer cases (refusing the recap, writing after the outcome, the AI provider being down): [appendix E](process-design-appendix.md#e-conversation-rules-in-detail).
 
 ## Outcomes
 

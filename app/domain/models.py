@@ -227,6 +227,11 @@ class ConversationState(BaseModel):
         description="When the candidate applied (from the ATS or job board). None: the chat is "
         "where they applied, so time to screen counts from started_at.",
     )
+    application_ref: str | None = Field(
+        default=None,
+        description="The ATS or spreadsheet's own id for this application, so a recruiter can "
+        "find the person in their own file. An opaque id: contact details stay over there.",
+    )
     started_at: datetime | None = None
     last_inbound_at: datetime | None = None
     ended_at: datetime | None = None

@@ -8,13 +8,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select, type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.adapters.storage.sql import ConversationRow, MessageRow
+from app.adapters.storage.sql import ChannelContactRow, ConversationRow, MessageRow
 from app.domain.models import Availability, FieldName, Schedule, Stage, Status
 
 
@@ -94,6 +95,14 @@ _ASKED_FOR_HUMAN = ConversationRow.human_after_knockout.is_(True) & (
 )
 
 
+@dataclass(frozen=True)
+class UnfinishedInvite:
+    conversation_id: UUID
+    reference: str
+    applied_at: datetime | None
+    opened: bool
+
+
 class DashboardQueries:
     def __init__(self, engine: Engine, client_id: str) -> None:
         self._engine = engine
@@ -138,6 +147,45 @@ class DashboardQueries:
             total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
             items = [_item(row) for row in session.scalars(listed)]
         return Page(items=items, total=total, page=page, per_page=per_page)
+
+    def unfinished_invites(self) -> list[UnfinishedInvite]:
+        """Invited applicants who haven't finished, oldest first: web chat can't reach someone who
+        closed the tab, so recruiters chase these. That includes those abandoned for silence (a
+        reply resumes them), never those who declined consent. Only those with a reference can
+        be matched to a person in the recruiter's own file."""
+        with Session(self._engine) as session:
+            rows = session.scalars(
+                select(ConversationRow)
+                .where(
+                    ConversationRow.client_id == self._client_id,
+                    ConversationRow.status.in_([Status.IN_PROGRESS.value, Status.ABANDONED.value]),
+                    ConversationRow.channel == "chat",
+                )
+                .order_by(ConversationRow.applied_at)
+            ).all()
+            return [
+                UnfinishedInvite(
+                    conversation_id=UUID(row.id),
+                    reference=row.state["application_ref"],
+                    applied_at=row.applied_at,
+                    opened=not row.invite_pending,
+                )
+                for row in rows
+                if row.state.get("application_ref")
+                and (row.status == Status.IN_PROGRESS.value or row.state.get("went_silent"))
+            ]
+
+    def channel_contact(self, conversation_id: UUID, channel: str) -> str | None:
+        """The number a channel knows this candidate by (WhatsApp), for a recruiter to write to."""
+        with Session(self._engine) as session:
+            contact: str | None = session.scalar(
+                select(ChannelContactRow.external_id).where(
+                    ChannelContactRow.client_id == self._client_id,
+                    ChannelContactRow.channel == channel,
+                    ChannelContactRow.conversation_id == str(conversation_id),
+                )
+            )
+            return contact
 
     def review_queue(self) -> list[CandidateItem]:
         query = (

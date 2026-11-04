@@ -33,7 +33,7 @@
 | --- | --- | --- | --- |
 | Unit | ms | every edit | Validators, policy, engine with fake `Extractor` / `Responder` |
 | Contract | fast | every commit | Each adapter against its port: the fake and the real one behave alike |
-| Recorded | fast | CI | Real LLM responses recorded once, replayed (VCR-style) |
+| Recorded-style | fast | CI | Hand-written responses shaped like the providers' (`tests/adapters/test_llm_adapters.py`), so no network. They check our parsing, not the real APIs |
 | Smoke | fast | CI | App boots, chat endpoint answers, dashboard renders |
 | Evals | slow, costs money | on demand; required when prompts or policy change | Simulated candidates (cooperative, vague, language-switcher, goes silent, abusive, multiple answers at once) against the full engine with a live LLM |
 
@@ -65,11 +65,11 @@ Scores per scenario: outcome correct, field accuracy against the expected record
 ## Claude Code hooks
 
 - **After a file edit:** `ruff format` + `ruff check --fix` on the changed file.
-- **Before finishing a task:** unit tests, `mypy` on `domain/`, `lint-imports`. On failure, Claude keeps working instead of handing back broken code.
+- **Before finishing a task:** unit tests, `mypy` on `app/`, `lint-imports`. On failure, Claude keeps working instead of handing back broken code.
 
-Configured in `.claude/settings.json` once the skeleton exists.
+Configured in `.claude/settings.json`.
 
-## Starting configuration (`pyproject.toml` excerpt)
+## Configuration (`pyproject.toml` excerpt)
 
 ```toml
 [tool.ruff]
@@ -94,7 +94,7 @@ source_modules = ["app.domain"]
 forbidden_modules = ["app.adapters","app.api","app.worker","sqlalchemy","fastapi","httpx","anthropic"]
 
 [tool.coverage.report]
-fail_under = 0   # ratchet: raise with every change, never lower
+fail_under = 98.0   # ratchet: raise with every change, never lower
 ```
 
 The `anthropic` entry assumes that SDK; replace it with whichever LLM SDK is chosen.

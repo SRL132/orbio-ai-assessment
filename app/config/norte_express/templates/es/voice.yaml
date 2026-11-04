@@ -1,0 +1,30 @@
+# Spanish voice overrides: read aloud by text-to-speech. No emoji, no "·" lists, options said
+# as a sentence. Any key not here falls back to chat.yaml.
+
+greeting_consent: >-
+  Hola, soy {persona}, la asistente virtual de {company}. Te hago siete preguntas rápidas sobre el
+  puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no
+  guardamos el audio. ¿Empezamos?
+consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos?
+ask_license: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.
+ask_location: ¿En qué ciudad y barrio vives? También me vale tu código postal.
+ask_availability: ¿Qué disponibilidad tienes, jornada completa, media jornada o fines de semana?
+ask_schedule: ¿Qué horario prefieres, mañana, tarde, noche, o te da igual?
+ask_experience: ¿Has repartido antes? Dime cuántos años y en qué aplicaciones, por ejemplo Glovo o Uber Eats.
+reask_license: Perdona, no te he entendido. ¿Tu carnet es de moto, de coche, de los dos, o no tienes?
+reask_availability: Perdona, ¿jornada completa, media jornada o fines de semana?
+reask_schedule: Perdona, ¿mañana, tarde, noche, o te da igual?
+reask_experience: ¿Cuánto tiempo has repartido? Si nunca lo has hecho, dime ninguno, no pasa nada.
+keep_on_file_reask: ¿Guardamos tus datos para futuras ofertas? Dime sí o no.
+recap: "Repasemos. {summary}. ¿Es todo correcto?"
+qualified: ¡Genial, {name}! Cumples los requisitos.
+offer_slots: "Elige un horario para tu entrevista: {slots}. Dime cuál prefieres, o ninguno si no te va."
+slot_unclear: No te he entendido bien.
+interview_booked: Hecho. Tu entrevista es el {when}. Te enviaremos la dirección de la base. ¡Hasta pronto!
+weekdays: lunes,martes,miércoles,jueves,viernes,sábado,domingo
+slot_format: "{weekday} {day} a las {time}"
+slot_ordinals: la primera,la segunda,la tercera,la cuarta,la quinta
+months: enero,febrero,marzo,abril,mayo,junio,julio,agosto,septiembre,octubre,noviembre,diciembre
+date_format: "{day} de {month}"
+retype_hint: Perdona, por voz a veces entiendo mal nombres y lugares. ¿Me lo escribes en el cuadro de texto de abajo?
+data_request_received: Entendido, paramos aquí. Un reclutador revisará tu petición, también si quieres que borremos tus datos, y te escribirá en dos días laborables.

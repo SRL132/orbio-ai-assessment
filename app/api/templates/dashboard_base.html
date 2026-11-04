@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Recruiter dashboard{% endblock %} · Grupo Sazón</title>
+  <title>{% block title %}Recruiter dashboard{% endblock %} · {{ request.app.state.company }}</title>
   <style>
     :root { --brand:#c2410c; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f9fafb; }
     * { box-sizing:border-box; }
@@ -52,7 +52,7 @@
 </head>
 <body>
 <nav>
-  <span class="brand">Grupo Sazón · Recruiting</span>
+  <span class="brand">{{ request.app.state.company }} · Recruiting</span>
   <a href="/dashboard" class="{{ 'active' if active == 'list' }}">Candidates</a>
   <a href="/dashboard/review" class="{{ 'active' if active == 'review' }}">Review queue</a>
   <a href="/dashboard/analytics" class="{{ 'active' if active == 'analytics' }}">Analytics</a>

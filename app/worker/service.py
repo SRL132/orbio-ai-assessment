@@ -81,6 +81,7 @@ class ScreeningService:
         channel: Channel = "chat",
         applied_at: datetime | None = None,
         invited_by: str | None = None,
+        application_ref: str | None = None,
     ) -> UUID:
         """Open a conversation. `applied_at` comes from the ATS or the recruiter who invites the
         candidate, so time to screen counts from the application, not from the first message.
@@ -91,6 +92,7 @@ class ScreeningService:
             client_id=self.config.client_id,
             channel=channel,
             applied_at=applied_at,
+            application_ref=application_ref,
             invite_pending=invited_by is not None,
         )
         result = engine.start(state, self.config, self.ports)

@@ -1,0 +1,29 @@
+# English voice overrides. Same rules as es/voice.yaml.
+
+greeting_consent: >-
+  Hi, I'm {persona}, {company}'s virtual assistant. I'll ask you seven quick questions about the
+  delivery driver job, about three minutes. We transcribe what you say only for this process and
+  don't keep the audio. Shall we start?
+consent_reask: To continue I need your OK to use your answers for this process. Shall we start?
+ask_license: Do you have a driving license? Tell me if it's for a moto, a car, both, or if you don't have one.
+ask_location: Which city and neighbourhood do you live in? Your postal code works too.
+ask_availability: What's your availability, full time, part time, or weekends?
+ask_schedule: Which hours do you prefer, morning, afternoon, evening, or are you flexible?
+ask_experience: Have you done deliveries before? Tell me how many years and on which apps, like Glovo or Uber Eats.
+reask_license: Sorry, I didn't catch that. Is your license for a moto, a car, both, or none?
+reask_availability: Sorry, full time, part time, or weekends?
+reask_schedule: Sorry, morning, afternoon, evening, or flexible?
+reask_experience: How long have you done deliveries? If never, just say none, that's fine.
+keep_on_file_reask: Shall we keep your details for future openings? Just say yes or no.
+recap: "Let's recap. {summary}. Is everything correct?"
+qualified: Great, {name}! You meet the requirements.
+offer_slots: "Pick a time for your interview: {slots}. Tell me which one, or say none if none works."
+slot_unclear: Sorry, I didn't catch that.
+interview_booked: Done. Your interview is on {when}. We'll send you the base's address. See you soon!
+weekdays: Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
+slot_format: "{weekday} the {day} at {time}"
+slot_ordinals: the first,the second,the third,the fourth,the fifth
+months: January,February,March,April,May,June,July,August,September,October,November,December
+date_format: "{month} {day}"
+retype_hint: Sorry, by voice I sometimes mishear names and places. Could you type it in the text box below?
+data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within two working days.

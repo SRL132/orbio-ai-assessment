@@ -31,6 +31,8 @@ from app.api.invites import (
     InviteLinks,
     links_csv,
     parse_applications,
+    reference_of,
+    unfinished_csv,
 )
 from app.api.limits import QUARTER_HOUR, client_ip
 from app.bootstrap import Container
@@ -217,6 +219,7 @@ async def candidate_detail(
         {
             "user": user,
             "state": state,
+            "whatsapp_number": c.queries.channel_contact(conversation_id, "whatsapp"),
             "location": location,
             "fields": field_rows(state.candidate, c.config),
             "messages": c.service.messages(conversation_id),
@@ -291,7 +294,10 @@ async def create_invites(
             base
             + links.path(
                 c.service.start_conversation(
-                    "chat", datetime.fromisoformat(row["applied_at"]), invited_by=user
+                    "chat",
+                    datetime.fromisoformat(row["applied_at"]),
+                    invited_by=user,
+                    application_ref=reference_of(row),
                 )
             )
             for row in rows
@@ -303,6 +309,28 @@ async def create_invites(
         media_type="text/csv",
         headers={
             "Content-Disposition": 'attachment; filename="chat-links.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/dashboard/invite/unfinished.csv", response_model=None)
+async def unfinished_invites(request: Request, c: App, user: Recruiter) -> Response:
+    """Who hasn't finished, for the recruiter's SMS or email tool: web chat has no way to reach
+    someone who closed the tab. Fresh links, because the first ones expire."""
+    base = _public_base(request, c)
+    if not base:
+        return _invite_page(request, c, user, "Set PUBLIC_BASE_URL first.", 400)
+    links: InviteLinks = request.app.state.invites
+    invites = await asyncio.to_thread(c.queries.unfinished_invites)
+    body = unfinished_csv(
+        [(invite, base + links.path(invite.conversation_id)) for invite in invites]
+    )
+    return Response(
+        body,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="unfinished-applications.csv"',
             "Cache-Control": "no-store",
         },
     )

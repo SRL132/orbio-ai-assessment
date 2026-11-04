@@ -80,6 +80,10 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Changing an earlier answer.** A value that wouldn't pass by itself never replaces an accepted one: "soy Ana" doesn't undo "Ana López". A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
 
+**Keeps refusing the recap.** After 3 replies in a row that neither confirm nor change it (`max_recap_rounds`), hand off to a recruiter (`recap_unconfirmed`) instead of repeating it.
+
+**Writes after the outcome.** Asking to move the interview or to talk to a person reaches the review queue, and any booking stands until a recruiter acts. After a knockout the rejection stands. Anything else gets the closing message.
+
 **LLM outages.** Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate.
 
 **Voice.** The questions, rules and outcomes are the same. Options are said as a sentence, there's no emoji, dates are said as words, and the greeting adds that the audio is transcribed and not kept. One rule differs: the model only sees the transcript, so it can be sure of a name or town that speech recognition got wrong ("Gostivar" heard as "ghost", "Zdravkovic" as "Lazkoz"). So the name and location are always read back before they count, whatever the model's confidence (`always_confirm`), including a location that would knock them out. If they say no, they're asked to type it in the text box below the call (still one attempt).
