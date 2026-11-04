@@ -2,13 +2,13 @@
 
 Lives in a city clearly outside the service area.
 
-Run: `fake/keyword/scripted` · passed · 6 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: Carmen Vidal  
 
@@ -16,7 +16,7 @@ Run: `fake/keyword/scripted` · passed · 6 candidate messages
 
 **Candidate**: Coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: Bilbao  
 

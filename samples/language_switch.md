@@ -2,13 +2,13 @@
 
 Starts in Spanish, asks to continue in English.
 
-Run: `fake/keyword/scripted` · passed · 9 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: Laura Gómez  
 
@@ -20,9 +20,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: Sorry, can we continue in English? I live in Valencia  
 
-**Lucía**: Good question, a recruiter will confirm that for you.  
-
-**Lucía**: What's your availability? Full time · Part time · Weekends  
+**Lucía**: What’s your availability? Full time · Part time · Weekends  
 
 **Candidate**: full time  
 
@@ -30,7 +28,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: evenings  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and on which apps (Glovo, Uber Eats...).  
+**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, such as Glovo or Uber Eats.  
 
 **Candidate**: 1 year on Uber Eats  
 

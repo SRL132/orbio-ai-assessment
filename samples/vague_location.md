@@ -2,9 +2,9 @@
 
 Says only the city first; the agent must ask for the neighbourhood.
 
-Run: `fake/keyword/scripted` · passed · 10 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -20,7 +20,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: Madrid  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo, Madrid, Chamberí.  
+**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid · Chamberí.  
 
 **Candidate**: Tetuán  
 
@@ -32,7 +32,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: Flexible  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas (Glovo, Uber Eats...).  
+**Lucía**: ¿Has hecho repartos antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 
@@ -46,7 +46,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 • Zona: Tetuán, Madrid  
 • Disponibilidad: fines de semana  
 • Horario: flexible  
-• Experiencia: 0 años · -  
+• Experiencia: sin experiencia  
 • Inicio: 09/11/2026  
 ¿Es todo correcto?  
 

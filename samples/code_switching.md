@@ -2,9 +2,9 @@
 
 Mixes Spanish and English inside the same conversation.
 
-Run: `fake/keyword/scripted` · passed · 9 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -16,7 +16,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: I have a moto license  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just tell me your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
 
 **Candidate**: Vivo en Sevilla  
 
@@ -28,7 +28,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: noches  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and on which apps (Glovo, Uber Eats...).  
+**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, like Glovo or Uber Eats.  
 
 **Candidate**: 3 years con Glovo  
 

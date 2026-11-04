@@ -2,7 +2,7 @@
 
 Voice call, no license; spoken knockout and keep-on-file question.
 
-Run: `fake/keyword/scripted` · passed · 4 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 5 candidate messages
 
 **Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de repartidor, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
 
@@ -11,6 +11,10 @@ Run: `fake/keyword/scripted` · passed · 4 candidate messages
 **Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
 **Candidate**: luis pérez  
+
+**Lucía**: Solo para confirmar: Luis Pérez, ¿correcto?  
+
+**Candidate**: sí  
 
 **Lucía**: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.  
 

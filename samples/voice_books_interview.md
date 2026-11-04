@@ -2,7 +2,7 @@
 
 Voice call that ends by booking an interview slot by saying "la segunda".
 
-Run: `fake/keyword/scripted` · passed · 10 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 12 candidate messages
 
 **Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de repartidor, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
 
@@ -12,6 +12,10 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: diego navarro  
 
+**Lucía**: Solo para confirmar: Diego Navarro, ¿correcto?  
+
+**Candidate**: sí  
+
 **Lucía**: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.  
 
 **Candidate**: las dos  
@@ -19,6 +23,10 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 **Lucía**: ¿En qué ciudad y barrio vives? También me vale tu código postal.  
 
 **Candidate**: cdmx en la condesa  
+
+**Lucía**: Solo para confirmar: la condesa, Ciudad de México, ¿correcto?  
+
+**Candidate**: sí  
 
 **Lucía**: ¿Qué disponibilidad tienes, jornada completa, media jornada o fines de semana?  
 
@@ -36,7 +44,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: pasado mañana  
 
-**Lucía**: Repasemos. Nombre: Diego Navarro; Carnet: moto y coche; Zona: Condesa, Ciudad de México; Disponibilidad: fines de semana; Horario: flexible; Experiencia: 1 año, Rappi; Inicio: 4 de noviembre. ¿Es todo correcto?  
+**Lucía**: Repasemos. Nombre: Diego Navarro; Carnet: moto y coche; Zona: la condesa, Ciudad de México; Disponibilidad: fines de semana; Horario: flexible; Experiencia: 1 año, Rappi; Inicio: 4 de noviembre. ¿Es todo correcto?  
 
 **Candidate**: correcto  
 

@@ -2,13 +2,13 @@
 
 Cooperative candidate writing in English.
 
-Run: `fake/keyword/scripted` · passed · 9 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Yes  
 
-**Lucía**: What's your name? First name and surname, please.  
+**Lucía**: What’s your full name? First name and surname, please.  
 
 **Candidate**: John Smith  
 
@@ -16,11 +16,11 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: Car  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just tell me your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
 
 **Candidate**: Sevilla  
 
-**Lucía**: What's your availability? Full time · Part time · Weekends  
+**Lucía**: What’s your availability? Full time · Part time · Weekends  
 
 **Candidate**: Part time  
 
@@ -28,7 +28,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: Mornings  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and on which apps (Glovo, Uber Eats...).  
+**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, like Glovo or Uber Eats.  
 
 **Candidate**: never  
 
@@ -42,7 +42,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 • Area: Sevilla  
 • Availability: part time  
 • Hours: morning  
-• Experience: 0 years · -  
+• Experience: no experience  
 • Start: 09/11/2026  
 Is everything correct?  
 

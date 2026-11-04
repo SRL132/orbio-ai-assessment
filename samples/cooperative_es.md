@@ -2,9 +2,9 @@
 
 Cooperative candidate, one answer per message, Spanish.
 
-Run: `fake/keyword/scripted` · passed · 9 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -16,7 +16,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: Madrid, Chamberí  
 
@@ -28,7 +28,7 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas (Glovo, Uber Eats...).  
+**Lucía**: ¿Has trabajado antes repartiendo? Cuéntame cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: 2 años en Glovo  
 

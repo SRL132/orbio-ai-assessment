@@ -2,9 +2,9 @@
 
 Gives name, license and location in one message; those questions must be skipped.
 
-Run: `fake/keyword/scripted` · passed · 7 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 7 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -20,7 +20,7 @@ Run: `fake/keyword/scripted` · passed · 7 candidate messages
 
 **Candidate**: Flexible  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas (Glovo, Uber Eats...).  
+**Lucía**: ¿Has repartido antes? Cuéntame cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 
@@ -34,7 +34,7 @@ Run: `fake/keyword/scripted` · passed · 7 candidate messages
 • Zona: Gràcia, Barcelona  
 • Disponibilidad: fines de semana  
 • Horario: flexible  
-• Experiencia: 0 años · -  
+• Experiencia: sin experiencia  
 • Inicio: 03/11/2026  
 ¿Es todo correcto?  
 

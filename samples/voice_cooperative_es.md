@@ -2,7 +2,7 @@
 
 Voice call, cooperative caller who reads out a postal code.
 
-Run: `fake/keyword/scripted` · passed · 9 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messages
 
 **Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de repartidor, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
 
@@ -12,6 +12,10 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 
 **Candidate**: ana lópez  
 
+**Lucía**: Solo para confirmar: Ana López, ¿correcto?  
+
+**Candidate**: sí  
+
 **Lucía**: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.  
 
 **Candidate**: de moto  
@@ -19,6 +23,10 @@ Run: `fake/keyword/scripted` · passed · 9 candidate messages
 **Lucía**: ¿En qué ciudad y barrio vives? También me vale tu código postal.  
 
 **Candidate**: vivo en madrid código postal veintiocho cero uno cero  
+
+**Lucía**: Solo para confirmar: Madrid, 28010, ¿correcto?  
+
+**Candidate**: sí  
 
 **Lucía**: ¿Qué disponibilidad tienes, jornada completa, media jornada o fines de semana?  
 

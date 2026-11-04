@@ -2,21 +2,21 @@
 
 Gives a past start date, gets asked again, then answers correctly.
 
-Run: `fake/keyword/scripted` · passed · 10 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso: [aviso de privacidad]. ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: Sofía Ramos  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 
@@ -28,7 +28,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas (Glovo, Uber Eats...).  
+**Lucía**: ¿Has trabajado antes como repartidora? Cuéntame cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 
@@ -36,7 +36,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 
 **Candidate**: el 1/1/2020  
 
-**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo, mañana, el lunes o el 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · 1 de marzo.  
 
 **Candidate**: el viernes  
 
@@ -46,7 +46,7 @@ Run: `fake/keyword/scripted` · passed · 10 candidate messages
 • Zona: Retiro, Madrid  
 • Disponibilidad: media jornada  
 • Horario: mañana  
-• Experiencia: 0 años · -  
+• Experiencia: sin experiencia  
 • Inicio: 06/11/2026  
 ¿Es todo correcto?  
 
