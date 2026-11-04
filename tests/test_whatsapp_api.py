@@ -5,6 +5,7 @@ import hmac
 import json
 import secrets
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -82,6 +83,44 @@ def test_message_end_to_end(container: Container) -> None:
         }
         container.whatsapp.dispatch_once()  # type: ignore[union-attr]
     assert "Lucía" in fake.sent[0][1]
+
+
+def inbound(number: str, message_id: str, text: str) -> tuple[bytes, dict[str, str]]:
+    message = {"from": number, "id": message_id, "type": "text", "text": {"body": text}}
+    return signed({"entry": [{"changes": [{"value": {"messages": [message]}}]}]})
+
+
+def test_a_web_process_leaves_turns_to_the_workers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c = build(settings(tmp_path, role="web"))
+    assert c.whatsapp is not None
+    c.whatsapp.client = FakeWhatsApp()  # type: ignore[assignment]
+    notified: list[UUID] = []
+    monkeypatch.setattr(c.runner, "notify", notified.append)
+    with TestClient(create_app(c)) as client:
+        for message_id, text in (("wamid.1", "hola"), ("wamid.2", "sí")):
+            raw, headers = inbound("346", message_id, text)
+            assert (
+                client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+            )
+        assert notified == []  # no debounce timer here: the turn won't run in this process
+        cid = c.service.repo.conversation_for("whatsapp", "346")
+        assert cid is not None
+        assert [m.text for m in c.service.repo.pending_inbound(cid)] == ["sí"]
+
+
+def test_a_single_process_runs_its_own_turns(
+    container: Container, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    notified: list[UUID] = []
+    monkeypatch.setattr(container.runner, "notify", notified.append)
+    with TestClient(create_app(container)) as client:
+        for message_id, text in (("wamid.1", "hola"), ("wamid.2", "sí")):
+            raw, headers = inbound("346", message_id, text)
+            client.post("/webhooks/whatsapp", content=raw, headers=headers)
+    cid = container.service.repo.conversation_for("whatsapp", "346")
+    assert notified == [cid]
 
 
 def test_not_configured_is_404(tmp_path: Path) -> None:

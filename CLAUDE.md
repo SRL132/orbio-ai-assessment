@@ -20,7 +20,7 @@ Where the vision and the process design disagree on details, the process design 
 - **Keep the hexagon light.** Pydantic models are the domain (one mapping to SQLAlchemy, in the repository adapter). Add a port only if it has a second implementation, a fake counts. No DI framework: wire by hand in `bootstrap.py`. Dashboard reads may query projections directly; writes go through the core.
 - **Rules live in config.** Service areas, license rules, allowed values, persona, templates and FAQ belong to the client config, not to Python code or prompts. Every table has `client_id`.
 - **Fixed texts are templates.** Consent/privacy notice, disqualification and the final recap use templates (per language and channel), not free LLM output.
-- **Traceable and private.** Every state change is an event in the append-only event log, with its reason. No personal data in application logs.
+- **Traceable and private.** The append-only event log is the source of truth: every state change is an event, with its reason, and `conversations` is a projection that can be rebuilt from it. No personal data in application logs.
 
 ## Quality rules
 
@@ -48,6 +48,7 @@ uv run pytest --cov                           # tests + coverage ratchet
 uv run deptry . && uv run pip-audit           # dependency hygiene
 uv run pre-commit install                     # enable the git pre-commit hooks
 uv run python -m app.cli hash-password        # hash for a RECRUITER_USERS entry
+uv run python -m app.cli rebuild-state --check   # compare projections with the event log (no --check: repair)
 uv run alembic revision --autogenerate -m "…"  # after changing models in app/adapters/storage/sql.py
 docker compose up --build                     # app + Postgres, like production
 uv run python -m evals --check                # offline evals vs evals/baseline.json (free)

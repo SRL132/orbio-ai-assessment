@@ -283,3 +283,22 @@ def test_opening_an_invite_while_a_turn_runs_keeps_it_pending(
     state = service.repo.get(cid)
     assert state is not None
     assert state.invite_pending is True
+
+
+def test_every_kind_of_write_can_be_replayed(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    """Override, notes and reminders all go through the log, not just candidate turns."""
+    service = make_service(config, ports, clock)
+    repo = service.repo
+    assert isinstance(repo, SqlRepository)
+    cid = service.start_conversation()
+    clock.advance(hours=config.reminder_hours[0] + 1)
+    assert service.send_due_reminders() == 1
+    assert repo.replay(cid) == repo.get(cid)
+    service.add_note(cid, "called them", "recruiter@example.com")
+    service.record_view(cid, "recruiter@example.com")
+    assert repo.replay(cid) == repo.get(cid)
+    service.override(cid, Status.QUALIFIED, "checked by phone", "recruiter@example.com")
+    assert repo.replay(cid) == repo.get(cid)
+    assert repo.rebuild_projections(check_only=True) == []

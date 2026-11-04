@@ -1,7 +1,11 @@
 """SQLAlchemy storage: conversations, messages and the append-only event log.
 
-SQLite for the demo, Postgres in production (same code). The `conversations` table keeps the
-full state as JSON plus a few projected columns the dashboard filters on. Every table carries
+SQLite for the demo, Postgres in production (same code). The event log is the source of truth:
+every save appends what changed as a `state_changed` event, in the same transaction. The
+`conversations` table is a projection of those events, the full state as JSON plus a few columns
+the dashboard filters on, so reads don't replay the log and `rebuild_projections` can restore it.
+Messages are stored apart: their text must stay redactable, which an immutable log wouldn't allow.
+Every table carries
 `client_id` and uses random UUIDs (docs/process-design-appendix.md, B). A repository serves one
 client: every read filters on its `client_id`, so a conversation id alone never reaches another
 client's data.
@@ -15,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -43,10 +48,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.adapters.storage.migrate import upgrade
+from app.domain.history import replay, state_delta
 from app.domain.models import (
     EXTERNAL_CHANNELS,
     ConversationState,
     DomainEvent,
+    EventType,
     Outbound,
     StoredMessage,
 )
@@ -118,6 +125,8 @@ class ConversationRow(Base):
     # Highest message seq so far. Reserving seqs here locks the row, so concurrent writers to one
     # conversation (webhook inbound, worker reply) queue up instead of colliding.
     last_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Highest event position so far, reserved the same way: replaying needs a strict order.
+    last_event_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Which worker is processing the conversation, until when (see `try_lease`).
     lease_owner: Mapped[str | None] = mapped_column(String(32))
     lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
@@ -153,6 +162,7 @@ class MessageRow(Base):
 
 class EventRow(Base):
     __tablename__ = "events"
+    __table_args__ = (UniqueConstraint("conversation_id", "seq", name="uq_events_order"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
@@ -300,7 +310,8 @@ class SqlRepository:
             _project(row, state, now)
             session.add(row)
             session.flush()
-            self._append(session, state, events, replies, now)
+            delta = state_delta(None, row.state)
+            self._append(session, state, events, replies, now, delta)
 
     def add_inbound(
         self, conversation_id: UUID, text: str, channel_message_id: str | None = None
@@ -351,6 +362,7 @@ class SqlRepository:
                 raise KeyError(state.conversation_id)
             if lease_owner is not None and row.lease_owner != lease_owner:
                 raise LeaseLost(state.conversation_id)
+            before = row.state
             _project(row, state, now)
             if processed:
                 ids = [str(m.id) for m in processed]
@@ -358,7 +370,7 @@ class SqlRepository:
                 if redact:
                     values |= {"text": REDACTED, "redacted": True}
                 session.execute(update(MessageRow).where(MessageRow.id.in_(ids)).values(**values))
-            self._append(session, state, events, replies, now)
+            self._append(session, state, events, replies, now, state_delta(before, row.state))
 
     def try_lease(self, conversation_id: UUID, owner: str, duration: timedelta) -> bool:
         """One atomic UPDATE: of two workers racing, exactly one matches the free lease."""
@@ -427,20 +439,28 @@ class SqlRepository:
         events: list[DomainEvent],
         replies: list[str],
         now: datetime,
+        delta: dict[str, Any] | None = None,
     ) -> None:
         conversation_id = str(state.conversation_id)
-        for index, event in enumerate(events):
-            session.add(
-                EventRow(
-                    id=str(uuid4()),
-                    conversation_id=conversation_id,
-                    client_id=state.client_id,
-                    seq=index,
-                    type=event.type,
-                    data=json.loads(json.dumps(event.data, default=str)),
-                    created_at=now,
+        entries: list[tuple[str, dict[str, Any]]] = [
+            (event.type, json.loads(json.dumps(event.data, default=str))) for event in events
+        ]
+        if delta:
+            entries.append((EventType.STATE_CHANGED, delta))
+        if entries:
+            first = _reserve_event_seqs(session, conversation_id, len(entries))
+            for offset, (event_type, data) in enumerate(entries):
+                session.add(
+                    EventRow(
+                        id=str(uuid4()),
+                        conversation_id=conversation_id,
+                        client_id=state.client_id,
+                        seq=first + offset,
+                        type=event_type,
+                        data=data,
+                        created_at=now,
+                    )
                 )
-            )
         if not replies:
             return
         seq = _reserve_seqs(session, conversation_id, len(replies))
@@ -466,6 +486,52 @@ class SqlRepository:
         with self._sessions() as session:
             row = self._conversation(session, conversation_id)
             return ConversationState.model_validate(row.state) if row else None
+
+    def replay(self, conversation_id: UUID) -> ConversationState | None:
+        """The state rebuilt from the event log, which is what `get`'s projection must match."""
+        with self._sessions() as session:
+            return replay(self._deltas(session, str(conversation_id)))
+
+    def _deltas(self, session: Session, conversation_id: str) -> list[dict[str, Any]]:
+        return list(
+            session.scalars(
+                select(EventRow.data)
+                .where(
+                    EventRow.client_id == self._client_id,
+                    EventRow.conversation_id == conversation_id,
+                    EventRow.type == EventType.STATE_CHANGED,
+                )
+                .order_by(EventRow.seq)
+            )
+        )
+
+    def rebuild_projections(self, *, check_only: bool = False) -> list[UUID]:
+        """Compare every conversation's projection with its event log. Returns those that differ,
+        after rewriting them from the log unless `check_only`. Each one is locked while it's
+        compared, so a turn being saved can't make it look different. `updated_at` is kept: it's
+        last activity, including saves that changed no state."""
+        with self._sessions() as session:
+            ids = session.scalars(
+                select(ConversationRow.id).where(ConversationRow.client_id == self._client_id)
+            ).all()
+        return [UUID(i) for i in ids if self._rebuild_one(i, check_only)]
+
+    def _rebuild_one(self, conversation_id: str, check_only: bool) -> bool:
+        with self._sessions() as session:
+            row = session.get(ConversationRow, conversation_id, with_for_update=True)
+            state = replay(self._deltas(session, conversation_id))
+            if row is None or state is None:  # erased meanwhile, or never had any history
+                return False
+            stored = row.state
+            _project(row, state, row.updated_at)
+            if _reads_as(stored, state):  # saved before a field existed: the same state, keep it
+                row.state = stored
+            differs = session.is_modified(row)
+            if differs and not check_only:
+                session.commit()
+            else:
+                session.rollback()
+            return differs
 
     def pending_inbound(self, conversation_id: UUID) -> list[StoredMessage]:
         with self._sessions() as session:
@@ -524,14 +590,16 @@ class SqlRepository:
         return [event for _, event in self.timeline(conversation_id)]
 
     def timeline(self, conversation_id: UUID) -> list[tuple[datetime, DomainEvent]]:
+        """What happened, for people and analytics. The state deltas are read by `replay`."""
         with self._sessions() as session:
             rows = session.scalars(
                 select(EventRow)
                 .where(
                     EventRow.client_id == self._client_id,
                     EventRow.conversation_id == str(conversation_id),
+                    EventRow.type != EventType.STATE_CHANGED,
                 )
-                .order_by(EventRow.created_at, EventRow.seq)
+                .order_by(EventRow.seq)
             ).all()
             return [(r.created_at, DomainEvent(type=r.type, data=r.data)) for r in rows]
 
@@ -650,6 +718,13 @@ class SqlRepository:
                 row.updated_at = now
 
 
+def _reads_as(stored: dict[str, Any], state: ConversationState) -> bool:
+    try:
+        return ConversationState.model_validate(stored) == state
+    except ValidationError:
+        return False
+
+
 def _reserve_seqs(session: Session, conversation_id: str, count: int) -> int:
     """Reserve `count` consecutive message seqs and return the first. One atomic UPDATE: it holds
     the conversation row lock until commit, unlike reading max(seq) and adding one."""
@@ -658,6 +733,17 @@ def _reserve_seqs(session: Session, conversation_id: str, count: int) -> int:
         .where(ConversationRow.id == conversation_id)
         .values(last_seq=ConversationRow.last_seq + count)
         .returning(ConversationRow.last_seq)
+    ).scalar_one()
+    return int(last) - count + 1
+
+
+def _reserve_event_seqs(session: Session, conversation_id: str, count: int) -> int:
+    """Like `_reserve_seqs`, for the positions that give each conversation's events their order."""
+    last = session.execute(
+        update(ConversationRow)
+        .where(ConversationRow.id == conversation_id)
+        .values(last_event_seq=ConversationRow.last_event_seq + count)
+        .returning(ConversationRow.last_event_seq)
     ).scalar_one()
     return int(last) - count + 1
 

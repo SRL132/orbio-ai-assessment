@@ -528,6 +528,8 @@ class EventType(StrEnum):
     RESPONDER_FAILED = "responder_failed"
     REPLY_REJECTED = "reply_rejected"
     NON_TEXT_MESSAGE = "non_text_message"
+    # What changed: the deltas the state is rebuilt from (domain/history.py), not for recruiters.
+    STATE_CHANGED = "state_changed"
     # Recruiter actions
     OVERRIDE = "override"
     NOTE_ADDED = "note_added"
