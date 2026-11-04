@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read  # gitleaks lists a pull request's commits to scan them
+
 jobs:
   checks:
     runs-on: ubuntu-latest
