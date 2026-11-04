@@ -143,8 +143,7 @@ def turn(
     ):
         _resume(t)  # silent, or declined consent and was told to write back if they changed mind
     if t.state.stage == Stage.CLOSED:
-        _on_closed(t, message)
-        return _finish(t)
+        return _on_closed(t, message)
 
     t.message = message.text
     # Nothing a candidate writes is kept before they say yes (see _is_plain_consent_answer).
@@ -278,36 +277,41 @@ def _is_plain_consent_answer(extraction: ExtractionResult, text: str) -> bool:
     return extraction.yes_no is False and len(text.split()) <= _BARE_ANSWER_WORDS
 
 
-def _on_closed(t: _Turn, message: InboundMessage) -> None:
+def _on_closed(t: _Turn, message: InboundMessage) -> TurnResult:
     """The screening is over, but a request only a person can act on still has to reach one, so
-    the closing message's "a recruiter will get in touch" stays true."""
-    status = t.state.status
+    the closing message's "a recruiter will get in touch" stays true. Anything we couldn't read
+    may be such a request, so it isn't answered as if it weren't: no LLM means retry it later,
+    and a bad answer means asking them to write it again, as in an open conversation."""
     try:
         extraction = t.ports.extractor.extract(t.state, message.text, t.config, t.now.date())
-    except Exception as exc:  # the closed reply needs no LLM
+    except LLMUnavailable as exc:
+        return _hold_for_retry(t, exc)
+    except Exception as exc:
         t.event(EventType.EXTRACTOR_FAILED, error=type(exc).__name__)
+        t.state.llm_failures, t.state.retry_turn_at = 0, None
+        t.say("technical_retry")
+        return _finish(t)
+    t.state.llm_failures, t.state.retry_turn_at = 0, None
+    t.redact = extraction.sensitive_data
+    status = t.state.status
+    if extraction.intent == "data_request":
+        t.state.language = extraction.language
+        _on_data_request(t)
+    elif extraction.intent == "interview_change" and status != Status.DISQUALIFIED:
+        t.state.language = extraction.language
+        t.event(EventType.INTERVIEW_CHANGE_REQUESTED)
+        _send_to_review(t, Reason.INTERVIEW_CHANGE)
+        t.say("interview_change_noted")
+    elif extraction.intent == "human_request" and status == Status.DISQUALIFIED:
+        t.state.language = extraction.language
+        _human_after_knockout(t)
+    elif extraction.intent == "human_request" and status == Status.QUALIFIED:
+        t.state.language = extraction.language
+        _send_to_review(t, Reason.HUMAN_REQUESTED)
+        t.actions.append(HandOff(reason="human_requested"))
     else:
-        t.redact = extraction.sensitive_data
-        if extraction.intent == "data_request":
-            t.state.language = extraction.language
-            _on_data_request(t)
-            return
-        if extraction.intent == "interview_change" and status != Status.DISQUALIFIED:
-            t.state.language = extraction.language
-            t.event(EventType.INTERVIEW_CHANGE_REQUESTED)
-            _send_to_review(t, Reason.INTERVIEW_CHANGE)
-            t.say("interview_change_noted")
-            return
-        if extraction.intent == "human_request" and status == Status.DISQUALIFIED:
-            t.state.language = extraction.language
-            _human_after_knockout(t)
-            return
-        if extraction.intent == "human_request" and status == Status.QUALIFIED:
-            t.state.language = extraction.language
-            _send_to_review(t, Reason.HUMAN_REQUESTED)
-            t.actions.append(HandOff(reason="human_requested"))
-            return
-    t.say("closed_disqualified" if status == Status.DISQUALIFIED else "closed")
+        t.say("closed_disqualified" if status == Status.DISQUALIFIED else "closed")
+    return _finish(t)
 
 
 def _on_data_request(t: _Turn) -> None:

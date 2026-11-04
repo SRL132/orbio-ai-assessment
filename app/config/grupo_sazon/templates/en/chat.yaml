@@ -57,7 +57,7 @@ needs_review: Thanks, {name}! A recruiter will review your application and write
 handoff_human: Sure, I'll let someone from the team know. They'll write to you within 1 working day.
 
 abuse_warning: I'm here to help with your application. Let's keep it respectful, please.
-data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within 2 working days.
+data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within 2 working days. You can also write to privacy@gruposazon.example.
 abuse_end: Let's stop here. A recruiter will review your case.
 sensitive_data: We don't need that information right now, so we won't keep it.
 offer_human: If you'd rather talk to a person from the team, just tell me.

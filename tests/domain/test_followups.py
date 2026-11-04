@@ -2,25 +2,30 @@
 flags, reminder wording and impossible experience."""
 
 from datetime import date
+from uuid import UUID
 
 import pytest
 
-from app.adapters.llm.fake import ScriptedExtractor
+from app.adapters.clock.clocks import FakeClock
+from app.adapters.llm.fake import ScriptedExtractor, TemplateResponder
 from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.keyword import KeywordExtractor
+from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
     ConversationState,
     EventType,
+    ExtractionResult,
     FieldName,
     FieldStatus,
+    InboundMessage,
     Reason,
     ReviewReason,
     Stage,
     Status,
 )
 from app.domain.policy import apply_extraction
-from app.domain.ports import Ports
+from app.domain.ports import LLMUnavailable, Ports
 from tests.conftest import ex
 from tests.domain.test_engine import Chat, answer_everything
 
@@ -251,3 +256,55 @@ def test_keyword_reader_picks_the_new_faq_entries(
     state: ConversationState, config: ClientConfig, question: str, expected: str
 ) -> None:
     assert KeywordExtractor().extract(state, question, config, TODAY).faq_id == expected
+
+
+class _NoProvider:
+    def extract(self, *_: object) -> ExtractionResult:
+        raise LLMUnavailable("down")
+
+
+def test_a_data_request_during_an_outage_is_held_then_reaches_a_person(
+    chat: Chat, config: ClientConfig, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    qualified(chat)
+    message = InboundMessage(
+        conversation_id=UUID(int=1), text="borrad mis datos", received_at=clock.now()
+    )
+    down = Ports(extractor=_NoProvider(), responder=TemplateResponder(), clock=clock)  # type: ignore[arg-type]
+
+    held = engine.turn(chat.state, message, config, down)
+    assert held.hold_inbound is True  # the message is kept, not answered as if it were nothing
+    assert held.replies == [config.template("es", "technical_hold")]
+    assert held.state.status == Status.QUALIFIED
+    assert held.state.retry_turn_at is not None
+
+    extractor.push(ex(intent="data_request"))
+    retried = engine.turn(held.state, message, config, chat.ports)
+    assert retried.hold_inbound is False
+    assert retried.state.status == Status.NEEDS_REVIEW
+    assert ReviewReason(reason=Reason.DATA_REQUEST) in retried.state.review_reasons
+    assert (retried.state.llm_failures, retried.state.retry_turn_at) == (0, None)
+
+
+def test_a_long_outage_after_closing_asks_them_to_write_again(
+    chat: Chat, config: ClientConfig, clock: FakeClock
+) -> None:
+    qualified(chat)
+    message = InboundMessage(
+        conversation_id=UUID(int=1), text="borrad mis datos", received_at=clock.now()
+    )
+    down = Ports(extractor=_NoProvider(), responder=TemplateResponder(), clock=clock)  # type: ignore[arg-type]
+    state = chat.state
+    for _ in config.llm_retry_seconds:
+        state = engine.turn(state, message, config, down).state
+    gave_up = engine.turn(state, message, config, down)
+    assert gave_up.hold_inbound is False
+    assert gave_up.replies == [config.template("es", "technical_unavailable")]
+
+
+@pytest.mark.parametrize(("language", "address"), [("es", "privacidad@"), ("en", "privacy@")])
+def test_the_data_request_reply_gives_the_privacy_address(
+    config: ClientConfig, language: str, address: str
+) -> None:
+    assert address in config.template(language, "data_request_received")
+    assert address not in config.template(language, "data_request_received", "voice")

@@ -537,7 +537,8 @@ def test_extractor_failure_asks_again_without_penalty(
     assert result.redact_inbound is True  # nothing is kept before consent, even on a failure
     closed = started.state.model_copy(update={"stage": Stage.CLOSED})
     after_close = engine.turn(closed, message, config, ports)
-    assert after_close.replies == [config.template("es", "closed")]  # the closed reply needs no LLM
+    # It might be a request for a person: we say we couldn't read it, not that it's all done.
+    assert after_close.replies == [config.template("es", "technical_retry")]
     assert result.state.stage == Stage.CONSENT
 
 

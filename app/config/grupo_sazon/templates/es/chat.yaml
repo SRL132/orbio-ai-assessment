@@ -59,7 +59,7 @@ needs_review: ¡Gracias, {name}! Un reclutador revisará tu candidatura y te esc
 handoff_human: Claro, aviso a una persona del equipo. Te escribirá en 1 día laborable.
 
 abuse_warning: Estoy aquí para ayudarte con tu candidatura. Sigamos con respeto, por favor.
-data_request_received: Entendido, paramos aquí. Un reclutador revisará tu petición, también si quieres que borremos tus datos, y te escribirá en 2 días laborables.
+data_request_received: Entendido, paramos aquí. Un reclutador revisará tu petición, también si quieres que borremos tus datos, y te escribirá en 2 días laborables. También puedes escribir a privacidad@gruposazon.example.
 abuse_end: Vamos a dejarlo aquí. Un reclutador revisará tu caso.
 sensitive_data: No necesitamos ese dato ahora, así que no lo guardaremos.
 offer_human: Si lo prefieres, puedo pasarte con una persona del equipo. Solo dímelo.
