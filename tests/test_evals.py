@@ -6,7 +6,15 @@ from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
 from app.domain.config import ClientConfig
 from evals.__main__ import BASELINE, _regressions, main, summarize
-from evals.runner import HOLDOUT, Expect, Harness, Scenario, load_scenarios
+from evals.runner import (
+    HOLDOUT,
+    SIMULATOR_ATTEMPTS,
+    Expect,
+    Harness,
+    Scenario,
+    _candidate_says,
+    load_scenarios,
+)
 
 
 def test_offline_suite_passes(config: ClientConfig) -> None:
@@ -97,3 +105,25 @@ def test_holdout_scenarios_are_valid_and_need_a_real_model() -> None:
     assert not {s.id for s in scenarios} & {
         s.id for s in load_scenarios()
     }  # never in the main suite
+
+
+def test_an_empty_answer_from_the_simulated_candidate_is_retried() -> None:
+    class Flaky:
+        calls = 0
+
+        def complete(self, system: str, user: str, max_tokens: int = 400) -> str:
+            self.calls += 1
+            if self.calls < SIMULATOR_ATTEMPTS:
+                raise ValueError("empty completion")
+            return " hola "
+
+    assert _candidate_says(Flaky(), "s", "u") == "hola"
+
+
+def test_a_simulated_candidate_that_never_answers_stops_the_run() -> None:
+    class Silent:
+        def complete(self, system: str, user: str, max_tokens: int = 400) -> str:
+            raise ValueError("empty completion")
+
+    with pytest.raises(ValueError, match="empty"):
+        _candidate_says(Silent(), "s", "u")

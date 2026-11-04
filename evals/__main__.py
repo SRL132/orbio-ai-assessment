@@ -205,8 +205,12 @@ def summarize(results: list[ScenarioResult], complete: bool = True) -> dict[str,
 
 def _baseline_entry(run: dict[str, Any]) -> dict[str, Any]:
     """What the ratchet compares: quality only (latency and cost vary between runs)."""
-    keep = ("passed", "total", "pass_rate", "field_accuracy", "scenarios")
-    return {k: run[k] for k in keep}
+    keep = ("passed", "total", "pass_rate", "field_accuracy")
+    scenarios = {
+        name: {k: v for k, v in scenario.items() if k != "failures"}
+        for name, scenario in run["scenarios"].items()
+    }
+    return {**{k: run[k] for k in keep}, "scenarios": scenarios}
 
 
 def _regressions(baseline: dict[str, Any] | None, run: dict[str, Any]) -> list[str]:

@@ -46,6 +46,7 @@ SCENARIOS = Path(__file__).parent / "scenarios.yaml"
 HOLDOUT = Path(__file__).parent / "holdout.yaml"
 EVAL_START = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
 MAX_SIMULATED_TURNS = 20
+SIMULATOR_ATTEMPTS = 3
 
 
 class Expect(BaseModel):
@@ -104,6 +105,7 @@ class ScenarioResult:
             "field_accuracy": round(self.field_accuracy, 3),
             "turns": self.turns,
             "replies_failed": self.replies_failed,
+            "failures": self.failures,
         }
 
 
@@ -118,6 +120,18 @@ def percentile(values: list[float], q: float) -> float | None:
 @runtime_checkable
 class Completer(Protocol):
     def complete(self, system: str, user: str, max_tokens: int = ...) -> str: ...
+
+
+def _candidate_says(candidate: Completer, system: str, user: str) -> str:
+    """The simulated candidate's next message. A model sometimes returns nothing: that's about the
+    simulator, not the model being measured, so it mustn't end the run."""
+    for attempt in range(SIMULATOR_ATTEMPTS):
+        try:
+            return candidate.complete(system, user).strip()
+        except ValueError:
+            if attempt == SIMULATOR_ATTEMPTS - 1:
+                raise
+    return ""
 
 
 def load_scenarios(
@@ -214,7 +228,7 @@ class Harness:
                 f"{'Assistant' if m.direction == 'out' else 'Candidate'}: {m.text}"
                 for m in repo.messages(cid)
             )
-            message = candidate.complete(system, f"Conversation so far:\n{transcript}").strip()
+            message = _candidate_says(candidate, system, f"Conversation so far:\n{transcript}")
             if not message or message == "DONE":
                 break
             turns += 1
