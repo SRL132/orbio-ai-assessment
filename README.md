@@ -32,6 +32,10 @@ The database schema is managed with Alembic migrations, which run automatically 
 
 Replies and reminders go out through an outbox (`messages.delivered`), so a reminder created hours later reaches the phone like any reply. Since 1 October 2026 [Meta charges per delivered service message](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages), replies included, and needs a payment method on file; its docs don't say how that applies to test numbers. WhatsApp allows free-form messages only within 24 h of the candidate's last message, so on WhatsApp the reminders go out at 2 h and 23 h. Anything later needs an approved template (`WHATSAPP_REMINDER_TEMPLATE`, paid) or is skipped and logged.
 
+### A second client
+
+`CLIENT_ID=norte_express` runs the same app as an invented courier company, to show that a new client is config and no code ([details](docs/architecture.md#adding-a-client)).
+
 ### Docker
 
 ```bash

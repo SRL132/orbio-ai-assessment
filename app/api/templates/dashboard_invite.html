@@ -9,9 +9,14 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
   <h2>From a CSV</h2>
   <label>File with an <code>applied_at</code> column, for example 2026-11-03T09:00:00+01:00 <input type="file" name="applications" accept=".csv,text/csv"></label>
-  <p class="muted">Other columns, such as a phone number, come back in the download so you can match links to people. They aren't stored.</p>
+  <p class="muted">Add an <code>application_ref</code> column with your own id for each applicant: it's kept, so the candidate's page and the list below can point you back to them. Other columns, such as a phone number, come back in the download so you can match links to people. They aren't stored.</p>
   <h2>Or just a number</h2>
   <label>Links to make, up to {{ max_rows }}. They count as applying now. <input type="number" name="count" min="1" max="{{ max_rows }}"></label>
   <p><button type="submit">Download links</button></p>
 </form>
+<div class="card">
+  <h2 style="margin-top:0">Chase who hasn't finished</h2>
+  <p class="muted">Web chat can't reach someone who closed the tab, so reminders only show if they come back. Download everyone with an <code>application_ref</code> who is still in progress, each with a fresh link, and send it with your own tool. Do this daily: it's what keeps them inside the 24 h target.</p>
+  <p><a href="/dashboard/invite/unfinished.csv">Download unfinished applications</a></p>
+</div>
 {% endblock %}

@@ -1,0 +1,105 @@
+# English chat templates. Same keys and placeholders as es/chat.yaml.
+
+greeting_consent: >-
+  Hi! I'm {persona}, {company}'s virtual assistant 👋 I'll ask you 7 quick questions about the
+  delivery driver job (about 3 minutes). We only use your answers for this process
+  (privacy notice: {privacy_url}). Shall we start?
+consent_reask: To continue I need your OK to use your answers for this process. Shall we start? (yes / no)
+consent_declined: Understood, we won't keep anything. If you change your mind, just write to us.
+
+ask_full_name: What's your name? First name and surname, please.
+ask_license: "Do you have a driving license? Reply: Moto · Car · Both · None"
+ask_location: Which city and neighbourhood do you live in? Or just tell me your postal code.
+ask_availability: "What's your availability? Full time · Part time · Weekends"
+ask_schedule: "Which hours do you prefer? Morning · Afternoon · Evening · Flexible"
+ask_experience: Have you done deliveries before? Tell me how many years and on which apps (Glovo, Uber Eats...).
+ask_start_date: Which day could you start?
+
+reask_full_name: Sorry, could you also tell me your surname?
+reask_license: I didn't quite get that. Do you have a license for a moto, a car, both, or none?
+reask_location: Could you tell me your city and neighbourhood or postal code? For example, Bilbao, Deusto.
+reask_availability: Pick one or more, full time, part time or weekends?
+reask_schedule: Morning, afternoon, evening or flexible? You can pick several.
+reask_experience: How long have you done deliveries? If never, just say "none", that's fine.
+reask_start_date: I didn't quite get that. Which day could you start? For example, tomorrow, Monday or 1 March.
+
+disqualified_no_license: >-
+  Thanks, {name}. This job needs a driving license, so we can't continue for now. Would you like
+  us to keep your details for future openings?
+disqualified_outside_area: >-
+  Thanks, {name}. We don't deliver in your area yet, so we can't continue for now. Would you like
+  us to keep your details in case we open near you?
+keep_on_file_reask: Shall we keep your details for future openings? (yes / no)
+keep_on_file_yes: Done, we'll write to you if something fits. Thanks!
+keep_on_file_no: Understood, we won't keep your details. Thanks for your time!
+
+recap: |-
+  Let's recap:
+  {summary}
+  Is everything correct?
+confirm_value: "Just to check: {value}, right?"
+ask_change: Sure, what would you like to change?
+qualified: Great, {name}! You meet the requirements 🎉
+qualified_no_slots: A recruiter will write to you within 2 working days to set up the interview.
+offer_slots: |-
+  Pick a time for your interview:
+  {slots}
+  Reply with the number. If none works, say "none".
+interview_booked: Done! Your interview is on {when}. We'll send you the base's address. See you soon!
+slot_taken: Oops, that time was just taken. Here are some others.
+no_slot_fits: No problem. Which days and times would suit you? I'll pass it on to the recruiter.
+preferred_times_noted: Noted. A recruiter will write to you to set up the interview.
+handoff_disqualified: I've noted it. A person on the recruiting team will review your case and write to you if anything changes.
+retype_hint: Sorry, I got that wrong. Could you write it again?
+weekdays: Mon,Tue,Wed,Thu,Fri,Sat,Sun
+slot_format: "{weekday} {day}/{month} {time}"
+needs_review: Thanks, {name}! A recruiter will review your application and write to you within 2 working days.
+handoff_human: Sure, I'll let someone from the team know. They'll write to you within 1 working day.
+
+abuse_warning: I'm here to help with your application. Let's keep it respectful, please.
+data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within 2 working days. You can also write to privacy@gruposazon.example.
+abuse_end: Let's stop here. A recruiter will review your case.
+sensitive_data: We don't need that information right now, so we won't keep it.
+offer_human: If you'd rather talk to a person from the team, just tell me.
+reminder_1: Hi again! Only {missing_count} questions left for your application. Shall we continue?
+reminder_2: We're keeping your spot a bit longer, {missing_count} questions left. Shall we finish them?
+reminder_1_one: Hi again! Only 1 question left for your application. Shall we continue?
+reminder_2_one: We're keeping your spot a bit longer, 1 question left. Shall we finish it?
+reminder_1_recap: Hi again! All that's left is to confirm your details. Are they correct?
+reminder_2_recap: We're keeping your spot a bit longer, you only need to confirm your details. Are they correct?
+interview_change_noted: Noted. A person on the team will write to you to change it; until then, your interview stays as it is.
+closed: Your application is already registered. If you need anything, a recruiter will get in touch.
+closed_disqualified: Thanks for writing. This application is closed, but you're welcome to apply again any time.
+technical_retry: Sorry, I didn't catch that. Could you say it again?
+technical_hold: Give me a moment, I'm looking at your answer. I'll be right back.
+technical_unavailable: Sorry, we're having a technical problem and I couldn't read your answer. Could you send it again in a little while?
+answer_unknown: Good question, a recruiter will confirm that for you.
+
+label_full_name: Name
+label_license: License
+label_location: Area
+label_availability: Availability
+label_schedule: Hours
+label_experience: Experience
+label_start_date: Start
+value_moto: moto
+value_car: car
+value_both: moto and car
+value_no_license: no driving license
+value_full_time: full time
+value_part_time: part time
+value_weekends: weekends
+value_morning: morning
+value_afternoon: afternoon
+value_evening: evening
+value_flexible: flexible
+experience_value: "{years} years · {platforms}"
+experience_value_one: "{years} year · {platforms}"
+experience_years: "{years} years"
+experience_years_one: "{years} year"
+experience_none: no experience
+license_with_type: "{vehicle} ({license_type} license)"
+license_with_years: "{vehicle} ({license_type} license, {years} years)"
+license_with_years_one: "{vehicle} ({license_type} license, {years} year)"
+slot_unclear: Sorry, I didn't get that. Reply with the number of one of these times, or say "none".
+text_only: For now I can only read text messages. Could you type it?

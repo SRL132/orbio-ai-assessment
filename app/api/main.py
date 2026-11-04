@@ -34,7 +34,7 @@ from app import metrics, tracing
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
-from app.api.invites import InviteLinks
+from app.api.invites import REFERENCE_PATTERN, InviteLinks
 from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
@@ -68,6 +68,8 @@ class ApplicationIn(BaseModel):
     everything else, so no personal data has to cross over."""
 
     applied_at: AwareDatetime
+    # The ATS's own id, so a recruiter can find the person there. Not contact details.
+    application_ref: str | None = Field(default=None, pattern=REFERENCE_PATTERN)
 
 
 class SpeakIn(BaseModel):
@@ -92,8 +94,9 @@ def create_app(container: Container | None = None) -> FastAPI:
             await c.runner.stop()
         c.close()
 
-    app = FastAPI(title="Sazón Screening Agent", lifespan=lifespan)
+    app = FastAPI(title=f"{c.config.persona.company} screening agent", lifespan=lifespan)
     app.state.container = c
+    app.state.company = c.config.persona.company
     secret = c.settings.session_secret
     if secret is None:
         logger.warning("SESSION_SECRET not set: using a random one, logins reset on restart")
@@ -201,7 +204,7 @@ def create_app(container: Container | None = None) -> FastAPI:
                 status.HTTP_422_UNPROCESSABLE_CONTENT, "applied_at is in the future"
             )
         conversation_id = await asyncio.to_thread(
-            c.service.start_conversation, "chat", body.applied_at, "ats"
+            c.service.start_conversation, "chat", body.applied_at, "ats", body.application_ref
         )
         return {"id": str(conversation_id), "chat_url": invites.path(conversation_id)}
 

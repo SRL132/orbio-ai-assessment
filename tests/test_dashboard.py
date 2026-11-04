@@ -569,3 +569,129 @@ def test_erasing_leaves_no_history_to_rebuild_and_other_candidates_alone(
     container.service.receive(kept, "Madrid, Chamberí")
     container.service.process_pending(kept)
     assert repo.rebuild_projections(check_only=True) == []
+
+
+CSV_WITH_REFS = (
+    "applied_at,application_ref,phone\n"
+    "2026-01-05T09:00:00+01:00,APP-1,+34600000001\n"
+    "2026-01-06T09:00:00+01:00,,+34600000002\n"
+)
+
+
+def test_the_reference_is_kept_and_the_phone_is_not(
+    logged_in: TestClient, container: Container
+) -> None:
+    rows = links(upload(logged_in, CSV_WITH_REFS.encode()))
+    cid = cid_of(logged_in, rows[0]["chat_url"])
+
+    state = container.service.get(cid)
+    assert state is not None
+    assert state.application_ref == "APP-1"
+    assert "+34600000001" not in state.model_dump_json()
+
+    page = logged_in.get(f"/dashboard/candidates/{cid}").text
+    assert "APP-1" in page
+    assert "no contact details" not in page
+
+
+@pytest.mark.parametrize("reference", ["=HYPERLINK(1)", "+34600000001", "a b", "x" * 65])
+def test_a_reference_that_is_not_a_plain_id_is_refused(
+    logged_in: TestClient, reference: str
+) -> None:
+    body = f"applied_at,application_ref\n2026-01-05T09:00:00+01:00,{reference}\n"
+    response = upload(logged_in, body.encode())
+    assert response.status_code == 400
+    assert "Line 2: application_ref" in response.text
+
+
+def test_a_rebuilt_state_keeps_the_reference(logged_in: TestClient, container: Container) -> None:
+    rows = links(upload(logged_in, CSV_WITH_REFS.encode()))
+    cid = cid_of(logged_in, rows[0]["chat_url"])
+    replayed = container.service.repo.replay(cid)
+    assert replayed is not None
+    assert replayed.application_ref == "APP-1"
+
+
+def test_an_open_chat_candidate_is_shown_as_unreachable(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "si", "Ana Ruiz")
+    assert "no contact details" in logged_in.get(f"/dashboard/candidates/{cid}").text
+
+
+def test_a_whatsapp_candidate_shows_their_number(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "si", "Ana Ruiz")
+    container.service.repo.link_contact("whatsapp", "34600000009", cid)
+    page = logged_in.get(f"/dashboard/candidates/{cid}").text
+    assert "WhatsApp +34600000009" in page
+    assert "no contact details" not in page
+
+
+def unfinished(client: TestClient) -> list[dict[str, str]]:
+    response = client.get("/dashboard/invite/unfinished.csv")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    return list(csv.DictReader(io.StringIO(response.text)))
+
+
+def test_the_unfinished_list_needs_login(client: TestClient) -> None:
+    response = client.get("/dashboard/invite/unfinished.csv", follow_redirects=False)
+    assert response.status_code in {303, 401}
+
+
+def test_the_unfinished_list_has_who_to_chase_with_a_working_link(
+    logged_in: TestClient, container: Container
+) -> None:
+    body = (
+        "applied_at,application_ref\n"
+        "2026-01-05T09:00:00+01:00,UNOPENED\n"
+        "2026-01-04T09:00:00+01:00,STARTED\n"
+        "2026-01-03T09:00:00+01:00,\n"
+    )
+    rows = links(upload(logged_in, body.encode()))
+    started = cid_of(logged_in, rows[1]["chat_url"])
+    chat(container)  # an open-chat candidate has nothing to match: not listed
+
+    listed = unfinished(logged_in)
+    assert [(r["application_ref"], r["opened"]) for r in listed] == [
+        ("STARTED", "yes"),
+        ("UNOPENED", "no"),
+    ]
+    assert cid_of(logged_in, listed[0]["chat_url"]) == started  # back to the same conversation
+
+
+def test_a_finished_candidate_leaves_the_unfinished_list(
+    logged_in: TestClient, container: Container
+) -> None:
+    rows = links(upload(logged_in, CSV_WITH_REFS.encode()))
+    cid = cid_of(logged_in, rows[0]["chat_url"])
+    for text in ("si", "Ana Ruiz", "No tengo", "no"):
+        container.service.receive(cid, text)
+        container.service.process_pending(cid)
+    state = container.service.get(cid)
+    assert state is not None
+    assert state.status.value == "disqualified"
+    assert unfinished(logged_in) == []
+
+
+def test_the_unfinished_list_keeps_the_silent_and_drops_who_declined(
+    logged_in: TestClient, container: Container
+) -> None:
+    body = (
+        "applied_at,application_ref\n"
+        "2026-01-05T09:00:00+01:00,SILENT\n"
+        "2026-01-06T09:00:00+01:00,DECLINED\n"
+    )
+    rows = links(upload(logged_in, body.encode()))
+    cid_of(logged_in, rows[0]["chat_url"])
+    declined = cid_of(logged_in, rows[1]["chat_url"])
+    container.service.receive(declined, "no")
+    container.service.process_pending(declined)
+
+    for _ in range(4):
+        container.clock.advance(hours=25)
+        container.service.send_due_reminders()
+
+    assert [r["application_ref"] for r in unfinished(logged_in)] == ["SILENT"]

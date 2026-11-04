@@ -194,6 +194,12 @@ Same code, different implementations behind the ports.
 
 Explicitly **not** now: microservices, Kafka, Kubernetes, a separate vector database, multi-agent orchestration.
 
+## Adding a client
+
+A client is a directory in `app/config/` and `CLIENT_ID` to select it. [`norte_express`](../app/config/norte_express/client.yaml) is an invented second client, a courier in northern Spain, with its own name, assistant, service areas, FAQ and privacy notice: 41 lines differ from `grupo_sazon`, and no Python does. `tests/test_second_client.py` screens a candidate with it and checks that nothing of the first client reaches them. Building it found one leak, the brand hard-coded in the dashboard, now read from the config.
+
+Not shown: one deployment serves one client (`CLIENT_ID` is a setting), the seven screening fields are fixed in code, and no one outside this project has onboarded a client. Tables carry `client_id`, so several deployments can share a database.
+
 ## Deployment and monitoring
 
 Design only; the demo runs as one process.
@@ -203,7 +209,7 @@ Design only; the demo runs as one process.
 - **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
 - **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work, and the only turns it runs are voice messages) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless: all state is in the database, so any worker can take any conversation. Each worker runs `WORKER_CONCURRENCY` turns at once; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
 - **Chat delivery:** replies are pushed to the browser over server-sent events (`/api/conversations/{id}/stream`), with polling as the fallback. Each open stream checks the database every 0.5 s; past a few thousand concurrent chats, Postgres `LISTEN/NOTIFY` (or Redis pub/sub) would replace that check.
-- **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
+- **Data:** managed Postgres (point-in-time recovery, encrypted at rest). Workers find waiting messages in the database, so there's no separate queue; SQS or Redis Streams only if polling becomes the bottleneck. Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
 - **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
 - **Release:** CI gates (lint, types, boundaries, tests, offline evals) → image → staging with live evals → production. Prompt and config changes ship per client behind a version number, so one client can be rolled back without the others.
 

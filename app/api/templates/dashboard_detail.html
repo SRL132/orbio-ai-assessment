@@ -12,6 +12,12 @@
     <div class="card"><h2 style="margin-top:0">Summary</h2>
       <div class="summary">{{ state.summary or 'Conversation still in progress.' }}</div>
       {% if interview %}<p><b>Interview:</b> {{ interview }}</p>{% endif %}
+      <p><b>Reach them:</b>
+        {% if whatsapp_number %}WhatsApp +{{ whatsapp_number }}{% endif %}
+        {% if whatsapp_number and state.application_ref %} · {% endif %}
+        {% if state.application_ref %}application <code>{{ state.application_ref }}</code> in your own file{% endif %}
+        {% if not whatsapp_number and not state.application_ref %}<span class="muted">no contact details. They came through the open chat link, so they can only be reached if they write again.</span>{% endif %}
+      </p>
       {% if state.review_reasons %}<p><b>Review reasons:</b> {{ state.review_reasons|map('reason')|join('; ') }}</p>{% endif %}
     </div>
 

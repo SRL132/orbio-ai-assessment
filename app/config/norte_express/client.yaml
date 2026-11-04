@@ -1,0 +1,189 @@
+# A second, invented client: a courier in northern Spain. It shows that a new client is a new
+# directory with no code changes (docs/architecture.md, "Adding a client"). Synthetic only.
+
+client_id: norte_express
+
+persona:
+  name: Ane
+  company: Norte Express
+
+field_priority:
+  - full_name
+  - license
+  - location
+  - availability
+  - schedule
+  - experience
+  - start_date
+
+max_attempts: 2
+# Replies in a row to the recap that neither confirm nor change it, before a recruiter takes over.
+max_recap_rounds: 3
+# "Entre semana" names days, not full or part time: whatever the model picked for it is asked
+# again, unless the answer also says how much (checked in code, on the candidate's own words).
+availability_days_only:
+  phrases: [entre semana, de lunes a viernes, lunes a viernes, dias laborables, weekdays, during the week, monday to friday, mon to fri]
+  unless: [completa, completo, media, parcial, horas, fin de semana, fines de semana, full, part, hours, weekend, weekends, todo el dia, all day]
+max_abuse_strikes: 2
+far_start_days: 60
+# Disqualified and abandoned candidates are erased after ~6 months unless they opted to stay on file.
+retention_days: 183
+reminder_hours: [2, 24]
+# WhatsApp only allows free-form messages within 24 h of the candidate's last message; after
+# that only paid, pre-approved templates. Both reminders stay inside the window.
+channel_reminder_hours:
+  whatsapp: [2, 23]
+abandon_after_hours: 24
+max_reply_chars: 250
+# Pilot success metric: applicants who reach an outcome within this many hours of applying.
+screening_target_hours: 24
+
+# Interview slots offered in the chat, in each location's local time (mocked calendar for the demo).
+interview:
+  slot_times: ["10:00", "12:00", "17:00"]
+  offer_count: 3
+  min_days_ahead: 1
+
+known_platforms:
+  - Glovo
+  - Uber Eats
+  - Just Eat
+  - Deliveroo
+  - Rappi
+  - DiDi Food
+  - Amazon Flex
+
+# lat/lon: city centre. Places not listed here are geocoded (GEOCODER) and decided by their
+# distance to the nearest city centre: within geo_review_radius_km, review; farther, outside.
+geo_review_radius_km: 30
+# Values the model is less sure of than this are confirmed with the candidate (yes/no) first.
+confirm_below_confidence: 0.5
+# On a call, speech recognition mishears names and towns ("Gostivar" -> "Ghost") and the model
+# can't tell, so these are always read back, knockouts included. A "no" asks them to type it.
+always_confirm:
+  voice: [full_name, location]
+# Silence on a call feels like a dropped line, so plain next questions skip the LLM there.
+template_questions_on: [voice]
+
+locations:
+  - id: es-bilbao
+    lat: 43.2630
+    lon: -2.9350
+    country: ES
+    city: Bilbao
+    zones: [Abando, Indautxu, Deusto, Casco Viejo, Begoña]
+    postal_prefixes: ["480"]
+    nearby: [Barakaldo, Getxo, Basauri]
+  - id: es-santander
+    lat: 43.4623
+    lon: -3.8100
+    country: ES
+    city: Santander
+    postal_prefixes: ["390"]
+    nearby: [Camargo, Astillero]
+
+# Detailed license rules (docs/process-design-appendix.md, A). They only ever send a candidate
+# to human review, never to a knockout.
+license_rules:
+  ES:
+    accepted_for_moto: [AM, A1, A2, A]
+    accepted_for_car: [B]
+    conditional:
+      - vehicle: moto
+        license_type: B
+        min_years: 3
+
+# Linked from the consent message. The web chat serves the notice below at /privacy; for
+# WhatsApp set an absolute URL. Demo text, to be confirmed by the client's legal team.
+privacy_url: /privacy
+privacy_notice:
+  es: >-
+    Norte Express usa los datos que nos das en este chat (nombre, carnet, zona, disponibilidad,
+    horario, experiencia y fecha de inicio) solo para valorar tu candidatura al puesto de
+    repartidor. No pedimos documentos de identidad ni datos de salud. Si no sigues en el proceso,
+    borramos tus datos a los 6 meses, salvo que aceptes que los guardemos para futuras ofertas.
+    Puedes pedir acceso, rectificación o borrado de tus datos en cualquier momento escribiendo a
+    privacidad@norteexpress.example.
+  en: >-
+    Norte Express uses the details you give in this chat (name, license, area, availability,
+    schedule, experience and start date) only to assess your application as a delivery driver.
+    We don't ask for ID documents or health data. If you don't continue in the process, we
+    delete your details after 6 months, unless you agree that we keep them for future openings.
+    You can ask to access, correct or delete your data at any time by writing to
+    privacy@norteexpress.example.
+
+# Sent word for word: the LLM only picks the entry (faq_id). Demo content: the brief attached no
+# FAQ, so these need the client's confirmation (docs/process-design-appendix.md, D). No pay figures.
+faq:
+  - id: bot
+    question: Am I talking to a person or a bot?
+    keywords: [bot, robot, persona, humano, person, human, ia, ai, automatico, automated, real]
+    answer:
+      es: Soy Ane, una asistente virtual automatizada. Si prefieres hablar con una persona, dímelo.
+      en: I'm Ane, an automated virtual assistant. If you'd rather talk to a person, just tell me.
+  - id: company
+    question: What is Norte Express?
+    keywords: [empresa, norte, company, quienes, who]
+    answer:
+      es: Norte Express es una empresa de reparto con bases en Bilbao y Santander.
+      en: Norte Express is a courier company with bases in Bilbao and Santander.
+  - id: job
+    question: What does the delivery driver job involve?
+    keywords: [trabajo, puesto, consiste, tareas, job, role, involve, hacer]
+    answer:
+      es: Repartir paquetes de nuestras bases a clientes de tu zona.
+      en: Delivering parcels from our bases to customers in your area.
+  - id: next_steps
+    question: What happens after the questions?
+    keywords: [despues, siguiente, entrevista, next, after, interview, proceso, process]
+    answer:
+      es: Si cumples los requisitos, reservas una entrevista aquí mismo en el chat.
+      en: If you meet the requirements, you book an interview right here in the chat.
+  - id: pay
+    question: How much does the job pay?
+    keywords: [pagan, paga, pago, cobra, cobrar, sueldo, salario, gana, ganar, pay, paid, salary, wage, money]
+    answer:
+      es: El sueldo depende de la ciudad y de las horas. Un reclutador te dará la cifra exacta.
+      en: Pay depends on the city and the hours. A recruiter will give you the exact figure.
+  - id: hours
+    question: What are the hours and shifts?
+    keywords: [horario, horarios, horas, turno, turnos, hours, shift, shifts]
+    answer:
+      es: Hay turnos de mañana, tarde y noche, a jornada completa, media jornada o fines de semana. Cada local fija los turnos exactos.
+      en: There are morning, afternoon and evening shifts, full time, part time or weekends. Each location sets the exact shifts.
+  - id: vehicle
+    question: Do I need my own vehicle, and who pays for fuel?
+    keywords: [vehiculo, propio, gasolina, vehicle, own, fuel, petrol, gas]
+    answer:
+      es: Un reclutador te confirmará en la entrevista quién pone el vehículo y cómo se cubren los gastos en tu local.
+      en: At the interview, a recruiter will confirm who provides the vehicle and how costs are covered at your location.
+  - id: contract
+    question: What kind of contract is it?
+    keywords: [contrato, autonomo, empleado, contract, freelance, employee]
+    answer:
+      es: Un reclutador te confirmará el tipo de contrato en la entrevista, porque depende del país y del local.
+      en: A recruiter will confirm the type of contract at the interview, because it depends on the country and location.
+  - id: areas
+    question: Which cities and areas do you hire in?
+    keywords: [ciudad, ciudades, zona, zonas, donde, city, cities, area, areas, where]
+    answer:
+      es: Contratamos en Bilbao, Santander y alrededores. Con tu ciudad y tu barrio compruebo si hay servicio.
+      en: We hire in Bilbao, Santander and nearby towns. With your city and neighbourhood I can check if we cover it.
+  - id: data_use
+    question: What do you do with my data?
+    keywords: [datos, privacidad, borrar, data, privacy, delete]
+    answer:
+      es: Usamos tus respuestas solo para valorar tu candidatura. Si no sigues en el proceso, las borramos a los 6 meses salvo que aceptes que las guardemos. Para pedir acceso o borrado, escribe a privacidad@norteexpress.example.
+      en: We use your answers only to assess your application. If you don't continue, we delete them after 6 months unless you agree that we keep them. To ask for access or deletion, write to privacy@norteexpress.example.
+  - id: license_needed
+    question: Do I need a driving license, even if I deliver by bicycle?
+    keywords: [bici, bicicleta, patinete, bike, bicycle, necesito, need, hace, falta]
+    answer:
+      es: Para este puesto necesitamos carnet o licencia de conducir, también si sueles repartir en bici.
+      en: This job needs a driving license, even if you usually deliver by bicycle.
+  - id: languages
+    question: Which languages can we talk in? Do you speak English or Spanish?
+    keywords: [idioma, idiomas, ingles, espanol, castellano, language, languages, english, spanish, speak, hablas]
+    answer:
+      es: Puedes escribirme en español o en inglés, como prefieras.
+      en: You can write to me in Spanish or English, whichever you prefer.

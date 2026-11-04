@@ -6,7 +6,8 @@
 
 - **One city for four weeks:** Madrid, chosen for the most complete zone list. Spanish and English, web chat.
 - **A control group:** every other applicant stays on phone screening, so the comparison isn't against a guess.
-- **Invites without an ATS:** a recruiter exports the week's applications to a CSV (`applied_at`, plus a phone number for their own use) and uploads it at `/dashboard/invite`. They send the links with the SMS or email tool they already have. The phone number stays in their file: the app doesn't store it.
+- **Invites without an ATS:** every working day, a recruiter exports the new applications to a CSV (`applied_at`, `application_ref` with their own id, plus a phone number for their own use) and uploads it at `/dashboard/invite`. They send the links with the SMS or email tool they already have. The phone number stays in their file: the app stores only the reference. Daily, because the 24 h target below counts from `applied_at`: a weekly export would miss it by construction. Getting to minutes needs the ATS trigger ([`POST /api/v1/applications`](ats-integration.md)).
+- **Chasing without WhatsApp:** web chat can't reach someone who closed the tab, so its reminders only show if they come back. Each day the recruiter also downloads "unfinished applications" from the invite page (fresh links, matched by `application_ref`) and resends them. This understates what WhatsApp's reminders would reach, so read the reach result as a floor.
 - **WhatsApp comes after the pilot.** It needs a verified number, approved templates and a payment method, and every message now has a cost.
 
 ## Before the first candidate
@@ -35,6 +36,17 @@
 | Decisions can be trusted | Knockouts a recruiter overturned | Not applicable | ≤ 2% |
 | Data can be trusted | Fields a recruiter corrected, sampled from the review | Not applicable | ≤ 5% |
 | Candidates aren't put off | Drop-off per question, and complaints | Not applicable | No single question loses more than 15%, and no complaint left unresolved |
+
+## The business case
+
+These are planning figures for the client to correct, not results. From the brief: 13 recruiters, about 1,000 applications and 975 calls a week, 60% unanswered, 80% of recruiter time on unqualified candidates.
+
+- **Reach:** about 390 screened a week today. Meeting the 60% target above would be 600, about 54% more.
+- **Recruiter time (assumes a 40-hour week):** 520 hours a week, of which about 416 go to unqualified candidates. If the agent removes half of that, about 208 hours a week are free, or 16 per recruiter.
+- **Value (assumes EUR 20 an hour, for the client to replace):** about EUR 4,160 a week.
+- **LLM cost:** about $15 a week at 1,000 conversations ($0.0153 each, [measured on the scripted suite](architecture.md#where-the-choice-stands)). Hosting, WhatsApp fees and the recruiters' review time come on top.
+
+The pilot replaces the assumed half with a measurement: recruiter hours per hire against the control group.
 
 ## Stopping and rollback
 
