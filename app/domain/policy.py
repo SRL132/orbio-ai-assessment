@@ -184,6 +184,15 @@ def _days_only(fields: ExtractedFields, config: ClientConfig) -> bool:
     return names_days and not any(f" {_plain(w)} " in said for w in rule.unless)
 
 
+_NEGATIVE_NUMBER = re.compile(r"(?<![\w.,])-\s*\d")
+
+
+def _negative_experience(fields: ExtractedFields) -> bool:
+    """They wrote "-3 años" and the model dropped the sign. "2-3 años" is a range, not this."""
+    extracted = fields.experience_years
+    return extracted is not None and bool(_NEGATIVE_NUMBER.search(extracted.quote))
+
+
 def _changes_another_answer(name: FieldName, draft: Candidate, state: ConversationState) -> bool:
     """While collecting, a new value for a field already answered, in reply to a different
     question ("Mai" to the experience question replacing the name): confirm it first."""
@@ -235,6 +244,20 @@ def _knock_out(
     )
 
 
+def _clear_review_reasons(state: ConversationState, name: FieldName) -> list[DomainEvent]:
+    """A valid answer replaces the one that was flagged, so the flag no longer applies: a date
+    corrected after two failed tries shouldn't keep a qualified candidate from an interview."""
+    stale = [r for r in state.review_reasons if r.field == name]
+    state.review_reasons = [r for r in state.review_reasons if r.field != name]
+    return [
+        DomainEvent(
+            type=EventType.REVIEW_REASON_CLEARED,
+            data={"field": name.value, "reason": r.reason.value},
+        )
+        for r in stale
+    ]
+
+
 def _accept(
     state: ConversationState,
     name: FieldName,
@@ -260,6 +283,7 @@ def _accept(
             add_review_reason(state, Reason.UNGROUNDED_ANSWER, name)
     else:
         meta.status = FieldStatus.VALID
+        result.events.extend(_clear_review_reasons(state, name))
     result.progressed.add(name)
     if not was_set:
         result.added.add(name)
@@ -311,6 +335,8 @@ def apply_extraction(
             and _days_only(fields, config)
         ):
             outcome = Outcome.invalid("days_only")
+        if name == FieldName.EXPERIENCE and _negative_experience(fields):
+            outcome = Outcome.invalid("out_of_range")
         if outcome.kind == "knockout" and name == FieldName.LICENSE and not _has_letters(message):
             outcome = Outcome.invalid("unclear")  # "000" is junk, not "I have no license"
         grounded = _grounded(fields, name, message)

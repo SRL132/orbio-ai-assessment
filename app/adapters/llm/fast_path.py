@@ -60,6 +60,7 @@ def closed_answer(
         Stage.CONSENT,
         Stage.RECAP,
         Stage.KEEP_ON_FILE,
+        Stage.CLOSED,
     ):
         # Only the yes or no: a "no" must never also be read as an answer to the field in question.
         if said not in _YES and said not in _NO:

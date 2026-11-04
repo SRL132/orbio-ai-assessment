@@ -27,6 +27,7 @@ from app.domain.models import (
     ExtractionResult,
     FieldStatus,
     InboundMessage,
+    Reason,
     Schedule,
     Stage,
     Status,
@@ -196,8 +197,15 @@ def test_no_extraction_can_break_the_rules(
         if state.stage == Stage.SCHEDULING:
             assert state.status == Status.QUALIFIED
             assert state.offered_slots
-        if state.interview_at is not None:
-            assert state.status == Status.QUALIFIED
+        if state.interview_at is not None and state.status != Status.QUALIFIED:
+            # A booking only leaves "qualified" when the candidate asks a person for something
+            # after it; it stands until a recruiter acts.
+            assert state.status == Status.NEEDS_REVIEW
+            assert {r.reason for r in state.review_reasons} & {
+                Reason.INTERVIEW_CHANGE,
+                Reason.HUMAN_REQUESTED,
+                Reason.DATA_REQUEST,
+            }
     event(f"ended {state.status.value} at {state.stage.value}")  # --hypothesis-show-statistics
 
 

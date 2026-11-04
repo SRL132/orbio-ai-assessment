@@ -80,6 +80,7 @@ class ClientConfig(BaseModel):
     license_rules: dict[str, CountryLicenseRules] = Field(default_factory=dict)
     known_platforms: list[str] = Field(default_factory=list)
     max_attempts: int = 2
+    max_recap_rounds: int = 3
     confirm_below_confidence: float = Field(
         default=0.5,
         description="A value the model is less sure of than this is confirmed with the "

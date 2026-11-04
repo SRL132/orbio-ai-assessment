@@ -77,6 +77,7 @@ class Reason(StrEnum):
     NO_LICENSE = "no_license"
     OUTSIDE_AREA = "outside_area"
     HUMAN_REQUESTED = "human_requested"
+    DATA_REQUEST = "data_request"
     FLAGGED_BEHAVIOUR = "flagged_behaviour"
     LICENSE_UNCLEAR = "license_unclear"
     BORDERLINE_ZONE = "borderline_zone"
@@ -85,6 +86,8 @@ class Reason(StrEnum):
     FIELD_FAILED_TWICE = "field_failed_twice"
     UNGROUNDED_ANSWER = "ungrounded_answer"
     LOCATION_UNVERIFIED = "location_unverified"
+    INTERVIEW_CHANGE = "interview_change"
+    RECAP_UNCONFIRMED = "recap_unconfirmed"
 
 
 # Knockouts end the screening; each needs a `disqualified_<reason>` template.
@@ -239,6 +242,7 @@ class ConversationState(BaseModel):
         "them) and not a candidate in the lists until the link is opened.",
     )
     keep_on_file_reasks: int = 0  # unclear answers to "shall we keep your details?"
+    recap_rounds: int = 0  # replies to the recap in a row that neither confirmed nor changed it
     recent_messages: list[tuple[Literal["in", "out"], str]] = Field(
         default_factory=list,
         exclude=True,
@@ -286,7 +290,16 @@ class Extracted[T](BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-Intent = Literal["answer", "question", "human_request", "off_topic", "abuse", "other"]
+Intent = Literal[
+    "answer",
+    "question",
+    "human_request",
+    "data_request",
+    "interview_change",
+    "off_topic",
+    "abuse",
+    "other",
+]
 Sentiment = Literal["positive", "neutral", "frustrated"]
 
 
@@ -384,6 +397,7 @@ SayTemplate = Literal[
     "technical_hold",
     "technical_unavailable",
     "sensitive_data",
+    "data_request_received",
     "abuse_warning",
     "abuse_end",
     "consent_reask",
@@ -400,6 +414,7 @@ SayTemplate = Literal[
     "slot_unclear",
     "handoff_disqualified",
     "preferred_times_noted",
+    "interview_change_noted",
 ]
 
 
@@ -498,6 +513,9 @@ class EventType(StrEnum):
     NO_SLOT_FITS = "no_slot_fits"
     PREFERRED_TIMES_GIVEN = "preferred_times_given"
     HUMAN_REQUESTED = "human_requested"
+    DATA_REQUESTED = "data_requested"
+    INTERVIEW_CHANGE_REQUESTED = "interview_change_requested"
+    REVIEW_REASON_CLEARED = "review_reason_cleared"
     INTERVIEW_BOOKED = "interview_booked"
     REMINDER_SENT = "reminder_sent"
     ABANDONED = "abandoned"

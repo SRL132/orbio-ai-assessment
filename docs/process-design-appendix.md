@@ -20,7 +20,7 @@ The conversation asks one question: does the candidate have a license, and for w
 
 The agent collects only what screening needs, and every decision can be traced.
 
-- **Consent:** the privacy notice comes in the first message, before any data is collected (GDPR in Spain; LFPDPPP in Mexico). Keeping a candidate on file for future roles is a separate yes/no, because it is a different purpose.
+- **Consent:** the privacy notice comes in the first message, before any data is collected (GDPR in Spain; LFPDPPP in Mexico). Until the candidate says yes, only a bare yes or no is stored as written: anything else they send is kept as `[redacted]`. To understand it, the message still goes to the LLM provider once. Keeping a candidate on file for future roles is a separate yes/no, because it is a different purpose.
 - **Minimal data:** only the 7 screening fields. No ID numbers, health details or nationality.
 - **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file. Built: an hourly job erases them 183 days (`retention_days` in the client config) after their last activity: state, messages, events including recruiter notes, interview bookings and the WhatsApp contact, in one transaction. An `erasures` row with no personal data records each one as proof.
 - **Access:** the recruiter dashboard is behind a login with one account per recruiter. No default or shared passwords. Secrets live in environment variables.

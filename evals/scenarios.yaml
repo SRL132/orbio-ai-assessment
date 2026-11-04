@@ -689,3 +689,103 @@
     disqualify_reason: no_license
     events_include: [human_requested]
     reply_contains: ["equipo de selección"]
+
+- id: data_request_stops_screening
+  description: Asks to delete their data and stop mid-screening. Nothing else is asked, and a recruiter gets it.
+  persona: Ana López, moto. After the license question she changes her mind and asks to delete her data.
+  steps: [Sí, Ana López, "borrad todos mis datos, no quiero seguir"]
+  expect:
+    status: needs_review
+    events_include: [data_requested]
+    reply_contains: ["reclutador"]
+
+- id: data_request_in_english
+  description: A GDPR deletion request in English during the location question.
+  persona: Mark Evans, moto. Asks for his data to be deleted when asked where he lives.
+  steps: ["Yes", Mark Evans, Moto, "please delete my data, GDPR"]
+  expect:
+    status: needs_review
+    language: en
+    events_include: [data_requested]
+    reply_contains: ["recruiter"]
+
+- id: data_request_after_chat_closed
+  description: Rejected and closed, then asks to delete their data. It still reaches a person, and the knockout reason stays on record.
+  persona: Raúl Ortega, no driving license. Declines to stay on file, then asks for his data to be deleted.
+  steps: [Sí, Raúl Ortega, No tengo carnet, "No", "borrad mis datos"]
+  expect:
+    status: needs_review
+    disqualify_reason: no_license
+    events_include: [knockout, data_requested]
+    reply_contains: ["reclutador"]
+
+- id: privacy_question_is_not_a_data_request
+  description: Asking what happens to their data is a question, so it gets the approved answer and the screening carries on.
+  persona: Ana López, moto. Asks what happens to her data before answering.
+  steps: [Sí, Ana López, "¿qué hacéis con mis datos?"]
+  expect:
+    status: in_progress
+
+- id: interview_change_after_booking
+  description: Booked, then asks to move the interview. The booking stays, and a recruiter is told.
+  persona: Ana López, Chamberí (Madrid), moto. Books an interview, then asks to move it to another day.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, mañana, Sí, "1", quiero cambiar la entrevista de día]
+  expect:
+    status: needs_review
+    interview_booked: true
+    review_reasons_include: [interview_change]
+    events_include: [interview_booked, interview_change_requested]
+
+- id: thanks_after_booking_changes_nothing
+  description: A thank-you after booking isn't a request, so the candidate stays qualified.
+  persona: Ana López, Chamberí (Madrid), moto. Books an interview, then says thanks.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, mañana, Sí, "1", gracias]
+  expect:
+    status: qualified
+    interview_booked: true
+
+- id: recap_refused_again_and_again
+  description: Keeps refusing the recap without saying what to change. A recruiter takes over; it doesn't loop.
+  persona: Ana López, Chamberí (Madrid), moto. Says no to the recap and never says what's wrong.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, mañana, "No", todo mal, "No"]
+  expect:
+    status: needs_review
+    review_reasons_include: [recap_unconfirmed]
+
+- id: date_corrected_after_two_failures_qualifies
+  description: Two unusable start dates, then a good one at the recap. The old flag goes, so they still get an interview.
+  requires_llm: true
+  persona: Ana López, Chamberí (Madrid), moto. Gives two impossible start dates, then tomorrow.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, ayer, ayer, mañana, Sí]
+  expect:
+    status: qualified
+    events_include: [field_gave_up, review_reason_cleared]
+    fields: {start_date: "2026-11-03"}
+
+- id: reminder_at_the_recap_counts_no_questions
+  description: Goes quiet at the recap. The reminder asks for the confirmation, not for "0 preguntas".
+  persona: Ana López, Chamberí (Madrid), moto. Stops replying at the recap.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, mañana, {wait_hours: 3}]
+  expect:
+    status: in_progress
+    reminders_sent: 1
+    reply_contains: ["confirmes tus datos"]
+    later_replies_avoid: ["\\b0 preguntas"]
+
+- id: negative_experience_is_asked_again
+  description: '"-3 años" is not three years of experience, even if the sign gets lost.'
+  requires_llm: true
+  persona: Ana López, Chamberí (Madrid), moto. Writes a negative number of years.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, -3 años en Glovo]
+  expect:
+    status: in_progress
+    awaiting: experience
+
+- id: year_alone_is_not_a_start_date
+  description: '"En 2030" names no day, so the agent asks again instead of choosing 1 January.'
+  requires_llm: true
+  persona: Ana López, Chamberí (Madrid), moto. Says only a year when asked for a start date.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches, nunca, en 2030]
+  expect:
+    status: in_progress
+    awaiting: start_date

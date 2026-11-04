@@ -45,6 +45,11 @@ _YES = vocab(
 _NO = vocab("no|nope|no gracias|no thanks|nah")
 _HUMAN = vocab("persona|humano|human|agente|agent|reclutador|recruiter|real person")
 _ABUSE = vocab("idiota|imbecil|estupido|gilipollas|puta|mierda|idiot|stupid|fuck|shit")
+# Asking to move or cancel the interview: an action word and what it applies to.
+_INTERVIEW_CHANGE = re.compile(
+    r"\b(?:cambi\w*|mov\w*|reprogram\w*|anul\w*|cancel\w*|change|move|reschedule)\b"
+    r".*\b(?:entrevista|cita|interview)\b"
+)
 # Words that tip the language guess (whole words, after normalize()).
 _ENGLISH = vocab(
     "yes|hi|hello|my|name|is|i|im|have|the|and|car|both|none|weekends|full|part|time|morning|"
@@ -75,6 +80,12 @@ _ORDINALS = {
     **dict.fromkeys(("segunda", "segundo", "second"), 2),
     **dict.fromkeys(("tercera", "tercero", "third"), 3),
 }
+# Asking to stop or to have their data deleted. "¿Qué hacéis con mis datos?" is only a question.
+_DATA_REQUEST = re.compile(
+    r"\b(borr\w*|elimin\w*|suprim\w*|delete|erase|remove)\b.*\b(datos|data|details)\b|"
+    r"\bno quiero (seguir|continuar)\b|\bretiro mi candidatura\b|"
+    r"\b(withdraw|stop) my application\b|\bi (want|would like) to (stop|withdraw)\b"
+)
 _SENSITIVE = re.compile(
     r"\b\d{8}[a-z]\b|\b[xyz]\d{7}[a-z]\b|\bdni\b|\bnie\b|\bpasaporte\b|"
     r"\bpassport\b|\bcurp\b|\biban\b"
@@ -230,8 +241,12 @@ class KeywordExtractor:
         confused = not words  # "?" or "..." alone: they didn't understand the question
         if confused:
             intent = "other"
+        elif _DATA_REQUEST.search(t):
+            intent = "data_request"
         elif _has(t, *_ABUSE):
             intent = "abuse"
+        elif _INTERVIEW_CHANGE.search(t):
+            intent = "interview_change"
         elif "?" in text and _has(t, "eres", "are you", "es un bot", "is this"):
             intent = "question"  # "¿Eres una persona?" asks what Lucía is; it isn't a hand-off
         elif _has(t, *_HUMAN):

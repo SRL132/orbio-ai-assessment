@@ -89,6 +89,7 @@ def test_context_is_short_and_recent(config: ClientConfig, ports: Ports, clock: 
     spy = ContextSpy()
     service = make_service(config, replace(ports, extractor=spy), clock)
     cid = service.start_conversation()
+    spy.push(ex(yes_no=True))  # before consent, messages aren't kept, so they aren't context either
     for text in ("primero", "x" * 1000, "tercero", "cuarto", "quinto"):
         service.receive(cid, text)
         service.process_pending(cid)
@@ -97,6 +98,24 @@ def test_context_is_short_and_recent(config: ClientConfig, ports: Ports, clock: 
     assert len(last) == RECENT_MESSAGES
     assert all(len(text) <= RECENT_MESSAGE_CHARS for _, text in last)
     assert ("in", "x" * RECENT_MESSAGE_CHARS) in spy.contexts[2]
+
+
+def test_only_a_consent_answer_is_stored_before_consent(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    spy = ContextSpy()
+    service = make_service(config, replace(ports, extractor=spy), clock)
+    cid = service.start_conversation()
+    service.receive(cid, "soy Ana López y tengo moto")
+    service.process_pending(cid)
+    service.receive(cid, "Sí")
+    spy.push(ex(yes_no=True))
+    service.process_pending(cid)
+    service.receive(cid, "Ana López")
+    service.process_pending(cid)
+    assert ("in", REDACTED) in spy.contexts[1]
+    assert not any("soy Ana" in text for context in spy.contexts[1:] for _, text in context)
+    assert ("in", "Sí") in spy.contexts[2]
 
 
 def test_context_never_brings_redacted_data_back(

@@ -57,11 +57,17 @@ needs_review: Thanks, {name}! A recruiter will review your application and write
 handoff_human: Sure, I'll let someone from the team know. They'll write to you within 1 working day.
 
 abuse_warning: I'm here to help with your application. Let's keep it respectful, please.
+data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within 2 working days.
 abuse_end: Let's stop here. A recruiter will review your case.
 sensitive_data: We don't need that information right now, so we won't keep it.
 offer_human: If you'd rather talk to a person from the team, just tell me.
 reminder_1: Hi again! Only {missing_count} questions left for your application. Shall we continue?
 reminder_2: We're keeping your spot a bit longer, {missing_count} questions left. Shall we finish them?
+reminder_1_one: Hi again! Only 1 question left for your application. Shall we continue?
+reminder_2_one: We're keeping your spot a bit longer, 1 question left. Shall we finish it?
+reminder_1_recap: Hi again! All that's left is to confirm your details. Are they correct?
+reminder_2_recap: We're keeping your spot a bit longer, you only need to confirm your details. Are they correct?
+interview_change_noted: Noted. A person on the team will write to you to change it; until then, your interview stays as it is.
 closed: Your application is already registered. If you need anything, a recruiter will get in touch.
 closed_disqualified: Thanks for writing. This application is closed, but you're welcome to apply again any time.
 technical_retry: Sorry, I didn't catch that. Could you say it again?

@@ -80,7 +80,7 @@ def render(
             case Say(template=key):
                 replies.append(fill(key))
             case Remind(number=number):
-                replies.append(fill(f"reminder_{number}"))
+                replies.append(fill(_reminder_key(number, state)))
             case AskField(offer_options=False) if channel in config.template_questions_on:
                 replies.append(fill(_fallback_key(action)))
             case AnswerQuestion(faq_id=faq_id):
@@ -135,6 +135,13 @@ def render(
             case ScheduleReminder():
                 pass
     return replies, events
+
+
+def _reminder_key(number: int, state: ConversationState) -> str:
+    """The reminder that reads right: at the recap no question is left, only the confirmation."""
+    missing = missing_count(state.candidate)
+    suffix = {0: "_recap", 1: "_one"}.get(missing, "")
+    return f"reminder_{number}{suffix}"
 
 
 def _pending_text(name: FieldName, state: ConversationState, config: ClientConfig) -> str:
@@ -326,7 +333,11 @@ def required_templates(config: ClientConfig) -> set[str]:
         *(f"{prefix}_{name.value}" for name in FieldName for prefix in ("ask", "reask", "label")),
         *(f"value_{value.value}" for value in values),
         *(f"disqualified_{reason.value}" for reason in KNOCKOUT_REASONS),
-        *(f"reminder_{n}" for n in range(1, reminders + 1)),
+        *(
+            f"reminder_{n}{suffix}"
+            for n in range(1, reminders + 1)
+            for suffix in ("", "_one", "_recap")
+        ),
         "answer_unknown",
         "handoff_human",
         "needs_review",

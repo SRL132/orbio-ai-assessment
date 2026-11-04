@@ -23,6 +23,7 @@ REASON_TEXT: dict[str, str] = {
     Reason.NO_LICENSE: "no driving license",
     Reason.OUTSIDE_AREA: "lives outside the service area",
     Reason.HUMAN_REQUESTED: "asked to talk to a person",
+    Reason.DATA_REQUEST: "asked to stop or to delete their data",
     Reason.FLAGGED_BEHAVIOUR: "abusive messages",
     Reason.LICENSE_UNCLEAR: "license may not cover a motorbike",
     Reason.BORDERLINE_ZONE: "borderline zone",
@@ -31,6 +32,8 @@ REASON_TEXT: dict[str, str] = {
     Reason.FIELD_FAILED_TWICE: "no usable answer after two tries",
     Reason.UNGROUNDED_ANSWER: "answer not found in the candidate's own words",
     Reason.LOCATION_UNVERIFIED: "place could not be checked (lookup failed)",
+    Reason.INTERVIEW_CHANGE: "asked to change the interview",
+    Reason.RECAP_UNCONFIRMED: "did not confirm the recap after several tries",
 }
 
 

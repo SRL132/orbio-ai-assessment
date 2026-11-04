@@ -74,6 +74,7 @@ _KNOCKOUT_FIELDS = {Reason.NO_LICENSE: FieldName.LICENSE, Reason.OUTSIDE_AREA: F
 
 # A candidate's own words about when they could do the interview, kept for the recruiter.
 _PREFERRED_TIMES_CHARS = 200
+_BARE_ANSWER_WORDS = 2  # "no", "no gracias": a refusal with nothing else in it
 
 # Intents that count as a (possibly failed) attempt at answering the awaited question.
 _ANSWER_INTENTS = frozenset({"answer", "other"})
@@ -142,10 +143,12 @@ def turn(
     ):
         _resume(t)  # silent, or declined consent and was told to write back if they changed mind
     if t.state.stage == Stage.CLOSED:
-        t.say("closed_disqualified" if t.state.status == Status.DISQUALIFIED else "closed")
+        _on_closed(t, message)
         return _finish(t)
 
     t.message = message.text
+    # Nothing a candidate writes is kept before they say yes (see _is_plain_consent_answer).
+    t.redact = t.state.stage == Stage.CONSENT
     t.state.last_inbound_at = t.now
     t.state.reminders_sent = 0
     try:
@@ -162,12 +165,16 @@ def turn(
     own_name = (t.state.candidate.full_name or "").split()
     if not says_no_language(message.text, config, own_name):  # "madrid tetuan" keeps the language
         t.state.language = extraction.language
+    if t.redact and _is_plain_consent_answer(extraction, message.text):
+        t.redact = False
     if extraction.sensitive_data:
         t.redact = True
         t.say("sensitive_data")
         t.event(EventType.SENSITIVE_DATA_REDACTED)
 
-    if extraction.intent == "abuse":
+    if extraction.intent == "data_request":
+        _on_data_request(t)
+    elif extraction.intent == "abuse":
         _on_abuse(t)
     elif extraction.intent == "human_request" and t.state.status == Status.DISQUALIFIED:
         _human_after_knockout(t)
@@ -264,6 +271,57 @@ def _hold_for_retry(t: _Turn, exc: LLMUnavailable) -> TurnResult:
 # --- Stage handlers -------------------------------------------------------------------------------
 
 
+def _is_plain_consent_answer(extraction: ExtractionResult, text: str) -> bool:
+    """What may be stored from a message sent before consent: one that gives it, or a bare "no"."""
+    if extraction.yes_no is True:
+        return True
+    return extraction.yes_no is False and len(text.split()) <= _BARE_ANSWER_WORDS
+
+
+def _on_closed(t: _Turn, message: InboundMessage) -> None:
+    """The screening is over, but a request only a person can act on still has to reach one, so
+    the closing message's "a recruiter will get in touch" stays true."""
+    status = t.state.status
+    try:
+        extraction = t.ports.extractor.extract(t.state, message.text, t.config, t.now.date())
+    except Exception as exc:  # the closed reply needs no LLM
+        t.event(EventType.EXTRACTOR_FAILED, error=type(exc).__name__)
+    else:
+        t.redact = extraction.sensitive_data
+        if extraction.intent == "data_request":
+            t.state.language = extraction.language
+            _on_data_request(t)
+            return
+        if extraction.intent == "interview_change" and status != Status.DISQUALIFIED:
+            t.state.language = extraction.language
+            t.event(EventType.INTERVIEW_CHANGE_REQUESTED)
+            _send_to_review(t, Reason.INTERVIEW_CHANGE)
+            t.say("interview_change_noted")
+            return
+        if extraction.intent == "human_request" and status == Status.DISQUALIFIED:
+            t.state.language = extraction.language
+            _human_after_knockout(t)
+            return
+        if extraction.intent == "human_request" and status == Status.QUALIFIED:
+            t.state.language = extraction.language
+            _send_to_review(t, Reason.HUMAN_REQUESTED)
+            t.actions.append(HandOff(reason="human_requested"))
+            return
+    t.say("closed_disqualified" if status == Status.DISQUALIFIED else "closed")
+
+
+def _on_data_request(t: _Turn) -> None:
+    """They want to stop or have their data deleted: a right, not a screening answer, so nothing
+    else is asked. A recruiter handles it from the review queue. That holds after a knockout too:
+    deleting their data can't win anyone a job, and the knockout reason stays on the record."""
+    t.event(EventType.DATA_REQUESTED, status=t.state.status.value)
+    t.state.keep_on_file = False
+    add_review_reason(t.state, Reason.DATA_REQUEST)
+    if t.state.status != Status.NEEDS_REVIEW or t.state.stage != Stage.CLOSED:
+        _close(t, Status.NEEDS_REVIEW)
+    t.say("data_request_received")
+
+
 def _on_abuse(t: _Turn) -> None:
     t.state.abuse_strikes += 1
     t.event(EventType.ABUSE_FLAGGED, strikes=t.state.abuse_strikes)
@@ -284,6 +342,17 @@ def _human_after_knockout(t: _Turn) -> None:
     t.say("handoff_disqualified")
     if t.state.stage == Stage.KEEP_ON_FILE:
         t.say("keep_on_file_reask")
+
+
+def _send_to_review(t: _Turn, reason: Reason) -> None:
+    """A person has to act on this, whatever the outcome was: put it in the review queue. The
+    time the outcome was first reached is kept, so analytics still measure the screening."""
+    add_review_reason(t.state, reason)
+    if t.state.status == Status.NEEDS_REVIEW:
+        return
+    ended_at = t.state.ended_at
+    _close(t, Status.NEEDS_REVIEW)
+    t.state.ended_at = ended_at or t.now
 
 
 def _on_consent(t: _Turn, extraction: ExtractionResult) -> None:
@@ -407,13 +476,22 @@ def _on_recap_reply(t: _Turn, extraction: ExtractionResult, applied: ApplyResult
     if applied.confirm is not None:
         t.actions.append(ConfirmField(field=applied.confirm))
     elif applied.added or applied.changed:
+        t.state.recap_rounds = 0
         t.actions.append(Recap())  # they corrected something: confirm the new version
     elif extraction.yes_no is True:
         _finalize(t)
-    elif extraction.yes_no is False:
-        t.say("ask_change")
+    elif extraction.yes_no is False or extraction.intent in _ANSWER_INTENTS:
+        t.state.recap_rounds += 1
+        if t.state.recap_rounds >= t.config.max_recap_rounds:  # the recap isn't asked forever
+            add_review_reason(t.state, Reason.RECAP_UNCONFIRMED)
+            _close(t, Status.NEEDS_REVIEW)
+            t.actions.append(HandOff(reason="review"))
+        elif extraction.yes_no is False:
+            t.say("ask_change")
+        else:
+            t.actions.append(Recap())
     else:
-        t.actions.append(Recap())
+        t.actions.append(Recap())  # a question, just answered: back to the recap
 
 
 def _ask_next(t: _Turn, extraction: ExtractionResult, applied: ApplyResult) -> None:
@@ -536,7 +614,9 @@ def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
         _offer_slots(t)
         return
     if state.no_slot_fits:  # we asked which days and times would suit them: pass it on
-        if not t.redact and not (extraction.yes_no is False and len(t.message.split()) <= 2):
+        if not t.redact and not (
+            extraction.yes_no is False and len(t.message.split()) <= _BARE_ANSWER_WORDS
+        ):
             state.preferred_times = t.message.strip()[:_PREFERRED_TIMES_CHARS]
         state.offered_slots = []
         state.stage = Stage.CLOSED

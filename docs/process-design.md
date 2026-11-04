@@ -29,7 +29,7 @@ flowchart TD
     SD --> R[Recap and confirm]
     R --> Q[Qualified: pick interview slot]
 
-    ANY((Any stage after name)) -. borderline / failed twice / asks for a human .-> NR[Needs review]
+    ANY((Any stage)) -. borderline / failed twice / asks for a human .-> NR[Needs review]
     ANY -. no reply after reminders at 2 h and 24 h .-> AB[Abandoned]
 ```
 
@@ -64,7 +64,10 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | **Rude or nonsense input** | One calm reply; if it continues, end politely and flag for review |
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed |
 | **Asks for a human** | Hand off right away. After a knockout the rejection stands, or anyone could skip it, but the request gets its own dashboard filter and they're told a person will review it |
-| **Changes an earlier answer** | Take the latest value, re-validate, log the change. A corrected knockout reopens the screening |
+| **Asks to stop or to delete their data** (at any point, even after the chat has closed) | Stop asking and send it to the review queue with its own reason. The candidate is told a recruiter will reply within 2 working days. After a knockout the reason stays on record |
+| **Changes an earlier answer** | Take the latest value, re-validate, log the change. A valid new answer clears the review flag on that field. A corrected knockout reopens the screening |
+| **Keeps refusing the recap** | After 3 replies in a row that neither confirm nor change it (`max_recap_rounds`), hand off to a recruiter (`recap_unconfirmed`) instead of repeating it |
+| **Writes after the outcome** | Asking to move the interview or to talk to a person reaches the review queue, and any booking stands until a recruiter acts. After a knockout the rejection stands, as above. Anything else gets the closing message |
 | **The AI provider is down** | Try the fallback, then keep the message and retry. Never counted against the candidate |
 
 ## Outcomes
