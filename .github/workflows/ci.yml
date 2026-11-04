@@ -27,10 +27,10 @@ jobs:
           --health-cmd "pg_isready -U sazon" --health-interval 5s --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv sync --locked
       - name: Lint and format
         run: uv run ruff format --check . && uv run ruff check .
@@ -47,13 +47,13 @@ jobs:
       - name: Dependency hygiene
         run: uv run deptry . && uv run pip-audit
       - name: Secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the image
         run: docker build --tag sazon-screening:ci .
