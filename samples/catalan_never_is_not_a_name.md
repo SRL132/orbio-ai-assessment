@@ -28,11 +28,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes como repartidor? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: Mai  
 
-**Lucía**: ¿Qué día podrías empezar?  
+**Lucía**: ¿Cuándo podrías empezar?  
 
 **Candidate**: Demà  
 

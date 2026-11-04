@@ -2,39 +2,35 @@
 
 Cooperative candidate, one answer per message, Spanish.
 
-Run: `openrouter/openai/gpt-5.6-terra/simulated` · FAILED · 10 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/simulated` · FAILED · 9 candidate messages
 
 **Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
-**Candidate**: ¡Hola! Sí, claro, ¡empecemos! 😊  
+**Candidate**: ¡Hola Lucía! Siii, cuando quieras 😊  
 
 **Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
-**Candidate**: Ana López  
+**Candidate**: Ana López! 😊  
 
 **Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
 
-**Candidate**: Moto 🛵  
+**Candidate**: Moto! 🛵💨  
 
 **Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
-**Candidate**: Vivo en Chamberí, Madrid 😊  
+**Candidate**: Chamberí, Madrid! 📍😊  
 
 **Lucía**: ¿Qué disponibilidad tienes? Jornada completa · Media jornada · Fines de semana  
 
-**Candidate**: Jornada completa 🕒  
-
-**Lucía**: ¿Qué horario prefieres? Mañana · Tarde · Noche · Flexible  
-
-**Candidate**: Tarde 🌆  
+**Candidate**: Jornada completa por las tardes! 🌇🛵  
 
 **Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
-**Candidate**: Sí, tengo dos años de experiencia trabajando en Glovo 🛵  
+**Candidate**: Dos años en Glovo! 🛵💨  
 
 **Lucía**: ¿Qué día podrías empezar?  
 
-**Candidate**: ¡Pues mañana mismo si queréis! 😊  
+**Candidate**: ¡Mañana mismo! 🚀😊  
 
 **Lucía**: Repasemos:  
 • Nombre: Ana López  
@@ -46,7 +42,7 @@ Run: `openrouter/openai/gpt-5.6-terra/simulated` · FAILED · 10 candidate messa
 • Inicio: 03/11/2026  
 ¿Es todo correcto?  
 
-**Candidate**: ¡Sí, todo correcto! 😊  
+**Candidate**: ¡Sí, todo perfecto! 😊🚀  
 
 **Lucía**: ¡Genial, Ana! Cumples los requisitos 🎉  
 
@@ -56,7 +52,7 @@ Run: `openrouter/openai/gpt-5.6-terra/simulated` · FAILED · 10 candidate messa
 3) mié 4/11 10:00  
 Responde con el número. Si no te va ninguno, dime «ninguno».  
 
-**Candidate**: 2) mar 3/11 17:00 🌆  
+**Candidate**: ¡El 2 por favor! 😊🛵  
 
 **Lucía**: ¡Hecho! Tu entrevista es el mar 3/11 17:00. Te enviaremos la dirección del local. ¡Hasta pronto!  
 

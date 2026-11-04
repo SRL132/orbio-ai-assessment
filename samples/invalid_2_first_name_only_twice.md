@@ -12,11 +12,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Ana  
 
-**Lucía**: Perdona, Ana, ¿me dices también tu apellido? Por ejemplo: Ana García.  
+**Lucía**: Perdona, ¿me dices también tu apellido? Por ejemplo: Ana García.  
 
 **Candidate**: Ana  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Moto  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has trabajado antes haciendo repartos? Cuéntame cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes haciendo repartos? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 

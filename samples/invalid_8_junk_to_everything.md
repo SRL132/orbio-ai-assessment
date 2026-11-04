@@ -12,7 +12,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 16 candidate messag
 
 **Candidate**: 123  
 
-**Lucía**: Perdona, necesito tu nombre y apellido, por ejemplo: “María García”. ¿Me lo indicas?  
+**Lucía**: Perdona, necesito tu nombre y apellido completos. Por ejemplo: “María García López”.  
 
 **Candidate**: ...  
 
@@ -20,54 +20,54 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 16 candidate messag
 
 **Candidate**: 000  
 
-**Lucía**: Solo para confirmar: jornada completa, ¿correcto?  
+**Lucía**: No me quedó claro. ¿Tienes carnet o licencia? Responde: Moto · Coche · Ambos · No tengo  
 
 **Candidate**: ---  
 
-**Lucía**: Solo para confirmar: jornada completa, ¿correcto?  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: 999  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: No pude identificar tu ubicación. Dime tu ciudad y barrio o código postal; por ejemplo: Madrid, Chamberí.  
 
 **Candidate**: !!!  
-
-**Lucía**: No me quedó claro. ¿Tienes licencia para Moto · Coche · Ambos · No tengo?  
-
-**Candidate**: ...  
-
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
-
-**Candidate**: 1  
-
-**Lucía**: No pude identificar tu zona. ¿Me dices tu ciudad y barrio o código postal? Por ejemplo: Madrid, Chamberí · 28010  
-
-**Candidate**: 2  
 
 **Lucía**: ¿Qué disponibilidad tienes? Jornada completa · Media jornada · Fines de semana  
 
 **Candidate**: ...  
 
-**Lucía**: Repasemos:  
-• Nombre: -  
-• Carnet: -  
-• Zona: -  
-• Disponibilidad: -  
-• Horario: flexible  
-• Experiencia: 0 años · other  
-• Inicio: 02/11/2026  
-¿Es todo correcto?  
+**Lucía**: No pude entenderlo. Puedes responder, por ejemplo: Jornada completa · Media jornada · Fines de semana. ¿Cuál o cuáles eliges?  
+
+**Candidate**: 1  
+
+**Lucía**: ¿Qué horario prefieres? Mañana · Tarde · Noche · Flexible  
+
+**Candidate**: 2  
+
+**Lucía**: ¿Has trabajado antes como repartidor? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+
+**Candidate**: ...  
+
+**Lucía**: No entendí bien tu experiencia. ¿Cuánto tiempo has repartido? Si nunca lo has hecho, responde «ninguno», no pasa nada.  
 
 **Candidate**: -  
 
+**Lucía**: ¿Qué día podrías empezar? Esta semana · La próxima semana · En otra fecha  
+
+**Candidate**: ...  
+
+**Lucía**: No me quedó claro qué día podrías empezar. Por ejemplo: esta semana · La próxima semana · En otra fecha.  
+
+**Candidate**: ...  
+
 **Lucía**: Repasemos:  
 • Nombre: -  
 • Carnet: -  
 • Zona: -  
 • Disponibilidad: -  
-• Horario: flexible  
-• Experiencia: 0 años · other  
-• Inicio: 02/11/2026  
+• Horario: tarde  
+• Experiencia: -  
+• Inicio: -  
 ¿Es todo correcto?  
 
 **Candidate**: ...  
@@ -77,33 +77,9 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 16 candidate messag
 • Carnet: -  
 • Zona: -  
 • Disponibilidad: -  
-• Horario: flexible  
-• Experiencia: 0 años · other  
-• Inicio: 02/11/2026  
-¿Es todo correcto?  
-
-**Candidate**: ...  
-
-**Lucía**: Repasemos:  
-• Nombre: -  
-• Carnet: -  
-• Zona: -  
-• Disponibilidad: -  
-• Horario: flexible  
-• Experiencia: 0 años · other  
-• Inicio: 02/11/2026  
-¿Es todo correcto?  
-
-**Candidate**: ...  
-
-**Lucía**: Repasemos:  
-• Nombre: -  
-• Carnet: -  
-• Zona: -  
-• Disponibilidad: -  
-• Horario: flexible  
-• Experiencia: 0 años · other  
-• Inicio: 02/11/2026  
+• Horario: tarde  
+• Experiencia: -  
+• Inicio: -  
 ¿Es todo correcto?  
 
 **Candidate**: Sí  

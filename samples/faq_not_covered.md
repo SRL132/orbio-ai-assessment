@@ -8,13 +8,13 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 3 candidate message
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: ¿Dais seguro médico privado?  
 
 **Lucía**: Buena pregunta, un reclutador te lo confirmará.  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: Nuria Gil  
 

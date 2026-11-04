@@ -44,7 +44,7 @@ Two rules:
 
 ## Running evals
 
-The suite lives in `evals/scenarios.yaml`: 64 synthetic candidates covering the edge cases in the process design. Each scenario has scripted messages, a persona for LLM-simulated runs, and the expected outcome. The four main edge cases (stops responding, invalid answers, ambiguous answers, switches language) each have a graded ladder, `silence_1…10`, `invalid_2…8`, `ambiguous_2…8` and `language_2…8`, from mild to extreme. Besides the outcome and fields, a scenario can check where it dropped off (`dropped_at`), a field's status or note (`field_status`, `field_notes`), and the language of every reply to each candidate message (`reply_languages`). `status` may list several acceptable outcomes. The 9 scenarios marked `requires_llm` need a real model to understand the candidate (Catalan, hedged answers, license types), so the offline keyword run skips them and runs 55. Simulated runs skip the 11 scenarios that wait for time to pass, because those need the scripted clock, and run 53.
+The suite lives in `evals/scenarios.yaml`: 69 synthetic candidates covering the edge cases in the process design. Each scenario has scripted messages, a persona for LLM-simulated runs, and the expected outcome. The four main edge cases (stops responding, invalid answers, ambiguous answers, switches language) each have a graded ladder, `silence_1…10`, `invalid_2…8`, `ambiguous_2…8` and `language_2…8`, from mild to extreme. Besides the outcome and fields, a scenario can check where it dropped off (`dropped_at`), a field's status or note (`field_status`, `field_notes`), and the language of every reply to each candidate message (`reply_languages`). `status` may list several acceptable outcomes. The 9 scenarios marked `requires_llm` need a real model to understand the candidate (Catalan, hedged answers, license types), so the offline keyword run skips them and runs 55. Simulated runs skip the 11 scenarios that wait for time to pass, because those need the scripted clock, and run 53.
 
 ```bash
 uv run python -m evals                       # offline: keyword extractor, scripted (free, in CI)
@@ -53,6 +53,7 @@ uv run python -m evals --provider anthropic --simulate           # an LLM plays 
 uv run python -m evals --check               # exit 1 on regression vs evals/baseline.json
 uv run python -m evals --write-baseline      # record this run (an explicit, reviewed change)
 uv run python -m evals -v --scenario abusive # show the transcript of failures
+uv run python -m evals --provider openrouter --model <slug> --scenarios evals/holdout.yaml   # held out: run once, don't tune against it
 uv run python -m evals.compare --check-models   # free: are the model ids in evals/compare.yaml available?
 uv run python -m evals.compare                  # the provider comparison, capped at budget_usd
 ```

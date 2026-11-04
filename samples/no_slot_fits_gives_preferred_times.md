@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has trabajado antes como repartidor? Dime cuántos años y en qué plataformas, como Uber Eats o Rappi.  
+**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Uber Eats o Rappi.  
 
 **Candidate**: 1 año en Rappi  
 

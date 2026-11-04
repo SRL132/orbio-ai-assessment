@@ -12,11 +12,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 5 candidate message
 
 **Candidate**: Ana López  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 

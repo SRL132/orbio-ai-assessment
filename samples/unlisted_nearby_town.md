@@ -8,7 +8,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
 
 **Candidate**: Raquel Ortiz  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes en reparto? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: un año en Glovo  
 

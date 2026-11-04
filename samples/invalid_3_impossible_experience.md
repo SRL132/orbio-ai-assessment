@@ -8,7 +8,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
 **Candidate**: Sofía Ramos  
 
@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 
@@ -28,11 +28,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes como repartidora? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: 150 años  
 
-**Lucía**: ¿Cuánto tiempo has repartido? Si no tienes experiencia, responde «ninguno», no pasa nada.  
+**Lucía**: ¿Cuánto tiempo has trabajado repartiendo? Por ejemplo: «1 año en Glovo» o «ninguno», no pasa nada.  
 
 **Candidate**: 2 años en Glovo  
 

@@ -8,13 +8,13 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 3 candidate message
 
 **Candidate**: Yes  
 
-**Lucía**: What’s your full name? First name and surname, please.  
+**Lucía**: What’s your full name, including your first name and surname?  
 
 **Candidate**: Do I need my own vehicle?  
 
 **Lucía**: At the interview, a recruiter will confirm who provides the vehicle and how costs are covered at your location.  
 
-**Lucía**: What’s your name? First name and surname, please.  
+**Lucía**: What’s your full name? First name and surname, please.  
 
 **Candidate**: Tom Reed  
 

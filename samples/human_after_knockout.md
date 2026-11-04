@@ -8,7 +8,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 4 candidate message
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
 **Candidate**: Raúl Ortega  
 

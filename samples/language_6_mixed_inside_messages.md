@@ -12,7 +12,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 7 candidate message
 
 **Candidate**: Hi! Me llamo Carlos Ruiz and I have coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: vivo en Madrid, barrio Salamanca  
 
@@ -20,7 +20,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 7 candidate message
 
 **Candidate**: full time pero solo mañanas  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, like Glovo or Uber Eats.  
+**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: two years en Glovo  
 

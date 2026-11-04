@@ -1,8 +1,10 @@
 # Sample conversations
 
-One transcript per eval scenario, generated with `uv run python -m evals --export-samples samples`.
+One transcript per eval scenario, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`.
 
-These were produced in **offline mode** (`LLM_PROVIDER=fake`): the candidate messages are the scripted ones from `evals/scenarios.yaml`, extraction uses simple keyword rules, and Lucía's questions come from the fixed templates. They show the flow, the branching and every outcome. With a real model (`--provider openrouter|anthropic`) the questions are worded by the LLM and the candidate can be LLM-simulated (`--simulate`).
+These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04, extractor v9 and responder v4). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
+
+[`simulated/`](simulated/) has six conversations where another LLM plays the candidate. They read more naturally, and two are marked failed. In `cooperative_es` the simulated candidate strayed from its persona (it should want evenings and answered "Tarde"), and the agent recorded what was said. `several_answers_at_once` is a real weakness: a rambling candidate says "soy Ana de Gràcia" after giving her full name, and the agent ends up storing only "Ana", and reads "disponibilidad total fines de semana" as full time plus weekends.
 
 | Scenario | Channel | What it shows |
 | --- | --- | --- |
@@ -25,6 +27,11 @@ These were produced in **offline mode** (`LLM_PROVIDER=fake`): the candidate mes
 | [prompt injection license](prompt_injection_license.md) | chat | Has no license but tells the assistant to record one: still disqualified. |
 | [job question](job_question.md) | chat | Asks about pay mid-flow; answered, then the flow continues without penalty. |
 | [books interview](books_interview.md) | chat | Qualified candidate picks one of the offered interview slots in the chat. |
+| [faq covered english](faq_covered_english.md) | chat | A question the FAQ covers gets its approved answer, word for word. |
+| [faq not covered](faq_not_covered.md) | chat | A question the FAQ doesn't cover gets the fixed "a recruiter will confirm" reply. |
+| [context follow up question](context_follow_up_question.md) | chat | A follow-up ("¿y los turnos?") only makes sense with the previous message. |
+| [context unrelated second question](context_unrelated_second_question.md) | chat | After a pay question, an uncovered one doesn't get a nearby entry's answer. |
+| [context back reference](context_back_reference.md) | chat | "Lo mismo que te dije antes" states no value, so nothing is invented. |
 | [asks if bot](asks_if_bot.md) | chat | Asks whether it's talking to a person; the assistant says it's automated and carries on. |
 | [voice cooperative es](voice_cooperative_es.md) | voice | Voice call, cooperative caller who reads out a postal code. |
 | [voice no license](voice_no_license.md) | voice | Voice call, no license; spoken knockout and keep-on-file question. |

@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: CDMX, Condesa  
 
@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años de experiencia y en qué plataformas, como Uber Eats o Rappi.  
+**Lucía**: ¿Has hecho repartos antes? Dime cuántos años y en qué plataformas, como Uber Eats o Rappi.  
 
 **Candidate**: 1 año en Rappi  
 

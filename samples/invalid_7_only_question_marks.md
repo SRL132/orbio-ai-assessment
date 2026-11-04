@@ -8,19 +8,19 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
 **Candidate**: Ana López  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: ?  
 
-**Lucía**: No me quedó claro, Ana. Responde, por ejemplo: Moto · Coche · Ambos · No tengo.  
+**Lucía**: No me quedó claro. ¿Tienes licencia para Moto · Coche · Ambos · No tengo? Por ejemplo: “Moto”.  
 
 **Candidate**: ??  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si te resulta más fácil, puedes decirme tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has trabajado antes en reparto? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes como repartidora? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 

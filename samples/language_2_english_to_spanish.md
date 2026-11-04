@@ -8,7 +8,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Yes  
 
-**Lucía**: What’s your full name? Please share your first name and surname.  
+**Lucía**: What’s your full name? First name and surname, please.  
 
 **Candidate**: John Smith  
 
@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has repartido antes? Dime cuántos años de experiencia y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 

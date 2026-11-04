@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 5 candidate message
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: Madrid, Chamberí  
 

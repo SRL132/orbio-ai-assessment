@@ -8,7 +8,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Sí  
 
-**Lucía**: ¿Cómo te llamas? Indícame tu nombre y apellido, por favor.  
+**Lucía**: ¿Cómo te llamas? Nombre y apellido, por favor.  
 
 **Candidate**: Laura Gómez  
 
@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: evenings  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, such as Glovo or Uber Eats.  
+**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve worked with, such as Glovo or Uber Eats.  
 
 **Candidate**: 1 year on Uber Eats  
 

@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 8 candidate message
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has trabajado antes como repartidor? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: 1 año en Glovo  
 
@@ -36,5 +36,5 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 8 candidate message
 
 **Candidate**: puedo empezar ayer  
 
-**Lucía**: Gracias, Pedro. ¿Qué día podrías empezar? Por ejemplo, mañana, el lunes o el 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo, mañana, el lunes o el 1 de marzo.  
 

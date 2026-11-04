@@ -18,7 +18,7 @@ Run: `openrouter/openai/gpt-5.6-terra/simulated` · passed · 4 candidate messag
 
 **Lucía**: Gracias, Luis. Para este puesto necesitamos carnet o licencia de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?  
 
-**Candidate**: Sí, guarden mis datos por favor.  
+**Candidate**: Sí, por favor, guárdenlos.  
 
 **Lucía**: Hecho, te escribiremos si sale algo que encaje. ¡Gracias!  
 

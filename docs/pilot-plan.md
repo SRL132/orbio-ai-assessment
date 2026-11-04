@@ -16,7 +16,8 @@
 | Real service areas, license rules and FAQ answers (pay, vehicle, contract) in the client config | Grupo Sazón |
 | Each location's real interview slots in place of the mock calendar | Us, with Grupo Sazón |
 | Legal review of [appendix C](process-design-appendix.md#c-regulatory-and-platform-context), above all GDPR Art. 22 for knockouts | Grupo Sazón's counsel |
-| Data processing agreement with the chosen LLM vendor, with EU processing if counsel requires it | Grupo Sazón and us |
+| Run the suite through the direct OpenAI adapter (tested with stubs only so far) | Us |
+| Data processing agreement with OpenAI, and its EU data residency and zero data retention if counsel requires them: both need OpenAI's approval. If they fall through, see the [next choices](architecture.md#where-the-choice-stands) | Grupo Sazón and us |
 | Recruiter accounts, a 30-minute walkthrough, and one named owner for the review queue | Both |
 
 ## Human oversight

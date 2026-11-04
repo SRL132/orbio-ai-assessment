@@ -14,6 +14,8 @@ cp .env.example .env                                     # LLM_PROVIDER=fake: no
 uv run uvicorn --factory app.api.main:create_app --reload
 ```
 
+That runs without an LLM, on keyword rules, and the chat says so. For the real agent, set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`, or `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY` and `OPENROUTER_MODEL=openai/gpt-5.6-terra` for synthetic data only.
+
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
 - WhatsApp: candidates message your WhatsApp number and get the same screening, with reply buttons, and reminders on their phone. Setup below.
@@ -42,9 +44,11 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openrouter`, or `anthropic` |
+| `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openai` (the production choice), `anthropic` (the fallback), or `openrouter` (evals, synthetic data only) |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT` | —, —, `low` | Development and model comparison (synthetic data only); reasoning per call (`none`, `minimal`, `low`…), less is faster |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-opus-5-5` | The intended production path |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-5.6-terra`, `low` | The production choice |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | —, `claude-haiku-5-5` | The fallback, with `LLM_FALLBACK_PROVIDER=anthropic` |
+| `ATS_TOKEN` | — | Optional: enables `POST /api/v1/applications`, which returns a chat link |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | — | Optional: the WhatsApp channel (all four needed) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
 | `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
@@ -59,7 +63,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 **Outcomes:** qualified (plus a booked interview), disqualified (kindly, with an offer to keep their details), needs review (with the reason), or abandoned (with the drop-off point). Each comes with a short summary for the recruiter.
 
-**Dashboard** ([spec](docs/recruiter-dashboard.md)): a filterable candidate list (including by channel: web chat, voice or WhatsApp) with counters, a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
+**Dashboard** ([spec](docs/recruiter-dashboard.md)): an invite page that turns a CSV of applications into signed chat links, so a pilot needs no ATS; a filterable candidate list (including by channel, and rejected candidates who asked for a human) with counters; a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
 
 ## Architecture
 
@@ -74,7 +78,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 ```
 
 - `app/domain/`: models, validators, policy, engine, summary, ports. No I/O and no SDKs; import-linter enforces this.
-- `app/adapters/`: LLM (Anthropic SDK, OpenRouter, offline keyword rules), SQLAlchemy storage with an append-only event log, calendar, clocks, config loader.
+- `app/adapters/`: LLM (OpenAI and Anthropic SDKs, OpenRouter, offline keyword rules), SQLAlchemy storage with an append-only event log, calendar, clocks, config loader.
 - `app/worker/`: application service (a database lease per conversation, so any number of workers can run; merging message bursts; reminders) and the async runner.
 - `app/api/`: FastAPI chat API, chat page, dashboard. `app/config/`: the Grupo Sazón config and ES/EN templates.
 
@@ -87,27 +91,35 @@ dashboard ──▶ read model over the projected state; writes go back through 
 - **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length), or the template is used instead.
 - **No callback at the end.** Qualified candidates book the interview in the chat, because a callback would bring back the 60% no-answer problem at the last step.
 - **Built to scale without a rewrite:** webhooks only store and acknowledge, one conversation is processed at a time, reminders live in the database, and the event log is the source of truth. See the "Demo vs production" and "Deployment and monitoring" sections of the architecture doc.
-- **LLM choice is decided by evals, and the production model is still open.** Out of the box `LLM_PROVIDER=fake` needs no key. The best live run so far is `google/gemini-3.5-flash-lite` through OpenRouter, which is for synthetic data only. For real candidates, the Anthropic adapter (`claude-opus-5-5` at low effort, with structured outputs, prompt caching and refusal fallbacks) is built but hasn't been through the evals yet. The [provider comparison](docs/architecture.md#llm-provider) covers Anthropic, OpenAI, Google, Mistral, Grok and DeepSeek on quality, data protection, cost and latency, and [where the choice stands](docs/architecture.md#where-the-choice-stands) has the measured results.
+- **GPT-5.6 Terra, chosen by evals.** It tied for the best accuracy and was faster and cheaper than the model it tied with ([results](docs/architecture.md#where-the-choice-stands)). Claude Haiku 5.5 is the fallback: a different vendor, and about 6x cheaper, though less accurate. Data-protection conditions and one untested step are listed there: the direct OpenAI and Anthropic adapters haven't reached the real APIs yet, because the runs went through OpenRouter. Out of the box `LLM_PROVIDER=fake` needs no key, and the chat says so on screen.
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 500+ tests (property tests included) with a coverage ratchet (≥ 97.9%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 700+ tests (property tests included) with a coverage ratchet (≥ 97.9%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
-The suite has 64 synthetic scenarios: cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 55 that work offline; the other 9 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
+The suite has 69 synthetic scenarios, plus 14 held-out ones (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 57 that work offline; the other 12 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
-| Offline (`fake/keyword/scripted`, in CI) | 55/55 | 100% |
-| Live scripted, `google/gemini-3.5-flash-lite` (2026-11-03, 2 runs at `low` reasoning) | 127/128 (99%) | 100% |
-| Live simulated, `qwen/qwen3.7-plus` (2026-10-30, older 21-scenario suite) | 13/20 | 99% |
+| Offline (`fake/keyword/scripted`, in CI) | 57/57 | 100% |
+| Live scripted, GPT-5.6 Terra, final prompts | 69/69 | 100% |
+| Live scripted, GPT-5.6 Terra, 4 earlier runs (one prompt change ago) | 271/272 | 99–100% |
+| Live, held-out messy scenarios, GPT-5.6 Terra (run once, one prompt change ago) | 13/14 | 93% |
+| Live simulated, GPT-5.6 Terra | 34/57 | 96% |
 
-The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. The live runs are the real measure, with limits: results vary between runs (64 and 63 of 64 now; 62, 62 and 63 of 64 before closed answers skipped the LLM), and two runs are a small sample; the scripted messages use more closed answers than real candidates may, which flatters the speed and cost figures; the suite isn't held out from the fixes it prompted; and live scores aren't in the baseline, so nothing fails automatically if they drop.
+The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them.
 
-[`samples/`](samples/README.md) has one transcript per scenario.
+The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 69/69 is a floor check rather than a prediction. The holdout is the fairer number, and its one failure is a [known bug](#potential-improvements). Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
+
+A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout for the first two weeks.
+
+[`samples/`](samples/README.md) has one transcript per scenario, from the live model.
 
 ## Potential improvements
 
-- **Finish the model choice:** run the current suite several times on each shortlisted model, including Claude through its own SDK, skipping models whose median turn is over 5 s. Pick the provider on accuracy, then latency, then cost, and record live baselines. Then tune the prompts against failures, with the LLM-simulated candidates as a harder test set (the last simulated runs used the older 21-scenario suite).
+- **Confirm the model on its own SDK:** run the suite through the direct OpenAI adapter, and Haiku through the Anthropic one, then settle OpenAI's EU data residency and the data processing agreement.
+- **Fix the held-out failure:** "vivo en Sants" followed by "en Barcelona" loses the neighbourhood, so the location stays unmatched and the conversation moves on. New scenarios will be needed to test the fix, since this one is held out.
+- **Real user data over more synthetic data:** after the pilot, turn real (anonymized) failures into scenarios, and tune prompts against a held-out set.
 - **WhatsApp in production:** a permanent system-user token, approved reminder templates, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.

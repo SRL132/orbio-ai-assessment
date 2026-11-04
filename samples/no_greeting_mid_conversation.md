@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 8 candidate message
 
 **Candidate**: coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
 
 **Candidate**: Barcelona, Gràcia  
 
@@ -28,7 +28,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 8 candidate message
 
 **Candidate**: tardes  
 
-**Lucía**: ¿Has trabajado antes como repartidor? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: sin experiencia  
 

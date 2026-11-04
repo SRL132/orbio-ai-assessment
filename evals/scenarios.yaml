@@ -195,6 +195,17 @@
     awaiting: full_name
     reply_contains: ["Hay turnos de mañana, tarde y noche"]
 
+- id: context_unrelated_second_question
+  description: After a pay question, one the FAQ doesn't cover must not get a nearby entry's answer.
+  requires_llm: true
+  persona: Nuria Gil, who asks about pay and then about health insurance.
+  steps: [Sí, "¿Cuánto se cobra?", "¿dais seguro médico privado?"]
+  expect:
+    status: in_progress
+    awaiting: full_name
+    reply_contains: ["un reclutador te lo confirmará"]
+    later_replies_avoid: ["tipo de contrato"]
+
 - id: context_back_reference
   description: '"Lo mismo que te dije antes" states no value: nothing is invented and the field is asked again.'
   requires_llm: true
@@ -204,6 +215,7 @@
     status: in_progress
     awaiting: schedule
     fields: {availability: [full_time]}
+    field_status: {schedule: missing}
 
 - id: books_interview
   description: Qualified candidate picks one of the offered interview slots in the chat.

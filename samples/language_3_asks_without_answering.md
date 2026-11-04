@@ -16,11 +16,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Can you speak English please?  
 
-**Lucía**: I didn’t quite catch that—do you have a license for a motorbike, car, both, or none? For example: “Both.”  
+**Lucía**: I didn’t quite catch that. Do you have a licence for a motorbike, a car, both, or none?  
 
 **Candidate**: Moto  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just send me your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
 
 **Candidate**: Madrid, Retiro  
 

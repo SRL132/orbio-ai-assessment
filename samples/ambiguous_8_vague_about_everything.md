@@ -16,11 +16,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: no sé, creo que el de coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: por el centro  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
+**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid · Chamberí.  
 
 **Candidate**: Madrid, Centro  
 
@@ -40,7 +40,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: pronto  
 
-**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · el 1 de marzo.  
 
 **Candidate**: la semana que viene  
 

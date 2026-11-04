@@ -14,5 +14,5 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 2 candidate message
 
 **Lucía**: No necesitamos ese dato ahora, así que no lo guardaremos.  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 

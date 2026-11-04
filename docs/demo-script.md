@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- [ ] `.env` with the chosen provider and key, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
+- [ ] `.env` with `LLM_PROVIDER=openrouter` and `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), or `openai` once its key is tested, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
 - [ ] WhatsApp: app running with the `WHATSAPP_*` settings, an ngrok tunnel up, and the webhook verified in Meta's dashboard. Your phone is a verified test recipient.
 - [ ] Two browser windows: the candidate chat on a phone-sized window (`/chat`), the dashboard on the other (`/dashboard`).
 - [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice).
@@ -22,7 +22,7 @@
    - Go silent: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
 4. **WhatsApp (2 min).** From your phone, send "hola" to the test number: the same screening with reply buttons. Press "+2 h" in the chat page's demo bar: the reminder arrives on the phone.
 5. **Voice call (2 min).** Open `/voice` in Chrome, press "Start call", and answer by voice: say the postal code out loud, then book the interview by saying "la segunda". Point out that it's the same engine and the same dashboard (filter by channel).
-6. **Recruiter side (4 min).** Counters → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
+6. **Recruiter side (4 min).** Invite page (CSV in, signed links out: no ATS needed) → counters and the "asked for a human" filter → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, transcript, timeline) → override with a reason (the original decision stays) → analytics funnel and drop-off.
 
 Why this beats the status quo: no missed calls, recruiters only see qualified candidates and real edge cases, structured data ready for the ATS, and the interview is booked without a callback.
 
@@ -31,15 +31,19 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 1. **One turn (3 min):** message → extractor (code for an exact closed answer, otherwise LLM with a strict schema) → Python validators and policy (rules from config) → responder (LLM, output check, template fallback). "Code decides, the LLM talks."
 2. **Code tour (5 min):** `app/domain/engine.py` (`turn` and its stage handlers), `render.py`, `policy.py` (slot-filling), `validators.py`, `ports.py`; the import-linter contract that keeps the domain pure; `app/config/grupo_sazon/client.yaml`.
 3. **Edge cases in code (3 min):** debounced bursts, per-conversation lock, reminders stored in the database, redaction, double-booking constraint.
-4. **LLM and stack choices (4 min):** the provider scorecard, cost at 10K a week, and why the choice is decided by evals and reversible behind a port. Show `uv run python -m evals` and explain the baseline ratchet.
+4. **LLM and stack choices (4 min):** why GPT-5.6 Terra won (the results table), Haiku as fallback, about $153 a week at 10K, and why it's reversible behind a port. Tell the schema story: only Gemini could pass until today's fix. Show `uv run python -m evals` and explain the baseline ratchet.
 
 ## Discussion (10 min): be ready for
 
-- **"What would you do with more time?"** Finish the model choice (repeated live evals on the current suite, Claude included) and tune the prompts, WhatsApp and voice in production, SSO, the real calendar and ATS integration.
+- **"What would you do with more time?"** Run the pilot ([plan](pilot-plan.md)) and learn from real failures, confirm the direct SDK path and OpenAI's EU terms, fix the Sants bug, then WhatsApp and voice in production, SSO, the real calendar and ATS integration.
   - **An admin area so recruiters can iterate quickly.** The rules already live in client config, so this is an editing layer over it, not a rewrite. Recruiters change structured settings directly (FAQ answers, service areas, reminder timing, tone options); knockout rules and consent or legal text need extra sign-off. Every change goes draft → automatic eval run → review what changed → publish, with rollback, and each conversation records the config version it ran under. No free-text prompt box: that would change the agent's behaviour without passing the evals, and could undermine "code decides, the LLM talks". Not built now because a half-finished version would weaken traceability, and one bad edit would reach 1,000 applications a week.
 - **"10K candidates a week?"** Swap in a real queue and Postgres and run N workers; the engine doesn't change. The limits are LLM rate limits and cost, not infrastructure.
 - **"What would you do differently?"** Be honest: the offline keyword extractor makes the offline evals look perfect; only live evals measure extraction. Field editing in the dashboard was cut in favour of overrides plus notes.
-- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 500+ tests, and the eval suite. "I can walk you through any file."
+- **"Which model would you ship tomorrow?"** Terra, on the numbers in the architecture doc, with two conditions you can name: the direct SDK run and OpenAI's EU data terms.
+- **"What's your accuracy on messy input?"** 13/14 on held-out scenarios written before seeing results, one prompt change ago, and say what the failure was. Then say what it doesn't tell you: they're still synthetic. Simulated runs score 34/57, mostly because the scenarios don't fit a candidate who carries on, so you'd want real data.
+- **"You built Prometheus and mutation testing before choosing a model. Why that order?"** Have your honest answer ready. It was the wrong order, and it hid a real bug: only Gemini could pass the schema, which nobody saw until the comparison ran on every vendor.
+- **"Why do the commits labelled days 0–5 share a date?"** Have your real answer ready.
+- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 700+ tests, and the eval suite. "I can walk you through any file."
 
 ## 5–10 min video
 

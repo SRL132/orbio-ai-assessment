@@ -16,11 +16,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: no sé  
 
-**Lucía**: No me quedó claro. ¿Tienes carnet o licencia para: Moto · Coche · Ambos · No tengo?  
+**Lucía**: No me quedó claro, Ana. ¿Tienes licencia para Moto · Coche · Ambos · No tengo?  
 
 **Candidate**: Ah sí, de moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has repartido antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes haciendo repartos? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 

@@ -16,11 +16,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Ambos  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
 
 **Candidate**: Madrid  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid · Chamberí.  
+**Lucía**: Gracias, Marta. ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
 
 **Candidate**: Tetuán  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Flexible  
 
-**Lucía**: ¿Has hecho repartos antes? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has trabajado antes repartiendo? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 

@@ -18,5 +18,5 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 3 candidate message
 
 **Candidate**: Paula Rey  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
