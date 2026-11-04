@@ -59,6 +59,7 @@ class ApplyResult:
     progressed: set[FieldName] = field(default_factory=set)  # accepted, even if already known
     added: set[FieldName] = field(default_factory=set)  # had no answer before
     changed: set[FieldName] = field(default_factory=set)  # had a different answer before
+    doubted: bool = False  # at the recap, an unsure value for an answered field was ignored
     confirm: FieldName | None = None  # held back in state.confirming until the candidate agrees
 
 
@@ -303,6 +304,25 @@ def _accept(
     )
 
 
+def _doubted_at_recap(
+    state: ConversationState, fields: ExtractedFields, config: ClientConfig, disagrees: bool
+) -> set[FieldName]:
+    """Unsure values for answered fields to ignore at the recap: they look invented, not meant.
+    A plain "no todo es correcto" that came back with values, or several answers changing at once
+    with none of them certain. One unsure change on its own is still confirmed with the candidate.
+    """
+    if state.stage != Stage.RECAP:
+        return set()
+    unsure = {
+        name
+        for name in config.field_priority
+        if _proposals(fields, name)
+        and state.candidate.meta[name].status != FieldStatus.MISSING
+        and _evidence(fields, name)[1] < config.confirm_below_confidence
+    }
+    return unsure if disagrees or len(unsure) > 1 else set()
+
+
 def apply_extraction(
     state: ConversationState,
     fields: ExtractedFields,
@@ -311,19 +331,30 @@ def apply_extraction(
     *,
     message: str,
     geo: GeoLookup | None = None,
+    disagrees: bool = False,
 ) -> ApplyResult:
     """Validate every proposed field and update the candidate in place. Stops at a knockout.
 
     `message` is the candidate's text the fields were extracted from. A value whose quote isn't
     in it is kept but sent to review: it never qualifies or knocks out a candidate on its own.
     A value the model wasn't sure of, or a geocoded place (`geo`), isn't applied: it waits in
-    `state.confirming` for the candidate's yes (one at a time).
+    `state.confirming` for the candidate's yes (one at a time). `disagrees`: the message also
+    says no, which matters at the recap (see `_doubted_at_recap`).
     """
     result = ApplyResult()
     candidate = state.candidate
+    doubted = _doubted_at_recap(state, fields, config, disagrees)
     for name in config.field_priority:
         proposals = _proposals(fields, name)
         if not proposals:
+            continue
+        if name in doubted:
+            result.doubted = True
+            result.events.append(
+                DomainEvent(
+                    type=EventType.FIELD_REJECTED, data={"field": name.value, "reason": "unsure"}
+                )
+            )
             continue
         # Merge the new proposals over what we already know for this field (e.g. a zone that
         # completes a city given earlier), then validate the whole group.
@@ -351,9 +382,9 @@ def apply_extraction(
             if outcome.kind != "invalid"
             else None
         )
-        if why == "channel" and state.confirming is not None:
-            # Another value is being confirmed: this one isn't applied unchecked (on voice a
-            # misheard place could reject them). It stays missing and is asked for later.
+        if why is not None and state.confirming is not None:
+            # Another value is being confirmed, and only one can wait at a time. This one isn't
+            # applied unchecked: an earlier answer stands, and a missing one is asked for later.
             continue
         if why is not None and state.confirming is None:
             place = geo.found.label() if geo and geo.found and outcome.note == "geocoded" else None
