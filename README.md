@@ -14,7 +14,7 @@ cp .env.example .env                                     # LLM_PROVIDER=fake: no
 uv run uvicorn --factory app.api.main:create_app --reload
 ```
 
-That runs without an LLM, on keyword rules, and the chat says so. For the real agent, set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`, or `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY` and `OPENROUTER_MODEL=openai/gpt-5.6-terra` for synthetic data only.
+That runs without an LLM, on keyword rules, and the chat says so. For the demo with a real LLM, set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` in `.env`: it runs on GPT-5.6 Terra, for synthetic data only. Production uses the same model through OpenAI's own API, with Claude Haiku 5.5 as the fallback: those are the Docker image's defaults, and it won't start without `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
@@ -44,8 +44,9 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LLM_PROVIDER` | `fake` | `fake` (offline keyword rules + templates), `openai` (the production choice), `anthropic` (the fallback), or `openrouter` (evals, synthetic data only) |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT` | —, —, `low` | Development and model comparison (synthetic data only); reasoning per call (`none`, `minimal`, `low`…), less is faster |
+| `LLM_PROVIDER` | `fake` (Docker image: `openai`) | `fake` (offline keyword rules + templates), `openai` (the production choice), `anthropic`, or `openrouter` (demo and evals, synthetic data only) |
+| `LLM_FALLBACK_PROVIDER`, `LLM_FALLBACK_MODEL` | none (Docker image: `anthropic`, `claude-haiku-5-5`) | Used when the primary is down |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT` | —, `openai/gpt-5.6-terra`, `low` | The demo and model comparison (synthetic data only); reasoning per call (`none`, `minimal`, `low`…), less is faster |
 | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-5.6-terra`, `low` | The production choice |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | —, `claude-haiku-5-5` | The fallback, with `LLM_FALLBACK_PROVIDER=anthropic` |
 | `ATS_TOKEN` | — | Optional: enables `POST /api/v1/applications`, which returns a chat link |

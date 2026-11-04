@@ -1,7 +1,8 @@
 # Local production-like stack: a web process, a worker process and Postgres.
 #   docker compose up --build      → http://localhost:8000/chat, /voice, /dashboard
 #   docker compose up --scale worker=3   (any number of workers: leases keep them apart)
-# Settings (LLM provider, keys, recruiter accounts) come from .env if present.
+# Settings (LLM provider, keys, recruiter accounts) come from .env if present. This is the demo
+# stack: without .env it runs offline, not on the production LLMs the image defaults to.
 
 services:
   db:
@@ -28,6 +29,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sazon:${POSTGRES_PASSWORD:-sazon-local-dev}@db:5432/sazon
       DEMO_MODE: ${DEMO_MODE:-true}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
       ROLE: web
     depends_on:
       db:
@@ -42,6 +46,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sazon:${POSTGRES_PASSWORD:-sazon-local-dev}@db:5432/sazon
       DEMO_MODE: ${DEMO_MODE:-true}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
     healthcheck:
       disable: true  # no HTTP server to probe
     depends_on:

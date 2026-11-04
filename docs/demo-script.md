@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- [ ] `.env` with `LLM_PROVIDER=openrouter` and `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), or `openai` once its key is tested, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
+- [ ] `.env` with `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), `LLM_FALLBACK_PROVIDER=openrouter`, `LLM_FALLBACK_MODEL=anthropic/claude-haiku-5.5`, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
 - [ ] WhatsApp: app running with the `WHATSAPP_*` settings, an ngrok tunnel up, and the webhook verified in Meta's dashboard. Your phone is a verified test recipient.
 - [ ] Two browser windows: the candidate chat on a phone-sized window (`/chat`), the dashboard on the other (`/dashboard`).
 - [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice).
@@ -31,7 +31,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 1. **One turn (3 min):** message → extractor (code for an exact closed answer, otherwise LLM with a strict schema) → Python validators and policy (rules from config) → responder (LLM, output check, template fallback). "Code decides, the LLM talks."
 2. **Code tour (5 min):** `app/domain/engine.py` (`turn` and its stage handlers), `render.py`, `policy.py` (slot-filling), `validators.py`, `ports.py`; the import-linter contract that keeps the domain pure; `app/config/grupo_sazon/client.yaml`.
 3. **Edge cases in code (3 min):** debounced bursts, per-conversation lock, reminders stored in the database, redaction, double-booking constraint.
-4. **LLM and stack choices (4 min):** why GPT-5.6 Terra won (the results table), Haiku as fallback, about $153 a week at 10K, and why it's reversible behind a port. Tell the schema story: only Gemini could pass until today's fix. Show `uv run python -m evals` and explain the baseline ratchet.
+4. **LLM and stack choices (4 min):** why GPT-5.6 Terra won (the results table), Haiku as fallback, about $153 a week at 10K, and why it's reversible behind a port. The demo reaches Terra through OpenRouter; production calls OpenAI directly. Tell the schema story: only Gemini could pass until today's fix. Show `uv run python -m evals` and explain the baseline ratchet.
 
 ## Discussion (10 min): be ready for
 

@@ -16,7 +16,10 @@ COPY --from=builder --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     DATABASE_URL=sqlite:////app/data/sazon.db \
-    DEMO_MODE=false
+    DEMO_MODE=false \
+    LLM_PROVIDER=openai \
+    LLM_FALLBACK_PROVIDER=anthropic \
+    LLM_FALLBACK_MODEL=claude-haiku-5-5
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \

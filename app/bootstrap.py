@@ -95,9 +95,10 @@ def make_llm(
 
             from app.adapters.llm.anthropic_sdk import AnthropicLLM
 
-            key = settings.anthropic_api_key
+            if settings.anthropic_api_key is None:
+                raise ValueError("ANTHROPIC_API_KEY is not set")
             client = anthropic.Anthropic(
-                api_key=key.get_secret_value() if key else None,
+                api_key=settings.anthropic_api_key.get_secret_value(),
                 timeout=settings.llm_timeout_seconds,
                 max_retries=settings.llm_max_retries,  # jittered, honours Retry-After
             )

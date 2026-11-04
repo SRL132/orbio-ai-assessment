@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     llm_max_concurrency: int = 16
 
     openrouter_api_key: SecretStr | None = None
-    openrouter_model: str = ""
+    openrouter_model: str = "openai/gpt-5.6-terra"  # the demo; synthetic data only
     # Hidden reasoning per call: none, minimal, low… Screening turns are simple, and reasoning
     # costs seconds per turn (voice!). On Gemini 3.5 Flash-Lite, "minimal" was no faster than
     # "low" and failed more evals. Empty:

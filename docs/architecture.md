@@ -341,7 +341,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 ### Where the choice stands
 
-**Primary: GPT-5.6 Terra. Fallback: Claude Haiku 5.5**, a different vendor that meets the 5 s rule. As of 2026-11-04, on the 68-scenario suite:
+**Primary: GPT-5.6 Terra. Fallback: Claude Haiku 5.5**, a different vendor that meets the 5 s rule. These are the Docker image's defaults. The demo runs the same two models through OpenRouter (synthetic data only). As of 2026-11-04, on the 68-scenario suite:
 
 | Model | Scripted | Simulated field accuracy | p50 / p95 s per turn | $ per conversation |
 | --- | --- | --- | --- | --- |

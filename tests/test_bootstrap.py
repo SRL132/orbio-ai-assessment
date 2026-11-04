@@ -85,6 +85,49 @@ def test_openrouter_needs_a_key(tmp_path: Path) -> None:
         build(settings(tmp_path, llm_provider="openrouter"))
 
 
+def test_anthropic_needs_a_key_as_the_fallback_too(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        build(
+            settings(
+                tmp_path,
+                llm_provider="openai",
+                openai_api_key="k",
+                llm_fallback_provider="anthropic",
+            )
+        )
+
+
+def test_demo_defaults_to_terra_through_openrouter(tmp_path: Path) -> None:
+    container = build(settings(tmp_path, llm_provider="openrouter", openrouter_api_key="k"))
+    extractor = primary(container).extractor
+    assert isinstance(extractor, OpenRouterLLM)
+    assert extractor._model == "openai/gpt-5.6-terra"
+    container.close()
+
+
+def test_production_is_terra_with_haiku_behind_it(tmp_path: Path) -> None:
+    container = build(
+        settings(
+            tmp_path,
+            demo_mode=False,
+            llm_provider="openai",
+            openai_api_key="k",
+            llm_fallback_provider="anthropic",
+            llm_fallback_model="claude-haiku-5-5",
+            anthropic_api_key="k",
+        )
+    )
+    llm = container.service.ports.responder
+    assert isinstance(llm, ResilientLLM)
+    extractor = primary(container).extractor
+    assert isinstance(extractor, OpenAILLM)
+    assert extractor._model == "gpt-5.6-terra"
+    assert isinstance(llm.fallback, Pair)
+    assert isinstance(llm.fallback.extractor, AnthropicLLM)
+    assert llm.fallback.extractor._model == "claude-haiku-5-5"
+    container.close()
+
+
 def test_anthropic_provider_and_real_clock(tmp_path: Path) -> None:
     container = build(
         settings(tmp_path, llm_provider="anthropic", anthropic_api_key="k", demo_mode=False)
