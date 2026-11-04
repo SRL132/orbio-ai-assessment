@@ -11,7 +11,7 @@
 | Types | **mypy** | `--strict` on all of `app/`; Pydantic plugin |
 | Architecture boundaries | **import-linter** | `domain/` imports nothing from adapters, api, worker or SDKs |
 | Unit tests | **pytest** + **hypothesis** | Property tests for parsers and validators, and for the engine: Hypothesis plays an arbitrary (even adversarial) extractor for whole conversations and checks the code-owned rules after every turn (only complete, unflagged candidates qualify; a final status never reopens; every message gets an answer) |
-| Mutation tests | **mutmut** | The rules that decide who qualifies (`validators.py`, `policy.py`) are mutated (`<` to `<=`, `and` to `or`, values dropped) and the domain tests must catch each change. 1058 of 1059 mutants are caught; the survivor is equivalent (it can't change behaviour). `tests/mutation_baseline.json` is a ratchet, checked in CI |
+| Mutation tests | **mutmut** | The rules that decide who qualifies (`validators.py`, `policy.py`) are mutated (`<` to `<=`, `and` to `or`, values dropped) and the domain tests must catch each change. 1065 of 1066 mutants are caught; the survivor is equivalent (it can't change behaviour). `tests/mutation_baseline.json` is a ratchet, checked in CI |
 | Coverage | **pytest-cov** | Ratcheted; ~90% target on `domain/`, no target on adapters |
 | LLM-dependent tests | Fake adapters + recorded responses | Deterministic and free in CI |
 | Evals | Own harness + `evals/baseline.json` | Live LLM; run on demand and required for prompt or policy changes |
@@ -44,7 +44,7 @@ Two rules:
 
 ## Running evals
 
-The suite lives in `evals/scenarios.yaml`: 72 synthetic candidates covering the edge cases in the process design. Each scenario has scripted messages, a persona for LLM-simulated runs, and the expected outcome. The four main edge cases (stops responding, invalid answers, ambiguous answers, switches language) each have a graded ladder, `silence_1…10`, `invalid_2…8`, `ambiguous_2…8` and `language_2…8`, from mild to extreme. Besides the outcome and fields, a scenario can check where it dropped off (`dropped_at`), a field's status or note (`field_status`, `field_notes`), and the language of every reply to each candidate message (`reply_languages`). `status` may list several acceptable outcomes. The 9 scenarios marked `requires_llm` need a real model to understand the candidate (Catalan, hedged answers, license types), so the offline keyword run skips them and runs 55. Simulated runs skip the 11 scenarios that wait for time to pass, because those need the scripted clock, and run 53.
+The suite lives in `evals/scenarios.yaml`: 72 synthetic candidates covering the edge cases in the process design. Each scenario has scripted messages, a persona for LLM-simulated runs, and the expected outcome. The four main edge cases (stops responding, invalid answers, ambiguous answers, switches language) each have a graded ladder, `silence_1…10`, `invalid_2…8`, `ambiguous_2…8` and `language_2…8`, from mild to extreme. Besides the outcome and fields, a scenario can check where it dropped off (`dropped_at`), a field's status or note (`field_status`, `field_notes`), and the language of every reply to each candidate message (`reply_languages`). `status` may list several acceptable outcomes. The 14 scenarios marked `requires_llm` need a real model to understand the candidate (Catalan, hedged answers, license types), so the offline keyword run skips them and runs 58. Simulated runs skip the 11 scenarios that wait for time to pass, because those need the scripted clock, and run 61.
 
 ```bash
 uv run python -m evals                       # offline: keyword extractor, scripted (free, in CI)
@@ -101,4 +101,4 @@ The `anthropic` entry assumes that SDK; replace it with whichever LLM SDK is cho
 
 ## Deliberately skipped
 
-Mutation testing (too slow for the timeline), 100% coverage targets (they reward testing adapters over behaviour), SonarQube-style platforms (ruff + mypy + import-linter cover the useful part), and commit-message linting (low value solo).
+100% coverage targets (they reward testing adapters over behaviour), SonarQube-style platforms (ruff + mypy + import-linter cover the useful part), and commit-message linting (low value solo).
