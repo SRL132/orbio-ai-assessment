@@ -353,7 +353,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 **Why Terra.** It ties Gemini 3.8 Flash on accuracy, with half the p95 and a slightly lower cost, and voice needs that p95. Haiku fails about 5% of scripted scenarios against Terra's 0.5%. Haiku would save about $125 a week at 10K conversations, small next to what a wrong screening costs in recruiter time, so accuracy wins.
 
-**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite has 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
+**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite had 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. After the hostile browser pass (extractor v10, responder v6) it has 83: 83/83 at 1.65 / 3.46 s and $0.0160. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
 
 **How to read these numbers:**
 

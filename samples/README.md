@@ -1,6 +1,6 @@
 # Sample conversations
 
-One transcript per eval scenario, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`.
+One transcript for each scenario in the 72-scenario live run, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`. The 11 scenarios added since have no transcript until the samples are regenerated.
 
 These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04, extractor v9 and responder v5). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
 
