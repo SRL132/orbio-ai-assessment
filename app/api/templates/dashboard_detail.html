@@ -49,6 +49,12 @@
         <button class="secondary" type="submit">Add note</button>
       </form>
       <p style="margin:12px 0 0"><a href="/dashboard/candidates/{{ state.conversation_id }}/export.json">Export JSON</a></p>
+      <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/erase" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:12px; padding-top:12px; border-top:1px solid #ddd">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <label style="flex:1">Erase all this candidate's data. This can't be undone. Type ERASE to confirm <input name="confirm" required pattern="ERASE" autocomplete="off"></label>
+        <button class="secondary" type="submit">Erase candidate</button>
+      </form>
+      <p class="muted" style="margin:8px 0 0">Removes the record, transcript, timeline, notes, any interview booking and the WhatsApp contact. Only your email, the date and the final status are kept as proof. Not for backups or anything already exported.</p>
     </div>
   </div>
   <div>

@@ -67,6 +67,8 @@ def check_csrf(request: Request, csrf: Annotated[str, Form(alias="csrf_token")] 
 
 Csrf = Annotated[None, Depends(check_csrf)]
 
+ERASE_CONFIRMATION = "ERASE"
+
 router = APIRouter()
 
 # The dashboard is in English; field labels and values come from the client's English templates,
@@ -330,6 +332,24 @@ async def override(
     return RedirectResponse(
         f"/dashboard/candidates/{conversation_id}", status_code=status.HTTP_303_SEE_OTHER
     )
+
+
+@router.post("/dashboard/candidates/{conversation_id}/erase")
+async def erase(
+    conversation_id: UUID, c: App, user: Recruiter, _: Csrf, confirm: Annotated[str, Form()]
+) -> RedirectResponse:
+    """Permanent, so it must be asked for in words, not just a click."""
+    if confirm.strip() != ERASE_CONFIRMATION:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Type {ERASE_CONFIRMATION} to confirm.")
+    try:
+        await asyncio.to_thread(c.service.erase, conversation_id, user)
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND) from None
+    except ConversationBusy:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "The agent is answering this candidate; try again."
+        ) from None
+    return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/dashboard/candidates/{conversation_id}/notes")

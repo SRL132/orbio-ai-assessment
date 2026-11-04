@@ -14,6 +14,7 @@ client's data.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -214,8 +215,8 @@ class JobLeaseRow(Base):
 
 
 class ErasureRow(Base):
-    """Proof that a candidate's data was erased under the retention policy. No personal data:
-    the conversation's id, its final status and when, nothing else."""
+    """Proof that a candidate's data was erased. Nothing of theirs: the conversation's id, its
+    final status and when. `erased_by` is the recruiter who did it; None means the retention job."""
 
     __tablename__ = "erasures"
 
@@ -225,6 +226,7 @@ class ErasureRow(Base):
     status: Mapped[str] = mapped_column(String(32))
     last_activity_at: Mapped[datetime] = mapped_column(UTCDateTime)
     erased_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    erased_by: Mapped[str | None] = mapped_column(String(320), default=None)
 
 
 class RateLimitKeyRow(Base):
@@ -261,6 +263,34 @@ class InterviewRow(Base):
     location_id: Mapped[str] = mapped_column(String(64))
     starts_at: Mapped[datetime] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+def erase_conversations(
+    session: Session,
+    client_id: str,
+    rows: Sequence[Any],
+    now: datetime,
+    erased_by: str | None = None,
+) -> None:
+    """Remove everything that can hold a candidate's personal data, whole conversations at a
+    time (the event log can't be replayed from a part of itself), and leave proof it happened.
+    `rows` have the conversation's id, status and updated_at. Runs in the caller's transaction."""
+    ids = [row.id for row in rows]
+    for table in (EventRow, MessageRow, InterviewRow, ChannelContactRow):
+        session.execute(delete(table).where(table.conversation_id.in_(ids)))
+    session.execute(delete(ConversationRow).where(ConversationRow.id.in_(ids)))
+    session.add_all(
+        ErasureRow(
+            id=str(uuid4()),
+            client_id=client_id,
+            conversation_id=row.id,
+            status=row.status,
+            last_activity_at=row.updated_at,
+            erased_at=now,
+            erased_by=erased_by,
+        )
+        for row in rows
+    )
 
 
 def make_engine(url: str) -> Engine:
@@ -395,6 +425,21 @@ class SqlRepository:
                 .where(row.id == str(conversation_id), row.lease_owner == owner)
                 .values(lease_owner=None, lease_until=None)
             )
+
+    def erase(self, conversation_id: UUID, erased_by: str, lease_owner: str) -> bool:
+        conv = ConversationRow
+        with self._sessions.begin() as session:
+            row = session.execute(
+                select(conv.id, conv.status, conv.updated_at).where(
+                    conv.id == str(conversation_id),
+                    conv.client_id == self._client_id,
+                    conv.lease_owner == lease_owner,
+                )
+            ).first()
+            if row is None:
+                return False
+            erase_conversations(session, self._client_id, [row], self._clock.now(), erased_by)
+        return True
 
     def try_job_lease(self, name: str, owner: str, duration: timedelta) -> bool:
         """Like `try_lease`, for a background job: the first caller creates the row (the

@@ -3,26 +3,18 @@
 The policy is in docs/process-design-appendix.md ("Retention"). A candidate who agreed to stay
 on file is kept. Erasure removes everything that can hold personal data (state, messages,
 events including recruiter notes, interview bookings, the WhatsApp contact) in one
-transaction, and leaves an `erasures` row with no personal data as proof it happened.
+transaction, and leaves an `erasures` row with nothing of theirs as proof it happened.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from uuid import uuid4
 
-from sqlalchemy import Engine, and_, delete, or_, select
+from sqlalchemy import Engine, and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.adapters.storage.sql import (
-    ChannelContactRow,
-    ConversationRow,
-    ErasureRow,
-    EventRow,
-    InterviewRow,
-    MessageRow,
-)
+from app.adapters.storage.sql import ConversationRow, erase_conversations
 from app.domain.config import ClientConfig
 from app.domain.models import Status
 from app.domain.ports import Clock
@@ -70,19 +62,6 @@ class SqlRetention:
             ids = [row.id for row in expired]
             if not ids:
                 return 0
-            for table in (EventRow, MessageRow, InterviewRow, ChannelContactRow):
-                session.execute(delete(table).where(table.conversation_id.in_(ids)))
-            session.execute(delete(conv).where(conv.id.in_(ids)))
-            session.add_all(
-                ErasureRow(
-                    id=str(uuid4()),
-                    client_id=self._config.client_id,
-                    conversation_id=row.id,
-                    status=row.status,
-                    last_activity_at=row.updated_at,
-                    erased_at=now,
-                )
-                for row in expired
-            )
+            erase_conversations(session, self._config.client_id, expired, now)
         logger.info("retention_erased count=%d", len(ids))
         return len(ids)
