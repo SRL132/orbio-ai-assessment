@@ -3,6 +3,10 @@
 # against a failure here makes it no longer held out: write new scenarios instead.
 #
 #   uv run python -m evals --provider openrouter --model <slug> --scenarios evals/holdout.yaml
+#
+# Run on 2026-11-04: 13/14. holdout_says_a_nearby_landmark failed and its bug was then fixed, so
+# that scenario isn't held out any more, and neither is this file after any prompt tuning: to
+# measure again, write new scenarios first.
 
 - id: holdout_typos_es
   description: Typos and little words in almost every answer.

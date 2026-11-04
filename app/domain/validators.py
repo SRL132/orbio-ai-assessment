@@ -281,6 +281,8 @@ def validate_location(
         return _geocoded(zone, None, geo, config)
     if pc:
         return Outcome.invalid("city_missing", postal_code=pc)
+    if zone:  # keep it: "vivo en Sants" then "en Barcelona" gives the whole location
+        return Outcome.invalid("missing", zone=zone)
     return Outcome.invalid("missing")
 
 

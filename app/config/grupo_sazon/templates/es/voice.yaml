@@ -3,7 +3,7 @@
 
 greeting_consent: >-
   Hola, soy {persona}, la asistente virtual de {company}. Te hago siete preguntas rápidas sobre el
-  puesto de repartidor, unos tres minutos. Transcribimos lo que dices solo para este proceso y no
+  puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no
   guardamos el audio. ¿Empezamos?
 consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos?
 ask_license: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.

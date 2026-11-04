@@ -12,6 +12,7 @@ from app.domain.models import (
     FieldStatus,
     Reason,
     ReviewReason,
+    Stage,
     Vehicle,
 )
 from app.domain.policy import (
@@ -210,3 +211,37 @@ def test_junk_is_not_a_no_license_knockout(
     result = apply_extraction(state, fields, config, TODAY, message=junk)
     assert result.knockout is None
     assert state.candidate.has_license is None
+
+
+def test_a_neighbourhood_given_first_completes_the_city_given_next(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    state.stage, state.awaiting = Stage.COLLECTING, FieldName.LOCATION
+    first = apply_extraction(state, ex(zone="Sants").fields, config, TODAY, message="Sants")
+    assert first.rejected == {FieldName.LOCATION: "missing"}
+    assert state.candidate.zone == "Sants"
+    second = apply_extraction(
+        state, ex(city="Barcelona").fields, config, TODAY, message="Barcelona"
+    )
+    assert not second.rejected
+    assert state.candidate.location_id == "es-barcelona"
+    assert state.candidate.meta[FieldName.LOCATION].status == FieldStatus.VALID
+
+
+def test_a_first_name_later_does_not_replace_the_full_name(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    state.stage, state.awaiting = Stage.COLLECTING, FieldName.FULL_NAME
+    apply_extraction(state, ex(full_name="Ana López").fields, config, TODAY, message="Ana López")
+    state.awaiting = FieldName.LICENSE
+    apply_extraction(state, ex(full_name="Ana").fields, config, TODAY, message="Ana")
+    assert state.candidate.full_name == "Ana López"
+    assert state.candidate.meta[FieldName.FULL_NAME].status == FieldStatus.VALID
+
+
+def test_a_first_name_alone_is_still_kept_while_the_name_is_missing(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    state.stage, state.awaiting = Stage.COLLECTING, FieldName.FULL_NAME
+    apply_extraction(state, ex(full_name="Ana").fields, config, TODAY, message="Ana")
+    assert state.candidate.full_name == "Ana"

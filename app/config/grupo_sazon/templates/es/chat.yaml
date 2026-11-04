@@ -4,7 +4,7 @@
 
 greeting_consent: >-
   ¡Hola! Soy {persona}, la asistente virtual de {company} 👋 Te hago 7 preguntas rápidas sobre
-  el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso
+  el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso
   (aviso de privacidad: {privacy_url}). ¿Empezamos?
 consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos? (sí / no)
 consent_declined: Entendido, no guardaremos nada. Si cambias de opinión, escríbenos cuando quieras.

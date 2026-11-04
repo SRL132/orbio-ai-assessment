@@ -4,7 +4,7 @@ Claims 150 years of experience, is asked again, then gives a real number.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -28,11 +28,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Mañanas  
 
-**Lucía**: ¿Has trabajado antes como repartidora? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has repartido antes? Cuéntame cuántos años de experiencia tienes y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: 150 años  
 
-**Lucía**: ¿Cuánto tiempo has trabajado repartiendo? Por ejemplo: «1 año en Glovo» o «ninguno», no pasa nada.  
+**Lucía**: ¿Podrías decirme cuánto tiempo has repartido? Si nunca lo has hecho, responde «ninguno», no pasa nada.  
 
 **Candidate**: 2 años en Glovo  
 

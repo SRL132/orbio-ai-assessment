@@ -70,7 +70,7 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Places the config doesn't list.** With a geocoder configured (`GEOCODER=nominatim`), a city or town that isn't a served city, zone or listed nearby town is looked up, and its distance to the nearest served city centre decides: within `geo_review_radius_km` (default 30 km) it goes to review as `borderline_zone`; farther away it is outside the area. Either way the candidate first confirms the place we found. A place the geocoder doesn't know is asked again. If the lookup itself fails, the candidate goes to review (`location_unverified`) instead of being rejected. Only the place name is sent to the geocoder. Without a geocoder, an unlisted city is outside the area.
 
-**Location details.** Vague → ask for neighbourhood or postal code. Postal code alone → ask for the city (Spanish and Mexican codes overlap). A town given as the zone ("Getafe") is read as the city.
+**Location details.** Vague → ask for neighbourhood or postal code. A neighbourhood alone is kept while the city is asked for, so the two make one location. Postal code alone → ask for the city (Spanish and Mexican codes overlap). A town given as the zone ("Getafe") is read as the city.
 
 **Ambiguous answers.** Store what is certain and leave out what is only hedged, to ask or confirm separately. An availability that only names days ("entre semana") says neither full nor part time, so it is asked again (checked in code against the candidate's words; phrases in the client config).
 
@@ -78,8 +78,10 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Rude or nonsense input.** Numbers and symbols alone ("000") never count as "no license". After two unclear answers to the keep-on-file question, nothing is kept and the conversation closes.
 
-**Changing an earlier answer.** A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
+**Changing an earlier answer.** A value that wouldn't pass by itself never replaces an accepted one: "soy Ana" doesn't undo "Ana López". A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
 
 **LLM outages.** Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate.
 
 **Voice.** The questions, rules and outcomes are the same. Options are said as a sentence, there's no emoji, dates are said as words, and the greeting adds that the audio is transcribed and not kept. One rule differs: the model only sees the transcript, so it can be sure of a name or town that speech recognition got wrong ("Gostivar" heard as "ghost", "Zdravkovic" as "Lazkoz"). So the name and location are always read back before they count, whatever the model's confidence (`always_confirm`), including a location that would knock them out. If they say no, they're asked to type it in the text box below the call (still one attempt).
+
+**Gender.** Lucía doesn't assume it, from a name or anything else. Spanish wording goes around it ("¿Has repartido antes?", "el puesto de reparto").

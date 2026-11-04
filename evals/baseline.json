@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 57,
+    "passed": 58,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -208,6 +208,12 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "neighbourhood_then_city": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
       "no_license": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -347,12 +353,12 @@
         "turns": 5
       }
     },
-    "total": 57
+    "total": 58
   },
   "openrouter/openai/gpt-5.6-terra/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 69,
+    "passed": 72,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -612,6 +618,18 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "neighbourhood_then_city": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
+      "no_gender_assumed": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 6
+      },
       "no_greeting_mid_conversation": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -659,6 +677,12 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 2
+      },
+      "shorter_name_keeps_the_full_name": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
       },
       "silence_10_abandoned_during_confirmation": {
         "field_accuracy": 1.0,
@@ -769,6 +793,6 @@
         "turns": 5
       }
     },
-    "total": 69
+    "total": 72
   }
 }

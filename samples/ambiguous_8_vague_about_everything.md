@@ -4,7 +4,7 @@ Hedges every answer. Must never be knocked out or guessed into a clean qualifica
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,15 +12,15 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: Ana, bueno, Ana López  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: no sé, creo que el de coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, puedes decirme tu código postal.  
 
 **Candidate**: por el centro  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid · Chamberí.  
+**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
 
 **Candidate**: Madrid, Centro  
 
@@ -40,7 +40,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: pronto  
 
-**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · el 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.  
 
 **Candidate**: la semana que viene  
 

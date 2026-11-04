@@ -323,3 +323,11 @@ def test_listed_zone_matches_with_an_article_or_prefix(said: str) -> None:
     outcome = validate_location("CDMX", said, None, CONFIG)
     assert outcome.kind == "valid"
     assert outcome.updates["location_id"] == "mx-cdmx"
+
+
+def test_a_zone_alone_is_kept_until_the_city_arrives(config: ClientConfig) -> None:
+    outcome = validate_location(None, "Sants", None, config)
+    assert outcome.kind == "invalid"
+    assert outcome.problem == "missing"
+    assert outcome.updates == {"zone": "Sants"}
+    assert validate_location(None, None, None, config).updates == {}

@@ -4,7 +4,7 @@ Cooperative candidate writing in English.
 
 Run: `openrouter/openai/gpt-5.6-terra/simulated` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Hi! Yes, let's start.  
 
@@ -12,21 +12,21 @@ Run: `openrouter/openai/gpt-5.6-terra/simulated` · passed · 9 candidate messag
 
 **Candidate**: John Smith  
 
-**Lucía**: Do you have a valid driving licence? Reply: Moto · Car · Both · None  
+**Lucía**: Do you have a driving license? Reply: Moto · Car · Both · None  
 
 **Candidate**: Car  
 
 **Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
 
-**Candidate**: I live in Seville, in the Triana neighbourhood.  
+**Candidate**: I live in Seville, in the Triana neighborhood.  
 
 **Lucía**: What’s your availability? Full time · Part time · Weekends  
 
-**Candidate**: Part time (mornings)  
+**Candidate**: Part time, specifically mornings.  
 
-**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve worked with, like Glovo or Uber Eats.  
+**Lucía**: Have you done deliveries before? Tell me how many years and which apps you’ve used, such as Glovo or Uber Eats.  
 
-**Candidate**: No, I haven't done deliveries before. This would be my first time!  
+**Candidate**: I've never worked in delivery before, but I'm a quick learner.  
 
 **Lucía**: Which day could you start?  
 
@@ -42,7 +42,7 @@ Run: `openrouter/openai/gpt-5.6-terra/simulated` · passed · 9 candidate messag
 • Start: 09/11/2026  
 Is everything correct?  
 
-**Candidate**: Yes, everything is correct!  
+**Candidate**: Yes, everything is correct.  
 
 **Lucía**: Great, John! You meet the requirements 🎉  
 
@@ -52,7 +52,7 @@ Is everything correct?
 3) Wed 4/11 10:00  
 Reply with the number. If none works, say "none".  
 
-**Candidate**: 3  
+**Candidate**: 3 please  
 
 **Lucía**: Done! Your interview is on Wed 4/11 10:00. We'll send you the restaurant's address. See you soon!  
 

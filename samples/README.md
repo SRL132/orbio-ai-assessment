@@ -2,9 +2,9 @@
 
 One transcript per eval scenario, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`.
 
-These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04, extractor v9 and responder v4). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
+These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04, extractor v9 and responder v5). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
 
-[`simulated/`](simulated/) has six conversations where another LLM plays the candidate. They read more naturally, and two are marked failed. In `cooperative_es` the simulated candidate strayed from its persona (it should want evenings and answered "Tarde"), and the agent recorded what was said. `several_answers_at_once` is a real weakness: a rambling candidate says "soy Ana de Gràcia" after giving her full name, and the agent ends up storing only "Ana", and reads "disponibilidad total fines de semana" as full time plus weekends.
+[`simulated/`](simulated/) has six conversations where another LLM plays the candidate. They read more naturally, and three are marked failed, each on a value that differs from the persona. In `cooperative_es` the simulated candidate strayed from it (it should want evenings and answered "Tarde"), and the agent recorded what was said. `code_switching` and `several_answers_at_once` come from rambling answers, where what the candidate said and what the scenario expected don't match cleanly.
 
 | Scenario | Channel | What it shows |
 | --- | --- | --- |
@@ -32,6 +32,9 @@ These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04
 | [context follow up question](context_follow_up_question.md) | chat | A follow-up ("¿y los turnos?") only makes sense with the previous message. |
 | [context unrelated second question](context_unrelated_second_question.md) | chat | After a pay question, an uncovered one doesn't get a nearby entry's answer. |
 | [context back reference](context_back_reference.md) | chat | "Lo mismo que te dije antes" states no value, so nothing is invented. |
+| [no gender assumed](no_gender_assumed.md) | chat | A candidate named Ana is asked about experience without a gendered job title. |
+| [neighbourhood then city](neighbourhood_then_city.md) | chat | A neighbourhood alone, then the city when asked, make one location. |
+| [shorter name keeps the full name](shorter_name_keeps_the_full_name.md) | chat | Giving only the first name later doesn't replace the full name. |
 | [asks if bot](asks_if_bot.md) | chat | Asks whether it's talking to a person; the assistant says it's automated and carries on. |
 | [voice cooperative es](voice_cooperative_es.md) | voice | Voice call, cooperative caller who reads out a postal code. |
 | [voice no license](voice_no_license.md) | voice | Voice call, no license; spoken knockout and keep-on-file question. |

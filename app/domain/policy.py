@@ -354,9 +354,11 @@ def apply_extraction(
             return result
 
         if outcome.kind == "invalid":
-            # Keep only the partial value the validator vouches for (e.g. a first name).
-            for attr, value in outcome.updates.items():
-                setattr(candidate, attr, value)
+            # Keep only the partial value the validator vouches for (e.g. a first name), and
+            # never over an accepted answer: "soy Ana" doesn't undo "Ana López".
+            if candidate.meta[name].status == FieldStatus.MISSING:
+                for attr, value in outcome.updates.items():
+                    setattr(candidate, attr, value)
             result.rejected[name] = outcome.problem
             result.events.append(
                 DomainEvent(

@@ -4,7 +4,7 @@ Asks "Can you speak English?" without answering anything; switches and re-asks.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,15 +12,15 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Ana López  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Can you speak English please?  
 
-**Lucía**: I didn’t quite catch that. Do you have a licence for a motorbike, a car, both, or none?  
+**Lucía**: I didn’t quite catch that. Do you have a licence for: Moto · Car · Both · None?  
 
 **Candidate**: Moto  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just send me your postal code.  
 
 **Candidate**: Madrid, Retiro  
 

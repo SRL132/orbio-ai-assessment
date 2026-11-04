@@ -4,11 +4,11 @@ Cooperative candidate writing in English.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Yes  
 
-**Lucía**: What’s your full name? First name and surname, please.  
+**Lucía**: What’s your first name and surname, please?  
 
 **Candidate**: John Smith  
 
@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Car  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just send me your postal code.  
 
 **Candidate**: Sevilla  
 

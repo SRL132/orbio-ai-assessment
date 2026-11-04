@@ -16,6 +16,35 @@
     language: es
     fields: {full_name: Ana López, vehicle: moto, location_id: es-madrid, availability: [full_time], schedule: [evening], experience_years: 2, start_date: "2026-11-03"}
 
+- id: no_gender_assumed
+  description: A candidate named Ana is asked about experience without a gendered job title.
+  requires_llm: true
+  persona: Ana López, Chamberí (Madrid), moto, full time, evenings. Stops after the experience question.
+  steps: [Sí, Ana López, Moto, "Madrid, Chamberí", Jornada completa, Noches]
+  expect:
+    status: in_progress
+    awaiting: experience
+    later_replies_avoid: ["repartidor", "list[ao]\\b", "segur[ao]\\b", "interesad[ao]\\b"]
+
+- id: neighbourhood_then_city
+  description: A neighbourhood alone, then the city when asked; the two make one location.
+  persona: Paula Serra, Tetuán (Madrid), moto.
+  steps: [Sí, Paula Serra, Moto, vivo en Tetuán, en Madrid]
+  expect:
+    status: in_progress
+    awaiting: availability
+    fields: {location_id: es-madrid, zone: Tetuán}
+
+- id: shorter_name_keeps_the_full_name
+  description: Giving only the first name later doesn't replace the full name already given.
+  requires_llm: true
+  persona: Ana López, who mentions her first name again while answering the license question.
+  steps: [Sí, Ana López, "Soy Ana, y tengo moto"]
+  expect:
+    status: in_progress
+    awaiting: location
+    fields: {full_name: Ana López, vehicle: moto}
+
 - id: cooperative_en
   description: Cooperative candidate writing in English.
   persona: John Smith, 31, lives in Seville. Car license. Part time, mornings. Never worked in delivery. Can start next week. Writes in English only.

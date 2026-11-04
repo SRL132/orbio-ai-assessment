@@ -4,7 +4,7 @@ Voice call that ends by booking an interview slot by saying "la segunda".
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 12 candidate messages
 
-**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de repartidor, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
+**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
 
 **Candidate**: vale  
 

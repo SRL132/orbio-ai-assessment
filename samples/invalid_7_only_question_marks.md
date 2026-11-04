@@ -4,7 +4,7 @@ Answers the license question with "?" twice; it must not loop forever.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de repartidor (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -16,7 +16,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: ?  
 
-**Lucía**: No me quedó claro. ¿Tienes licencia para Moto · Coche · Ambos · No tengo? Por ejemplo: “Moto”.  
+**Lucía**: Perdona, no me quedó claro. ¿Tienes carnet o licencia? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: ??  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Noches  
 
-**Lucía**: ¿Has trabajado antes como repartidora? Dime cuántos años y en qué plataformas, como Glovo o Uber Eats.  
+**Lucía**: ¿Has repartido antes? Cuéntame cuántos años de experiencia tienes y en qué plataformas, como Glovo o Uber Eats.  
 
 **Candidate**: nunca  
 
