@@ -52,7 +52,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 
 ## Rules
 
-- The dashboard never deletes data; retention is handled by a scheduled job (see the appendix to the process design).
+- A recruiter can erase one candidate on request, from the candidate's page, by typing `ERASE`. It removes the whole conversation at once, can't be undone, and leaves an `erasures` row with who and when. Everything else is deleted only by the retention job (see the appendix to the process design).
 - Overrides need a reason, and the original agent decision stays visible.
 - Every form carries a per-session CSRF token, on top of SameSite cookies. Login is rate-limited (see the process design appendix).
 - Login with one account per recruiter; no shared credentials. Accounts come from `RECRUITER_USERS` (`email:hash;email:hash`), with scrypt hashes made by `uv run python -m app.cli hash-password`.

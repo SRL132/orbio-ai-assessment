@@ -107,7 +107,7 @@ Events are never edited. Two kinds share one table, in a strict order per conver
 The events hold deltas, not a reducer per domain event. The engine stays pure and unchanged: it works on a copy of the state, and the repository records the difference. A reducer per event would repeat the engine's logic and could drift from it. What this costs:
 
 - **Not everything is in the log.** Message text lives in `messages`, because it must stay redactable. Bookings, leases and delivery status are operational, in their own tables.
-- **A corrected answer stays in the log** until retention erases the conversation, which deletes its whole log in one transaction. That erasure is the only exception to append-only. The deltas hold what the state holds, so they carry personal data: they're left out of the timeline and exports, and never reach application logs.
+- **A corrected answer stays in the log** until retention, or a recruiter acting on a candidate's request, erases the conversation, which deletes its whole log in one transaction. That erasure is the only exception to append-only. The deltas hold what the state holds, so they carry personal data: they're left out of the timeline and exports, and never reach application logs.
 
 ### 6. Reminders live in the database
 

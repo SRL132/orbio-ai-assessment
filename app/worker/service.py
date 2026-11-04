@@ -269,6 +269,19 @@ class ScreeningService:
             metrics.record_finished(state, new_state)
             logger.info("override id=%s to=%s", conversation_id, status.value)
 
+    def erase(self, conversation_id: UUID, actor: str) -> None:
+        """A recruiter erases a candidate on request: no undo. Waits for a running turn, like an
+        override, so no turn can write the conversation back. Raises `KeyError` if it's unknown,
+        `ConversationBusy` if a turn doesn't finish in time."""
+        if self.repo.get(conversation_id) is None:
+            raise KeyError(conversation_id)
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            if owner is None:
+                raise ConversationBusy(conversation_id)
+            if not self.repo.erase(conversation_id, actor, owner):
+                raise KeyError(conversation_id)
+        logger.info("erased id=%s", conversation_id)
+
     # Notes, views and exports only append audit events, which never conflict with a turn.
 
     def add_note(self, conversation_id: UUID, text: str, actor: str) -> None:

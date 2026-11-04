@@ -85,6 +85,11 @@ class Repository(Protocol):
 
     def get(self, conversation_id: UUID) -> ConversationState | None: ...
 
+    def erase(self, conversation_id: UUID, erased_by: str, lease_owner: str) -> bool:
+        """Delete all of a conversation's data at once, keeping only proof of who did it and
+        when. Returns False if it isn't this client's or `lease_owner` doesn't hold its lease."""
+        ...
+
     def add_inbound(
         self, conversation_id: UUID, text: str, channel_message_id: str | None = None
     ) -> bool:

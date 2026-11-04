@@ -4,15 +4,18 @@ import csv
 import io
 import re
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.adapters.storage.dashboard import Filters
+from app.adapters.storage.sql import ErasureRow, EventRow, MessageRow
 from app.api.auth import hash_password, parse_users, verify_password
 from app.api.main import create_app
 from app.bootstrap import Container, build
@@ -457,3 +460,112 @@ def test_unopened_applicant_still_counts_against_screening_on_time(
     container.clock.advance(hours=25)
     analytics = container.queries.analytics([], container.clock.now())
     assert (analytics.screening_due, analytics.screened_on_time) == (1, 0)
+
+
+def erasures(container: Container) -> list[ErasureRow]:
+    with Session(container.db) as session:
+        return list(session.scalars(select(ErasureRow)))
+
+
+def test_erasing_a_candidate_removes_everything_and_names_the_recruiter(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí", "Ana López", "moto")
+    page = logged_in.get(f"/dashboard/candidates/{cid}").text
+    assert "Erase candidate" in page
+
+    response = submit(logged_in, f"/dashboard/candidates/{cid}/erase", {"confirm": "ERASE"})
+    assert response.status_code == 200  # followed the redirect to the list
+
+    assert container.service.repo.get(cid) is None
+    assert logged_in.get(f"/dashboard/candidates/{cid}").status_code == 404
+    assert "Ana López" not in logged_in.get("/dashboard").text
+    with Session(container.db) as session:
+        for table in (EventRow, MessageRow):
+            found = session.scalars(select(table).where(table.conversation_id == str(cid))).all()
+            assert not found
+    [proof] = erasures(container)
+    assert (proof.conversation_id, proof.erased_by) == (str(cid), "rec@sazon.test")
+    assert proof.status == "in_progress"
+
+
+@pytest.mark.parametrize("confirm", ["", "erase", "yes"])
+def test_erasing_needs_the_word_typed(
+    logged_in: TestClient, container: Container, confirm: str
+) -> None:
+    cid = chat(container, "sí", "Ana López")
+    response = submit(logged_in, f"/dashboard/candidates/{cid}/erase", {"confirm": confirm})
+    assert response.status_code in (400, 422)
+    assert container.service.repo.get(cid) is not None
+    assert not erasures(container)
+
+
+def test_erasing_needs_a_login_and_a_csrf_token(client: TestClient, container: Container) -> None:
+    cid = chat(container, "sí")
+    anonymous = client.post(
+        f"/dashboard/candidates/{cid}/erase", data={"confirm": "ERASE"}, follow_redirects=False
+    )
+    assert anonymous.status_code in (303, 403)
+    submit(client, "/login", {"email": "rec@sazon.test", "password": PASSWORD})
+    forged = client.post(
+        f"/dashboard/candidates/{cid}/erase", data={"confirm": "ERASE", "csrf_token": "guess"}
+    )
+    assert forged.status_code == 403
+    assert container.service.repo.get(cid) is not None
+
+
+def test_erasing_twice_or_an_unknown_candidate_is_404(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí")
+    url = f"/dashboard/candidates/{cid}/erase"
+    submit(logged_in, url, {"confirm": "ERASE"})
+    assert submit(logged_in, url, {"confirm": "ERASE"}).status_code == 404
+
+
+def test_erasing_waits_for_a_running_turn(logged_in: TestClient, container: Container) -> None:
+    cid = chat(container, "sí")
+    container.service.recruiter_wait_seconds = 0
+    assert container.service.repo.try_lease(cid, "a-turn", timedelta(minutes=1))
+    response = submit(logged_in, f"/dashboard/candidates/{cid}/erase", {"confirm": "ERASE"})
+    assert response.status_code == 409
+    assert container.service.repo.get(cid) is not None
+
+
+def test_an_erased_chat_is_gone_for_the_candidate_too(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí")
+    submit(logged_in, f"/dashboard/candidates/{cid}/erase", {"confirm": "ERASE"})
+    assert (
+        logged_in.post(f"/api/conversations/{cid}/messages", json={"text": "hola"}).status_code
+        == 404
+    )
+
+
+def test_erasing_leaves_no_history_to_rebuild_and_other_candidates_alone(
+    logged_in: TestClient, container: Container
+) -> None:
+    erased = chat(container, "sí", "Ana López", "moto")
+    kept = chat(container, "sí", "Luis Pérez", "moto")
+    repo = container.service.repo
+    with Session(container.db) as session:
+        types = session.scalars(
+            select(EventRow.type).where(EventRow.conversation_id == str(erased))
+        )
+        assert "state_changed" in set(types)  # these hold personal data, so they must go too
+
+    submit(logged_in, f"/dashboard/candidates/{erased}/erase", {"confirm": "ERASE"})
+
+    assert repo.rebuild_projections() == []  # nothing is brought back from the log
+    assert repo.get(erased) is None
+    assert repo.get(kept) is not None
+    with Session(container.db) as session:
+        assert not session.scalars(
+            select(EventRow).where(EventRow.conversation_id == str(erased))
+        ).all()
+        assert session.scalars(select(EventRow).where(EventRow.conversation_id == str(kept))).all()
+    # The kept log still accepts new events at the next position.
+    container.service.receive(kept, "Madrid, Chamberí")
+    container.service.process_pending(kept)
+    assert repo.rebuild_projections(check_only=True) == []
