@@ -16,7 +16,13 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from opentelemetry import trace
@@ -36,6 +42,7 @@ from app.domain.models import Channel, Language
 from app.worker.service import MAX_MESSAGE_CHARS, ScreeningService
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
+FAVICON = Path(__file__).parent / "static" / "favicon.ico"
 logger = logging.getLogger("app.api")
 
 # The browser that starts a conversation gets a signed cookie naming it; the message endpoints
@@ -160,6 +167,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        """Browsers ask for this path on every page, so no template has to link it."""
+        return FileResponse(FAVICON, media_type="image/x-icon")
 
     backlog = CollectorRegistry()
     backlog.register(metrics.BacklogCollector(c.queries.backlog, c.clock.now))
