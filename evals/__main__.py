@@ -44,7 +44,9 @@ RESULTS = EVALS_DIR / "results"
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals", description=__doc__)
-    parser.add_argument("--provider", choices=["fake", "openrouter", "anthropic"], default="fake")
+    parser.add_argument(
+        "--provider", choices=["fake", "openrouter", "anthropic", "openai"], default="fake"
+    )
     parser.add_argument("--model", default=None, help="model id/slug for the provider")
     parser.add_argument("--responder-model", help="OpenRouter: a different model writes replies")
     parser.add_argument("--simulator-model", help="OpenRouter: the model playing the candidate")
@@ -64,15 +66,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.simulate and args.provider == "fake":
-        parser.error("--simulate needs a real provider (openrouter or anthropic)")
+        parser.error("--simulate needs a real provider (openrouter, anthropic or openai)")
     if args.write_baseline and (args.scenario or args.scenarios != SCENARIOS):
         parser.error("--write-baseline needs the full suite: a subset would shrink the ratchet")
 
     overrides: dict[str, Any] = {"llm_provider": args.provider}
     if args.model:
-        overrides["openrouter_model" if args.provider == "openrouter" else "anthropic_model"] = (
-            args.model
-        )
+        overrides[f"{args.provider}_model"] = args.model
     settings = Settings(**overrides)
     config = load_client_config(settings.client_id)
     meter = UsageMeter()
@@ -83,15 +83,21 @@ def main(argv: list[str] | None = None) -> int:
         for llm in (extractor, responder, simulator):
             llm.reasoning_effort = None if args.reasoning == "default" else args.reasoning
     else:
-        if (
-            args.provider == "anthropic"
-            and args.budget_usd is not None
-            and (
-                settings.anthropic_input_usd_per_mtok is None
-                or settings.anthropic_output_usd_per_mtok is None
+        if args.budget_usd is not None and (
+            (
+                args.provider == "anthropic"
+                and None
+                in (settings.anthropic_input_usd_per_mtok, settings.anthropic_output_usd_per_mtok)
+            )
+            or (
+                args.provider == "openai"
+                and None
+                in (settings.openai_input_usd_per_mtok, settings.openai_output_usd_per_mtok)
             )
         ):
-            parser.error("--budget-usd needs ANTHROPIC_INPUT/OUTPUT_USD_PER_MTOK to price calls")
+            parser.error(
+                f"--budget-usd needs {args.provider.upper()}_*_USD_PER_MTOK to price calls"
+            )
         extractor, responder = make_llm(settings, meter)
         simulator = extractor if isinstance(extractor, Completer) else None
     harness = Harness(config, FastPathExtractor(extractor), responder, meter)
@@ -168,6 +174,7 @@ def _key(args: argparse.Namespace, settings: Settings) -> str:
         "fake": "keyword",
         "openrouter": settings.openrouter_model,
         "anthropic": settings.anthropic_model,
+        "openai": settings.openai_model,
     }[args.provider]
     return f"{args.provider}/{model}/{'simulated' if args.simulate else 'scripted'}"
 

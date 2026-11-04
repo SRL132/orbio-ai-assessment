@@ -1378,6 +1378,23 @@ wheels = [
 ]
 
 [[package]]
+name = "openai"
+version = "3.44.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx2" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/82/f179e77c5d1893ab58dae694ac45784510b7c9465375735be361fcd7a065/openai-3.44.0.tar.gz", hash = "sha256:32e5981c3790ba0bc321f9a72ae88ee540166cc8696c774440932e51c309e0e5", size = 2384276, upload-time = "2026-11-03T20:28:13.685Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/b5/45dea1c284d11de6c291763d826c03ff4d0713094feedd1a06d6abbe167f/openai-3.44.0-py3-none-any.whl", hash = "sha256:0eebe25581773461fe7ad0e5fa53713b5e9f59c40fccbc9246cf82fff72bffd9", size = 2422175, upload-time = "2026-11-03T20:28:11.445Z" },
+]
+
+[[package]]
 name = "opentelemetry-api"
 version = "1.45.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2013,6 +2030,7 @@ dependencies = [
     { name = "httpx" },
     { name = "itsdangerous" },
     { name = "jinja2" },
+    { name = "openai" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -2050,6 +2068,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "openai", specifier = ">=3.44.0" },
     { name = "opentelemetry-api", specifier = ">=1.45.2" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.45.2" },
     { name = "opentelemetry-sdk", specifier = ">=1.45.2" },

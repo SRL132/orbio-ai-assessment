@@ -9,13 +9,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    llm_provider: Literal["fake", "openrouter", "anthropic"] = "fake"
+    llm_provider: Literal["fake", "openrouter", "anthropic", "openai"] = "fake"
     llm_timeout_seconds: float = 20.0
     # Per call, with jittered backoff (and Retry-After); then the fallback provider gets it.
     llm_max_retries: int = 1
     # Optional fallback behind the same interface, for when the primary is down (e.g. another
     # vendor's model through OpenRouter). Empty: no fallback, held messages retry the primary.
-    llm_fallback_provider: Literal["", "fake", "openrouter", "anthropic"] = ""
+    llm_fallback_provider: Literal["", "fake", "openrouter", "anthropic", "openai"] = ""
     llm_fallback_model: str = ""  # empty: that provider's own model setting
     # LLM calls in flight per process. Fleet-wide: replicas x this; keep it under the
     # provider's rate limits (docs/architecture.md, "Scaling").
@@ -30,11 +30,18 @@ class Settings(BaseSettings):
     openrouter_reasoning_effort: str = "low"
 
     anthropic_api_key: SecretStr | None = None
-    anthropic_model: str = "claude-opus-5-5"
+    anthropic_model: str = "claude-haiku-5-5"  # the evals' fallback choice
     # USD per million tokens, from Anthropic's pricing page. The API reports tokens, not cost;
     # without these the usage meter can't price Anthropic calls (e.g. for an eval budget).
     anthropic_input_usd_per_mtok: float | None = None
     anthropic_output_usd_per_mtok: float | None = None
+
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-5.6-terra"
+    openai_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] = "low"
+    # USD per million tokens, from OpenAI's pricing page, as for Anthropic above.
+    openai_input_usd_per_mtok: float | None = None
+    openai_output_usd_per_mtok: float | None = None
 
     # Optional: speak voice-channel replies with ElevenLabs instead of the browser's voice.
     elevenlabs_api_key: SecretStr | None = None
@@ -94,6 +101,7 @@ class Settings(BaseSettings):
     @field_validator(
         "openrouter_api_key",
         "anthropic_api_key",
+        "openai_api_key",
         "elevenlabs_api_key",
         "whatsapp_access_token",
         "whatsapp_verify_token",

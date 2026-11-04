@@ -108,6 +108,30 @@ def make_llm(
                 client, model or settings.anthropic_model, meter=meter, usd_per_mtok=prices
             )
             return claude, claude
+        case "openai":
+            import openai
+
+            from app.adapters.llm.openai_sdk import OpenAILLM
+
+            if settings.openai_api_key is None:
+                raise ValueError("OPENAI_API_KEY is not set")
+            gpt_client = openai.OpenAI(
+                api_key=settings.openai_api_key.get_secret_value(),
+                timeout=settings.llm_timeout_seconds,
+                max_retries=settings.llm_max_retries,
+            )
+            usd_in = settings.openai_input_usd_per_mtok
+            usd_out = settings.openai_output_usd_per_mtok
+            gpt = OpenAILLM(
+                gpt_client,
+                model or settings.openai_model,
+                effort=settings.openai_reasoning_effort,
+                meter=meter,
+                usd_per_mtok=(usd_in, usd_out)
+                if usd_in is not None and usd_out is not None
+                else None,
+            )
+            return gpt, gpt
         case other:
             raise ValueError(f"unknown LLM provider: {other!r}")
 

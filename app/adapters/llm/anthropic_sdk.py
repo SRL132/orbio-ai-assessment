@@ -2,7 +2,7 @@
 
 Uses the official SDK: the schema in the prompt with Pydantic checking the answer (see
 `json_instruction`), prompt caching on the stable system prompt, low effort for latency, and
-server-side refusal fallbacks.
+server-side refusal fallbacks where the model has them.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 import anthropic
 from anthropic.types.beta import BetaMessage, BetaOutputConfigParam, BetaTextBlockParam
@@ -56,6 +56,10 @@ class AnthropicLLM:
         self._client = client
         self._model = model
         self._output_config: BetaOutputConfigParam = {"effort": effort}
+        # Haiku has no server-side refusal fallback: a refusal there reaches our own handling.
+        self._refusal_fallback: dict[str, Any] = (
+            {} if "haiku" in model else {"betas": [FALLBACK_BETA], "fallbacks": "default"}
+        )
         self.meter = meter
         self._prices = usd_per_mtok
 
@@ -69,8 +73,7 @@ class AnthropicLLM:
             system=_cached_system(extractor_system(config) + json_instruction(ExtractionResult)),
             messages=[{"role": "user", "content": extractor_user(state, message, today)}],
             output_config=self._output_config,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            **self._refusal_fallback,
         )
         self._log("extract", response, started)
         if response.stop_reason == "refusal":
@@ -91,8 +94,7 @@ class AnthropicLLM:
             system=_cached_system(responder_system(config)),
             messages=[{"role": "user", "content": responder_user(action, state, config)}],
             output_config=self._output_config,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            **self._refusal_fallback,
         )
         self._log("compose", response, started)
         if response.stop_reason == "refusal":
@@ -108,8 +110,7 @@ class AnthropicLLM:
             system=_cached_system(system),
             messages=[{"role": "user", "content": user}],
             output_config=self._output_config,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            **self._refusal_fallback,
         )
         self._log("complete", response, started)
         return "".join(block.text for block in response.content if block.type == "text").strip()

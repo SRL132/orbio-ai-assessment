@@ -11,6 +11,7 @@ from prometheus_client import REGISTRY
 from pydantic import BaseModel
 
 from app.adapters.llm.anthropic_sdk import FALLBACK_BETA, AnthropicLLM, RefusalError
+from app.adapters.llm.openai_sdk import OpenAILLM
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.prompting import (
     extractor_system,
@@ -263,6 +264,17 @@ class TestAnthropic:
             RECORDED_EXTRACTION
         )
 
+    def test_haiku_asks_for_no_refusal_fallback(
+        self, config: ClientConfig, state: ConversationState
+    ) -> None:
+        """It has none, and the request would be rejected."""
+        messages = _StubMessages(_response(text="hola"))
+        client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
+        llm = AnthropicLLM(client, model="claude-haiku-5-5")  # type: ignore[arg-type]
+        llm.compose(AskField(field=FieldName.START_DATE), state, config)
+        assert "fallbacks" not in messages.calls[0]
+        assert "betas" not in messages.calls[0]
+
     def test_refusal_raises(self, config: ClientConfig, state: ConversationState) -> None:
         llm, _ = self.make(_response(stop_reason="refusal"))
         with pytest.raises(RefusalError):
@@ -397,3 +409,65 @@ def test_openrouter_free_text_completion(config: ClientConfig) -> None:
 
     llm = OpenRouterLLM("k", "m", transport=httpx.MockTransport(handler))
     assert llm.complete("system", "user") == "hola"
+
+
+class _StubCompletions:
+    def __init__(self, response: Any) -> None:
+        self.response = response
+        self.calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        return self.response
+
+
+def _openai_response(content: str | None = "hola", refusal: str | None = None) -> Any:
+    return SimpleNamespace(
+        model="gpt-5.6-terra",
+        usage=SimpleNamespace(prompt_tokens=1000, completion_tokens=100),
+        choices=[
+            SimpleNamespace(
+                finish_reason="stop", message=SimpleNamespace(content=content, refusal=refusal)
+            )
+        ],
+    )
+
+
+class TestOpenAI:
+    def make(self, response: Any, **kwargs: Any) -> tuple[OpenAILLM, _StubCompletions]:
+        completions = _StubCompletions(response)
+        client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        return OpenAILLM(client, **kwargs), completions  # type: ignore[arg-type]
+
+    def test_extract_sends_a_strict_schema_and_validates(
+        self, config: ClientConfig, state: ConversationState
+    ) -> None:
+        llm, completions = self.make(_openai_response(json.dumps(RECORDED_EXTRACTION)))
+        result = llm.extract(state, "tengo carnet de moto", config, TODAY)
+        assert result == ExtractionResult.model_validate(RECORDED_EXTRACTION)
+        call = completions.calls[0]
+        assert call["response_format"]["json_schema"]["strict"] is True
+        assert call["response_format"]["json_schema"]["schema"] == strict_schema(ExtractionResult)
+        assert call["reasoning_effort"] == "low"
+        assert call["messages"][0]["content"] == extractor_system(config)
+
+    def test_compose_sends_no_schema(self, config: ClientConfig, state: ConversationState) -> None:
+        llm, completions = self.make(_openai_response(" ¿Qué día? "))
+        assert llm.compose(AskField(field=FieldName.START_DATE), state, config) == "¿Qué día?"
+        assert "response_format" not in completions.calls[0]
+
+    def test_refusal_raises(self, config: ClientConfig, state: ConversationState) -> None:
+        llm, _ = self.make(_openai_response(None, refusal="no"))
+        with pytest.raises(RefusalError):
+            llm.extract(state, "hola", config, TODAY)
+
+    def test_empty_answer_raises(self, config: ClientConfig, state: ConversationState) -> None:
+        llm, _ = self.make(_openai_response(None))
+        with pytest.raises(ValueError, match="empty"):
+            llm.extract(state, "hola", config, TODAY)
+
+    def test_prices_calls_when_told_how(self) -> None:
+        meter = UsageMeter()
+        llm, _ = self.make(_openai_response(), meter=meter, usd_per_mtok=(2.0, 10.0))
+        assert llm.complete("s", "u") == "hola"
+        assert meter.cost_usd == pytest.approx((1000 * 2 + 100 * 10) / 1e6)

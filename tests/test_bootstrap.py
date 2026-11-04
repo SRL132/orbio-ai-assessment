@@ -7,9 +7,10 @@ from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.llm.anthropic_sdk import AnthropicLLM
 from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.llm.openai_sdk import OpenAILLM
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
-from app.bootstrap import Container, build, with_public_links
+from app.bootstrap import Container, build, make_llm, with_public_links
 from app.settings import Settings
 
 
@@ -118,3 +119,24 @@ def test_public_base_url_makes_the_privacy_link_absolute() -> None:
     settings = Settings(_env_file=None, public_base_url="https://jobs.example.com/")
     assert with_public_links(config, settings).privacy_url == "https://jobs.example.com/privacy"
     assert with_public_links(config, Settings(_env_file=None)).privacy_url == "/privacy"
+
+
+def test_openai_provider_needs_a_key() -> None:
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        make_llm(Settings(_env_file=None, llm_provider="openai"))
+
+
+def test_openai_is_wired_with_its_settings() -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="openai",
+        openai_api_key="k",
+        openai_model="gpt-x",
+        openai_input_usd_per_mtok=1.0,
+        openai_output_usd_per_mtok=2.0,
+    )
+    extractor, responder = make_llm(settings)
+    assert isinstance(extractor, OpenAILLM)
+    assert extractor is responder
+    assert extractor._model == "gpt-x"
+    assert extractor._prices == (1.0, 2.0)
