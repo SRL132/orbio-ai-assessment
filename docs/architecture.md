@@ -4,7 +4,7 @@
 
 ## Summary
 
-A **modular monolith with a hexagonal core**. A pure conversation engine holds all screening logic. Everything that touches the outside world (LLM, channels, database, calendar, clock) is an adapter behind an interface (a "port"). The demo runs as one process; scaling means swapping adapter implementations and running more workers. The engine, rules and evals don't change.
+A **modular monolith with a hexagonal core**. A pure conversation engine holds all screening logic. Everything that touches the outside world (LLM, channels, database, calendar, clock) is an adapter, and what the core depends on sits behind an interface (a "port"). The demo runs as one process; scaling means swapping adapter implementations and running more workers. The engine, rules and evals don't change.
 
 ## What "scale" means here
 
@@ -33,7 +33,7 @@ A **modular monolith with a hexagonal core**. A pure conversation engine holds a
                          ┌────────▼──────────┐           │  new state + actions         │
                          │ Database          │◀──────────│  LLM behind ports            │
                          │  events (append)  │           └──────────────────────────────┘
-                         │  candidates (view)│      Scheduler: polls `next_reminder_at`
+                         │  conversation view│      Scheduler: polls `next_reminder_at`
                          │  messages, config │      → enqueues reminder turns
                          └───────────────────┘
 ```
@@ -77,7 +77,7 @@ The extractor schema includes `language`, `intent`, `sentiment` and `confused` *
 
 ### 3. Webhooks only store and acknowledge
 
-The API normalizes input to `InboundMessage`, drops duplicates by channel message ID, persists, enqueues and returns 200 in milliseconds. All LLM work happens in workers.
+The API normalizes input to `InboundMessage`, drops duplicates by channel message ID, persists, enqueues and returns 200 in milliseconds. All LLM work happens in workers, with one deliberate exception: a voice message runs its turn inside the request, because silence on a call feels broken (see [Voice channel](#voice-channel)).
 
 Inbound is idempotent per message: before doing anything, the webhook claims the channel's message ID in `channel_deliveries` (a primary-key insert, so of two concurrent copies exactly one wins). A retry is dropped whatever it is: a first message that opens a conversation, a photo that gets the "text only" notice, or a normal answer. If handling fails, the claim is given back, the webhook answers 500, and Meta's retry is handled instead of lost. IDs are pruned after 7 days; Meta stops retrying after 36 h. Opening a conversation for a number is serialized too: when no conversation exists yet, the message takes a short lock (a job lease named by a hash of the number, deleted when released) and looks again. So two different first messages arriving together ("hola" / "soy Ana") open one conversation, and the second joins it. A message that waits more than 5 s for the lock fails, and Meta retries it.
 
@@ -85,7 +85,7 @@ Outbound is at-least-once: the dispatcher sends, then marks the message delivere
 
 ### 4. One conversation at a time
 
-A lease on the conversation row, plus a ~2 s debounce that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
+A lease on the conversation row, plus a 1.5 s debounce (`DEBOUNCE_SECONDS`) that merges a burst of messages into one turn. That fixes ordering and saves LLM calls.
 
 - **Taking it:** one atomic `UPDATE conversations SET lease_owner, lease_until WHERE id = … AND lease is free or expired`. Of any number of workers, in any number of processes, exactly one matches. It works the same on SQLite and Postgres, and holds no database connection while the LLM is thinking.
 - **Expiry:** a lease lasts 3 minutes, longer than any turn (two LLM calls, each with a retry and the fallback provider). A worker that dies holding one blocks its conversation for at most that long. Leases are timed by the system clock, not the demo's fast-forwardable one.
@@ -95,9 +95,19 @@ A lease on the conversation row, plus a ~2 s debounce that merges a burst of mes
 
 Storing an inbound message doesn't wait for that lock: a webhook must be acknowledged even while a turn is running. So message numbers come from a counter on the conversation row (`last_seq`), reserved with one atomic `UPDATE … RETURNING` that holds the row lock until commit. Concurrent writers to one conversation queue up instead of colliding, which reading `max(seq) + 1` didn't guarantee.
 
-### 5. Append-only event log as source of truth
+### 5. The event log is the source of truth
 
-Events (`message_received`, `field_extracted`, `field_rejected`, `status_changed`, `reminder_sent`, `override`) are never edited. The `candidates` table is a projection of them. One mechanism gives the audit trail, analytics, ATS sync (outbox) and replay for debugging.
+Events are never edited. Two kinds share one table, in a strict order per conversation (`seq`, reserved from a counter on the conversation row and unique):
+
+- **What happened:** `message_received`, `field_extracted`, `field_rejected`, `status_changed`, `reminder_sent`, `override` and the rest, with their reasons. They give the audit trail and the recruiter timeline, and the ATS sync design (outbox) builds on them.
+- **What changed:** `state_changed`, the top-level state values a save changed. The repository appends it in the same transaction as the save, so no code path can change state without recording it. Replaying these events in order rebuilds the state (`app/domain/history.py`).
+
+`conversations` is a projection of the log: the full state as JSON, plus columns to filter on. Turns and the dashboard read it, so a read doesn't replay anything. `uv run python -m app.cli rebuild-state --check` compares every projection with its log, and without `--check` it rewrites the ones that differ. Every eval scenario also checks that replaying the log gives the saved state.
+
+The events hold deltas, not a reducer per domain event. The engine stays pure and unchanged: it works on a copy of the state, and the repository records the difference. A reducer per event would repeat the engine's logic and could drift from it. What this costs:
+
+- **Not everything is in the log.** Message text lives in `messages`, because it must stay redactable. Bookings, leases and delivery status are operational, in their own tables.
+- **A corrected answer stays in the log** until retention erases the conversation, which deletes its whole log in one transaction. That erasure is the only exception to append-only. The deltas hold what the state holds, so they carry personal data: they're left out of the timeline and exports, and never reach application logs.
 
 ### 6. Reminders live in the database
 
@@ -123,13 +133,13 @@ Prompt caching for the system prompt and config; token usage and cost logged per
 
 | Port | Adapters (now → later) |
 | --- | --- |
-| `Channel` | web chat → WhatsApp, voice |
 | `Extractor`, `Responder` | LLM → fake for tests, cheaper model |
-| `Repository`, `EventLog` | SQLite → Postgres |
+| `Repository` (includes the event log) | SQLite → Postgres; used by the service, never by the engine |
 | `CalendarProvider` | mock slots → Google Calendar |
 | `Geocoder` | fixed list (fake) → Nominatim (OpenStreetMap) → self-hosted Nominatim |
-| `KnowledgeBase` | FAQ id list in prompt → embeddings |
 | `Clock` | system → fake |
+
+Channels and the FAQ aren't ports, by the rule below: each has one implementation. Web chat, voice and WhatsApp are routes that call the service, and their flows differ too much to share an interface yet. The FAQ is a list in the client config, and the LLM picks an id from it. Each gets a port when it gets a second implementation.
 
 What we deliberately **don't** do:
 
@@ -146,6 +156,7 @@ What we deliberately **don't** do:
 ```
 app/
   domain/            # pure: no I/O, no SDKs
+    history.py       # event sourcing: state deltas and replay
     models.py        # Candidate, ConversationState, fields, statuses, actions,
                      #   event types and reasons (enums, not free strings)
     policy.py        # next action, knockouts, outcomes
@@ -153,11 +164,11 @@ app/
     engine.py        # turn(state, msg, config, ports) -> (state, actions): one handler per stage
     render.py        # actions -> replies (templates + responder); checks a config's templates
     summary.py       # recruiter summary
-    ports.py         # Protocols: Extractor, Responder, Repository, EventLog,
-                     #            CalendarProvider, Geocoder, KnowledgeBase, Clock, Channel
+    ports.py         # Protocols: Extractor, Responder, Repository,
+                     #            CalendarProvider, Geocoder, Clock
   adapters/
     llm/             # extractor + responder (real, fake); prompts/ as versioned files
-    channels/        # web chat, (whatsapp, voice)
+    channels/        # WhatsApp client, quick replies
     storage/         # SQLAlchemy repository, event log, projections
     calendar/ geo/ kb/ clock/
   api/               # FastAPI: webhooks, chat endpoint, dashboard routes
@@ -190,7 +201,7 @@ Design only; the demo runs as one process.
 **Deploy**
 
 - **Region:** EU (for Spanish candidates' data under GDPR). A second region for Mexico only if the client requires local residency.
-- **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless: all state is in the database, so any worker can take any conversation. Each worker runs `WORKER_CONCURRENCY` turns at once; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
+- **Services:** one image (`Dockerfile`) run in two roles, as `docker-compose.yml` does locally with Postgres: `web` (`ROLE=web`: webhooks, chat, dashboard; no background work, and the only turns it runs are voice messages) and `worker` (`python -m app.worker`: turns, reminders, the WhatsApp outbox, cleanup and retention). Both are stateless: all state is in the database, so any worker can take any conversation. Each worker runs `WORKER_CONCURRENCY` turns at once; scale `worker` on `sazon_pending_messages_oldest_seconds`. Singleton jobs (the outbox) hold a job lease, so they need no separate scheduler service.
 - **Chat delivery:** replies are pushed to the browser over server-sent events (`/api/conversations/{id}/stream`), with polling as the fallback. Each open stream checks the database every 0.5 s; past a few thousand concurrent chats, Postgres `LISTEN/NOTIFY` (or Redis pub/sub) would replace that check.
 - **Data:** managed Postgres (point-in-time recovery, encrypted at rest) and a managed queue (SQS or Redis Streams). Schema changes go through Alembic migrations (`migrations/`), run by the container before the server starts; a CI test fails if the models change without a migration, and the suite also runs against Postgres in CI.
 - **Secrets:** a secrets manager injects LLM keys, `SESSION_SECRET` and recruiter credentials (or SSO). Nothing in images or the repo; gitleaks runs in CI.
@@ -243,7 +254,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 | Sentiment | `sentiment` / `confused` from the extractor; the policy rephrases with options or offers a human. Never used for qualification | Low |
 | Tests and evals | Pure engine + fake adapters; simulated candidates against the real engine | Low–Med |
 | Guardrails | Input: `intent` drives the policy. Output: a Python check on every reply, with a template fallback. Data: personal data redacted before logging | Low–Med |
-| RAG | `KnowledgeBase` port; the extractor picks from a small FAQ id list in the cached prompt, embeddings only if it grows. Code sends the approved text | Low–Med |
+| RAG | The extractor picks from a small FAQ id list in the cached prompt. A `KnowledgeBase` port and embeddings only if it grows. Code sends the approved text | Low–Med |
 | Interview scheduling | New stage after the recap; `CalendarProvider` port; `OfferSlots` / `InterviewBooked` actions; a database constraint prevents double-booking. Booking is idempotent per candidate, so a turn that booked but failed to save can be retried (an external calendar can't join our transaction anyway). A periodic job releases bookings the conversation never recorded, after a 10-minute grace period | Med |
 | Location lookup | Done: a `Geocoder` port, called by the engine only for places the config doesn't list (only the place name is sent). The validator decides by distance to the nearest served city (`geo_review_radius_km`), and the candidate confirms the place first. Nominatim adapter: in-memory cache, one request per second and an identifying User-Agent (its usage policy); at volume, self-host it or swap the adapter. A failed lookup sends the candidate to review, never to a knockout | Low–Med |
 | ATS integration design | Done: [`ats-integration.md`](ats-integration.md) (outbox → signed webhooks, REST API sketch, field mapping) | Low |
@@ -353,7 +364,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 **Why Terra.** It ties Gemini 3.8 Flash on accuracy, with half the p95 and a slightly lower cost, and voice needs that p95. Haiku fails about 5% of scripted scenarios against Terra's 0.5%. Haiku would save about $125 a week at 10K conversations, small next to what a wrong screening costs in recruiter time, so accuracy wins.
 
-**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite has 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
+**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite had 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. After the hostile browser pass (extractor v10, responder v6) it has 83: 83/83 at 1.65 / 3.46 s and $0.0160. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
 
 **How to read these numbers:**
 

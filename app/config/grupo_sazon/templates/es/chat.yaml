@@ -59,11 +59,17 @@ needs_review: ¡Gracias, {name}! Un reclutador revisará tu candidatura y te esc
 handoff_human: Claro, aviso a una persona del equipo. Te escribirá en 1 día laborable.
 
 abuse_warning: Estoy aquí para ayudarte con tu candidatura. Sigamos con respeto, por favor.
+data_request_received: Entendido, paramos aquí. Un reclutador revisará tu petición, también si quieres que borremos tus datos, y te escribirá en 2 días laborables. También puedes escribir a privacidad@gruposazon.example.
 abuse_end: Vamos a dejarlo aquí. Un reclutador revisará tu caso.
 sensitive_data: No necesitamos ese dato ahora, así que no lo guardaremos.
 offer_human: Si lo prefieres, puedo pasarte con una persona del equipo. Solo dímelo.
 reminder_1: ¡Hola de nuevo! Solo nos faltan {missing_count} preguntas para tu candidatura. ¿Seguimos?
 reminder_2: Te guardamos el sitio un poco más, quedan {missing_count} preguntas. ¿Las terminamos?
+reminder_1_one: ¡Hola de nuevo! Solo nos falta 1 pregunta para tu candidatura. ¿Seguimos?
+reminder_2_one: Te guardamos el sitio un poco más, queda 1 pregunta. ¿La terminamos?
+reminder_1_recap: ¡Hola de nuevo! Ya solo falta que confirmes tus datos. ¿Están bien?
+reminder_2_recap: Te guardamos el sitio un poco más, solo falta que confirmes tus datos. ¿Están bien?
+interview_change_noted: Lo apunto. Una persona del equipo te escribirá para cambiarla; hasta entonces, tu entrevista sigue como está.
 closed: Tu candidatura ya está registrada. Si necesitas algo, un reclutador se pondrá en contacto.
 closed_disqualified: Gracias por escribirnos. Esta candidatura ya está cerrada, pero puedes volver a presentarte cuando quieras.
 technical_retry: Perdona, no te he entendido bien. ¿Me lo repites?

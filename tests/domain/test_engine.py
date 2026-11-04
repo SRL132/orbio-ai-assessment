@@ -207,6 +207,87 @@ def test_sensitive_data_is_flagged_for_redaction(chat: Chat) -> None:
     assert result.replies[0] == chat.config.template("es", "sensitive_data")
 
 
+def test_a_data_request_stops_the_screening_and_goes_to_review(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López"))
+    result = chat.say(ex(intent="data_request"), text="borrad mis datos")
+    assert chat.state.status == Status.NEEDS_REVIEW
+    assert chat.state.stage == Stage.CLOSED
+    assert ReviewReason(reason=Reason.DATA_REQUEST) in chat.state.review_reasons
+    assert result.replies == [chat.config.template("es", "data_request_received")]
+    assert any(e.type == "data_requested" for e in result.events)
+    assert chat.state.next_reminder_at is None or chat.silence() is None
+    assert "asked to stop or to delete their data" in (chat.state.summary or "")
+
+
+def test_a_data_request_outranks_abuse(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(intent="data_request"), text="borrad mis datos, inútil")
+    assert chat.state.abuse_strikes == 0
+    assert ReviewReason(reason=Reason.DATA_REQUEST) in chat.state.review_reasons
+
+
+def test_a_data_request_after_a_knockout_reaches_a_person_and_keeps_the_reason(
+    chat: Chat,
+) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(intent="data_request"), text="pues borrad mis datos")
+    assert chat.state.status == Status.NEEDS_REVIEW
+    assert chat.state.stage == Stage.CLOSED
+    assert chat.state.disqualify_reason == Reason.NO_LICENSE
+    assert chat.state.keep_on_file is False
+
+
+def test_a_data_request_after_the_chat_closed_still_reaches_a_person(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(intent="human_request"))
+    assert chat.state.stage == Stage.CLOSED
+    result = chat.say(ex(intent="data_request", language="en"), text="delete my data")
+    assert ReviewReason(reason=Reason.DATA_REQUEST) in chat.state.review_reasons
+    assert result.replies == [chat.config.template("en", "data_request_received")]
+    again = chat.say(ex(intent="data_request", language="en"), text="delete my data")
+    assert chat.state.review_reasons.count(ReviewReason(reason=Reason.DATA_REQUEST)) == 1
+    assert not any(e.type == "status_changed" for e in again.events)
+
+
+def test_after_the_chat_closed_other_messages_get_the_closed_reply(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(intent="human_request"))
+    result = chat.say(ex(), text="gracias")
+    assert result.replies == [chat.config.template("es", "closed")]
+    assert ReviewReason(reason=Reason.DATA_REQUEST) not in chat.state.review_reasons
+
+
+def test_sensitive_data_after_the_chat_closed_is_redacted(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(intent="human_request"))
+    result = chat.say(ex(sensitive_data=True), text="mi DNI es 12345678Z")
+    assert result.redact_inbound is True
+
+
+@pytest.mark.parametrize(
+    ("extraction", "text", "redacted"),
+    [
+        (ex(yes_no=True), "Sí", False),
+        (ex(yes_no=True), "sí, soy Ana López", False),
+        (ex(yes_no=False), "No gracias", False),
+        (ex(yes_no=False), "no, soy Ana López y vivo en Madrid", True),
+        (ex(), "hola soy Ana López, tengo moto", True),
+        (ex(yes_no=True, sensitive_data=True), "sí, mi DNI es 12345678Z", True),
+    ],
+)
+def test_only_a_consent_answer_is_stored_before_consent(
+    chat: Chat, extraction: ExtractionResult, text: str, redacted: bool
+) -> None:
+    assert chat.say(extraction, text=text).redact_inbound is redacted
+
+
+def test_after_consent_messages_are_stored_again(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    assert chat.say(ex(full_name="Ana López"), text="Ana López").redact_inbound is False
+
+
 def test_declining_consent_ends_without_data(chat: Chat) -> None:
     chat.say(ex(yes_no=False))
     assert chat.state.status == Status.ABANDONED
@@ -453,6 +534,11 @@ def test_extractor_failure_asks_again_without_penalty(
     result = engine.turn(started.state, message, config, ports)
     assert result.replies == [config.template("es", "technical_retry")]
     assert any(e.type == "extractor_failed" for e in result.events)
+    assert result.redact_inbound is True  # nothing is kept before consent, even on a failure
+    closed = started.state.model_copy(update={"stage": Stage.CLOSED})
+    after_close = engine.turn(closed, message, config, ports)
+    # It might be a request for a person: we say we couldn't read it, not that it's all done.
+    assert after_close.replies == [config.template("es", "technical_retry")]
     assert result.state.stage == Stage.CONSENT
 
 

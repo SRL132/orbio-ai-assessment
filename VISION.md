@@ -48,7 +48,7 @@ A **modular monolith with a lightweight hexagonal core**. Full detail: [`docs/ar
 
 - **A pure engine.** `turn(state, message, config) → (new state, actions)` holds all screening logic. The LLM, channels, database, calendar and clock sit behind ports, so tests and evals run on fakes and "code decides, the LLM talks" is enforced by structure.
 - **Slot-filling, not a rigid script.** The next question is the highest-priority field still missing, so answers can arrive in any order.
-- **Built to scale without a rewrite.** Webhooks only store and acknowledge. Workers process one conversation at a time, from an append-only event log, with reminders stored in the database. Clients are configuration (`client_id` everywhere). The demo is one process (FastAPI + SQLite + in-process queue); production swaps in Postgres, a real queue and N workers.
+- **Built to scale without a rewrite.** Webhooks only store and acknowledge. Workers process one conversation at a time. An append-only event log is the source of truth, and reminders are stored in the database. Clients are configuration (`client_id` everywhere). The demo is one process (FastAPI + SQLite + in-process queue); production swaps in Postgres, a real queue and N workers.
 - **Quality gates for AI-written code.** ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, pytest, and an eval baseline that can only go up. See [`docs/quality.md`](docs/quality.md).
 
 ## Scope

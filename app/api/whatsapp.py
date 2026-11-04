@@ -51,6 +51,8 @@ async def receive(request: Request) -> dict[str, str]:
         payload = json.loads(raw)
     except ValueError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid JSON") from None
-    for conversation_id in await asyncio.to_thread(channel.handle, payload):
-        c.runner.notify(conversation_id)
+    conversations = await asyncio.to_thread(channel.handle, payload)
+    if c.settings.role == "all":  # "web": a worker process picks them up after the debounce
+        for conversation_id in conversations:
+            c.runner.notify(conversation_id)
     return {"status": "ok"}

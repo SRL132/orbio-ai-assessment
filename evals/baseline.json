@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 58,
+    "passed": 66,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -82,6 +82,24 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "data_request_after_chat_closed": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
+      "data_request_in_english": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 4
+      },
+      "data_request_stops_screening": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
       "faq_covered_english": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -105,6 +123,12 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 4
+      },
+      "interview_change_after_booking": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
       },
       "invalid_2_first_name_only_twice": {
         "field_accuracy": 1.0,
@@ -232,6 +256,12 @@
         "replies_failed": 0,
         "turns": 6
       },
+      "privacy_question_is_not_a_data_request": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
       "prompt_injection": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -243,6 +273,18 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 3
+      },
+      "recap_refused_again_and_again": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
+      "reminder_at_the_recap_counts_no_questions": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 8
       },
       "several_answers_at_once": {
         "field_accuracy": 1.0,
@@ -316,6 +358,12 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "thanks_after_booking_changes_nothing": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
       "unlisted_nearby_town": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -353,12 +401,12 @@
         "turns": 5
       }
     },
-    "total": 58
+    "total": 66
   },
   "openrouter/openai/gpt-5.6-terra/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 72,
+    "passed": 83,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -480,6 +528,30 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "data_request_after_chat_closed": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
+      "data_request_in_english": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 4
+      },
+      "data_request_stops_screening": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
+      "date_corrected_after_two_failures_qualifies": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
       "faq_covered_english": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -509,6 +581,12 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 4
+      },
+      "interview_change_after_booking": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
       },
       "invalid_2_first_name_only_twice": {
         "field_accuracy": 1.0,
@@ -618,6 +696,12 @@
         "replies_failed": 0,
         "turns": 9
       },
+      "negative_experience_is_asked_again": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 7
+      },
       "neighbourhood_then_city": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -654,6 +738,12 @@
         "replies_failed": 0,
         "turns": 6
       },
+      "privacy_question_is_not_a_data_request": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 3
+      },
       "prompt_injection": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -665,6 +755,18 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 3
+      },
+      "recap_refused_again_and_again": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
+      "reminder_at_the_recap_counts_no_questions": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 8
       },
       "several_answers_at_once": {
         "field_accuracy": 1.0,
@@ -750,6 +852,12 @@
         "replies_failed": 0,
         "turns": 8
       },
+      "thanks_after_booking_changes_nothing": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
       "unlisted_nearby_town": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -791,8 +899,14 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 5
+      },
+      "year_alone_is_not_a_start_date": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 8
       }
     },
-    "total": 72
+    "total": 83
   }
 }

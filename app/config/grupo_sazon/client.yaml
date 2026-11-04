@@ -18,6 +18,8 @@ field_priority:
   - start_date
 
 max_attempts: 2
+# Replies in a row to the recap that neither confirm nor change it, before a recruiter takes over.
+max_recap_rounds: 3
 # "Entre semana" names days, not full or part time: whatever the model picked for it is asked
 # again, unless the answer also says how much (checked in code, on the candidate's own words).
 availability_days_only:
@@ -216,5 +218,17 @@ faq:
     question: What do you do with my data?
     keywords: [datos, privacidad, borrar, data, privacy, delete]
     answer:
-      es: Usamos tus respuestas solo para valorar tu candidatura. Si no sigues en el proceso, las borramos a los 6 meses salvo que aceptes que las guardemos.
-      en: We use your answers only to assess your application. If you don't continue, we delete them after 6 months unless you agree that we keep them.
+      es: Usamos tus respuestas solo para valorar tu candidatura. Si no sigues en el proceso, las borramos a los 6 meses salvo que aceptes que las guardemos. Para pedir acceso o borrado, escribe a privacidad@gruposazon.example.
+      en: We use your answers only to assess your application. If you don't continue, we delete them after 6 months unless you agree that we keep them. To ask for access or deletion, write to privacy@gruposazon.example.
+  - id: license_needed
+    question: Do I need a driving license, even if I deliver by bicycle?
+    keywords: [bici, bicicleta, patinete, bike, bicycle, necesito, need, hace, falta]
+    answer:
+      es: Para este puesto necesitamos carnet o licencia de conducir, también si sueles repartir en bici.
+      en: This job needs a driving license, even if you usually deliver by bicycle.
+  - id: languages
+    question: Which languages can we talk in? Do you speak English or Spanish?
+    keywords: [idioma, idiomas, ingles, espanol, castellano, language, languages, english, spanish, speak, hablas]
+    answer:
+      es: Puedes escribirme en español o en inglés, como prefieras.
+      en: You can write to me in Spanish or English, whichever you prefer.

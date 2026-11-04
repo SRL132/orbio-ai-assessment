@@ -26,3 +26,4 @@ slot_ordinals: the first,the second,the third,the fourth,the fifth
 months: January,February,March,April,May,June,July,August,September,October,November,December
 date_format: "{month} {day}"
 retype_hint: Sorry, by voice I sometimes mishear names and places. Could you type it in the text box below?
+data_request_received: Understood, we'll stop here. A recruiter will review your request, including deleting your data if that's what you want, and write to you within two working days.

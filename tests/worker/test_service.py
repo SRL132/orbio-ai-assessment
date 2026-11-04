@@ -89,6 +89,7 @@ def test_context_is_short_and_recent(config: ClientConfig, ports: Ports, clock: 
     spy = ContextSpy()
     service = make_service(config, replace(ports, extractor=spy), clock)
     cid = service.start_conversation()
+    spy.push(ex(yes_no=True))  # before consent, messages aren't kept, so they aren't context either
     for text in ("primero", "x" * 1000, "tercero", "cuarto", "quinto"):
         service.receive(cid, text)
         service.process_pending(cid)
@@ -97,6 +98,24 @@ def test_context_is_short_and_recent(config: ClientConfig, ports: Ports, clock: 
     assert len(last) == RECENT_MESSAGES
     assert all(len(text) <= RECENT_MESSAGE_CHARS for _, text in last)
     assert ("in", "x" * RECENT_MESSAGE_CHARS) in spy.contexts[2]
+
+
+def test_only_a_consent_answer_is_stored_before_consent(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    spy = ContextSpy()
+    service = make_service(config, replace(ports, extractor=spy), clock)
+    cid = service.start_conversation()
+    service.receive(cid, "soy Ana López y tengo moto")
+    service.process_pending(cid)
+    service.receive(cid, "Sí")
+    spy.push(ex(yes_no=True))
+    service.process_pending(cid)
+    service.receive(cid, "Ana López")
+    service.process_pending(cid)
+    assert ("in", REDACTED) in spy.contexts[1]
+    assert not any("soy Ana" in text for context in spy.contexts[1:] for _, text in context)
+    assert ("in", "Sí") in spy.contexts[2]
 
 
 def test_context_never_brings_redacted_data_back(
@@ -264,3 +283,22 @@ def test_opening_an_invite_while_a_turn_runs_keeps_it_pending(
     state = service.repo.get(cid)
     assert state is not None
     assert state.invite_pending is True
+
+
+def test_every_kind_of_write_can_be_replayed(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    """Override, notes and reminders all go through the log, not just candidate turns."""
+    service = make_service(config, ports, clock)
+    repo = service.repo
+    assert isinstance(repo, SqlRepository)
+    cid = service.start_conversation()
+    clock.advance(hours=config.reminder_hours[0] + 1)
+    assert service.send_due_reminders() == 1
+    assert repo.replay(cid) == repo.get(cid)
+    service.add_note(cid, "called them", "recruiter@example.com")
+    service.record_view(cid, "recruiter@example.com")
+    assert repo.replay(cid) == repo.get(cid)
+    service.override(cid, Status.QUALIFIED, "checked by phone", "recruiter@example.com")
+    assert repo.replay(cid) == repo.get(cid)
+    assert repo.rebuild_projections(check_only=True) == []

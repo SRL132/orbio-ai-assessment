@@ -297,6 +297,7 @@ class Harness:
             actual_note = state.candidate.meta[FieldName(name)].note
             check(actual_note == note, f"{name} note {actual_note} != {note}")
         failures.extend(_language_failures(messages, expect.reply_languages))
+        check(repo.replay(cid) == state, "the event log doesn't add up to the saved state")
         event_types = {e.type for e in repo.events(cid)}
         for event in expect.events_include:
             check(event in event_types, f"missing event {event}")

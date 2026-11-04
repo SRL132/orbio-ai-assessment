@@ -31,7 +31,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 ### 2. Review queue
 
 - The `needs_review` candidates, oldest first, so nobody waits too long.
-- Each item shows its **reason**: `human_requested`, `borderline_zone`, `field_failed_twice:<field>`, `ungrounded_answer:<field>` (the extracted value isn't in the candidate's words), `location_unverified:location` (the place lookup failed), `license_unclear`, `flagged_behaviour`.
+- Each item shows its **reason**: `human_requested`, `borderline_zone`, `field_failed_twice:<field>`, `ungrounded_answer:<field>` (the extracted value isn't in the candidate's words), `location_unverified:location` (the place lookup failed), `license_unclear`, `flagged_behaviour`, `data_request` (stop or delete their data), `interview_change` (a booked interview stays until you act), `recap_unconfirmed` (kept refusing the recap).
 - Actions: mark qualified, mark disqualified (reason required), or contact the candidate.
 
 ### 3. Candidate detail
