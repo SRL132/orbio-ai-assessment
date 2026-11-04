@@ -179,3 +179,36 @@ def test_a_run_can_have_its_own_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     rows = {r["run"]["name"]: r["summary"] for r in json.loads(results.read_text())}
     assert rows["A"]["complete"] is False  # stopped at its cap, after one scenario
     assert rows["B"]["complete"] is True
+
+
+def test_one_failed_run_keeps_the_others(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(compare, "RESULTS", tmp_path / "results")
+    matrix = tmp_path / "m.yaml"
+    matrix.write_text(
+        "budget_usd: 1\n"
+        "simulator_model: s/sim\n"
+        "runs:\n"
+        "  - {name: Fails, model: bad/one}\n"
+        "  - {name: Works, model: a/one}\n"
+    )
+    healthy = fake_openrouter(models=("bad/one", "a/one", "s/sim"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and json.loads(request.content)["model"] == "bad/one":
+            raise httpx.ConnectError("down")
+        return healthy.handle_request(request)
+
+    real = compare.run_suite
+
+    def fail_on_bad(harness, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if harness.responder._model == "bad/one":
+            raise RuntimeError("rate limited")
+        return real(harness, *args, **kwargs)
+
+    monkeypatch.setattr(compare, "run_suite", fail_on_bad)
+    args = ["--config", str(matrix), "--scenario", "no_license"]
+    assert compare.main(args, httpx.MockTransport(handler)) == 0
+    report = next((tmp_path / "results").glob("compare-*.md")).read_text()
+    assert "| Fails | scripted | failed" in report
+    assert "| Works | scripted | 0/1" in report or "| Works | scripted | 1/1" in report

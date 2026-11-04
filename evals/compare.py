@@ -16,6 +16,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import httpx
@@ -62,7 +63,7 @@ def available_models(api_key: str, transport: httpx.BaseTransport | None = None)
         return {str(model["id"]) for model in response.json()["data"]}
 
 
-def table(rows: list[tuple[Run, dict[str, Any]]], spent: float, budget: float) -> str:
+def table(rows: list[tuple[Run, dict[str, Any] | None]], spent: float, budget: float) -> str:
     lines = [
         f"# Model comparison · {datetime.now(UTC):%Y-%m-%d %H:%M} UTC",
         "",
@@ -74,6 +75,9 @@ def table(rows: list[tuple[Run, dict[str, Any]]], spent: float, budget: float) -
     ]
     for run, summary in rows:
         mode = "simulated" if run.simulate else "scripted"
+        if summary is None:
+            lines.append(f"| {run.name} | {mode} | failed: see the output | | | | |")
+            continue
         partial = "" if summary["complete"] else " (partial)"
         lines.append(
             f"| {run.name} | {mode} | {summary['passed']}/{summary['total']}{partial} | "
@@ -120,7 +124,32 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
     def spent() -> float:
         return sum(meter.cost_usd for meter in meters)
 
-    def execute(run: Run, meter: UsageMeter) -> tuple[Run, dict[str, Any]]:
+    RESULTS.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    finished: dict[int, tuple[Run, dict[str, Any] | None]] = {}
+    saving = Lock()
+
+    def save(index: int, row: tuple[Run, dict[str, Any] | None]) -> None:
+        """After every run, so a later failure can't lose results already paid for."""
+        with saving:
+            finished[index] = row
+            rows = [finished[i] for i in sorted(finished)]
+            (RESULTS / f"compare-{stamp}.md").write_text(
+                table(rows, spent(), budget), encoding="utf-8"
+            )
+            (RESULTS / f"compare-{stamp}.json").write_text(
+                json.dumps([{"run": r.model_dump(), "summary": s} for r, s in rows], indent=2)
+                + "\n"
+            )
+
+    def execute(index: int, run: Run, meter: UsageMeter) -> None:
+        try:
+            save(index, (run, summarize_run(run, meter)))
+        except Exception as exc:  # one provider's failure mustn't lose the other runs
+            print(f"{run.name}: failed ({type(exc).__name__}: {exc})", file=sys.stderr)
+            save(index, (run, None))
+
+    def summarize_run(run: Run, meter: UsageMeter) -> dict[str, Any]:
         simulator_model = matrix.simulator_model if run.simulate else None
         extractor, responder, simulator = openrouter_trio(
             settings, run.model, run.responder_model, simulator_model, meter, transport
@@ -135,19 +164,12 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
         )
         summary = summarize(results, complete)
         print(f"{run.name}: {summary['passed']}/{summary['total']} · ${spent():.3f} so far")
-        return run, summary
+        return summary
 
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
-        rows: list[tuple[Run, dict[str, Any]]] = list(pool.map(execute, matrix.runs, meters))
+        list(pool.map(execute, range(len(matrix.runs)), matrix.runs, meters))
 
-    RESULTS.mkdir(exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    report = table(rows, spent(), budget)
-    (RESULTS / f"compare-{stamp}.md").write_text(report, encoding="utf-8")
-    (RESULTS / f"compare-{stamp}.json").write_text(
-        json.dumps([{"run": r.model_dump(), "summary": s} for r, s in rows], indent=2) + "\n"
-    )
-    print("\n" + report)
+    print("\n" + table([finished[i] for i in sorted(finished)], spent(), budget))
     return 0
 
 

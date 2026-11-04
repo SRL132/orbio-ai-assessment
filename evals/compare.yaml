@@ -2,27 +2,17 @@
 # Run: uv run python -m evals.compare            (needs OPENROUTER_API_KEY in .env; costs money)
 #      uv run python -m evals.compare --check-models   (free: only checks the model ids exist)
 # Model ids are checked against your account's live OpenRouter model list before anything runs.
-# Second pass: repeats, then LLM-simulated candidates, each with its own spending cap.
-# Sonnet costs about 20x Haiku per conversation, so it gets fewer repeats (the rule in the plan).
+# Third pass: LLM-simulated candidates, the harder test. Sonnet is left out: it costs 3.6x Terra
+# per conversation without beating it on the scripted runs.
 
-budget_usd: 30.0
+budget_usd: 8.0
 # One cheap model plays the candidate in every simulated run, so all models face the same people.
-simulator_model: qwen/qwen3.8-flash
-simulator_reasoning: none
+# Not Qwen: it hit OpenRouter rate limits (429) with several runs side by side.
+simulator_model: google/gemini-3.5-flash-lite
+simulator_reasoning: low
 
 runs:
-  - {name: Gemini 3.5 Flash-Lite, model: google/gemini-3.5-flash-lite, reasoning: low, cap_usd: 1}
-  - {name: Gemini 3.5 Flash-Lite, model: google/gemini-3.5-flash-lite, reasoning: low, cap_usd: 1}
-  - {name: Gemini 3.8 Flash, model: google/gemini-3.8-flash, reasoning: low, cap_usd: 2}
-  - {name: Gemini 3.8 Flash, model: google/gemini-3.8-flash, reasoning: low, cap_usd: 2}
-  - {name: GPT-5.6 Terra, model: openai/gpt-5.6-terra, reasoning: low, cap_usd: 2}
-  - {name: GPT-5.6 Terra, model: openai/gpt-5.6-terra, reasoning: low, cap_usd: 2}
-  - {name: Claude Haiku 5.5, model: anthropic/claude-haiku-5.5, reasoning: low, cap_usd: 0.5}
-  - {name: Claude Haiku 5.5, model: anthropic/claude-haiku-5.5, reasoning: low, cap_usd: 0.5}
-  - {name: Claude Haiku 5.5, model: anthropic/claude-haiku-5.5, reasoning: low, cap_usd: 0.5}
-  - {name: Claude Sonnet 5.5, model: anthropic/claude-sonnet-5.5, reasoning: low, cap_usd: 5}
-  - {name: Gemini 3.5 Flash-Lite (simulated), model: google/gemini-3.5-flash-lite, simulate: true, reasoning: low, cap_usd: 2}
-  - {name: Gemini 3.8 Flash (simulated), model: google/gemini-3.8-flash, simulate: true, reasoning: low, cap_usd: 3}
-  - {name: GPT-5.6 Terra (simulated), model: openai/gpt-5.6-terra, simulate: true, reasoning: low, cap_usd: 3}
-  - {name: Claude Haiku 5.5 (simulated), model: anthropic/claude-haiku-5.5, simulate: true, reasoning: low, cap_usd: 1}
-  - {name: Claude Sonnet 5.5 (simulated), model: anthropic/claude-sonnet-5.5, simulate: true, reasoning: low, cap_usd: 5}
+  - {name: Gemini 3.5 Flash-Lite (simulated), model: google/gemini-3.5-flash-lite, simulate: true, reasoning: low, cap_usd: 1.5}
+  - {name: Gemini 3.8 Flash (simulated), model: google/gemini-3.8-flash, simulate: true, reasoning: low, cap_usd: 2.5}
+  - {name: GPT-5.6 Terra (simulated), model: openai/gpt-5.6-terra, simulate: true, reasoning: low, cap_usd: 2.5}
+  - {name: Claude Haiku 5.5 (simulated), model: anthropic/claude-haiku-5.5, simulate: true, reasoning: low, cap_usd: 1.5}
