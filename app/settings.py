@@ -110,9 +110,13 @@ class Settings(BaseSettings):
         "session_secret",
         "metrics_token",
         "ats_token",
+        "anthropic_input_usd_per_mtok",
+        "anthropic_output_usd_per_mtok",
+        "openai_input_usd_per_mtok",
+        "openai_output_usd_per_mtok",
         mode="before",
     )
     @classmethod
     def _empty_is_unset(cls, value: object) -> object:
-        """`KEY=` in .env means "not set", never an empty secret."""
+        """`KEY=` in .env means "not set", never an empty secret or a price that can't parse."""
         return None if isinstance(value, str) and not value.strip() else value

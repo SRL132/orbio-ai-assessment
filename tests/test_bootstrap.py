@@ -183,3 +183,20 @@ def test_openai_is_wired_with_its_settings() -> None:
     assert extractor is responder
     assert extractor._model == "gpt-x"
     assert extractor._prices == (1.0, 2.0)
+
+
+def test_the_example_env_file_loads_as_the_readme_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`cp .env.example .env` is the quick start: every blank value in it must mean "not set"."""
+    for name in (
+        "OPENAI_INPUT_USD_PER_MTOK",
+        "OPENAI_OUTPUT_USD_PER_MTOK",
+        "ANTHROPIC_INPUT_USD_PER_MTOK",
+        "ANTHROPIC_OUTPUT_USD_PER_MTOK",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    example = Path(__file__).parent.parent / ".env.example"
+    loaded = Settings(_env_file=example)  # type: ignore[call-arg]
+    assert loaded.openai_input_usd_per_mtok is None
+    assert loaded.openai_output_usd_per_mtok is None
+    assert loaded.anthropic_input_usd_per_mtok is None
+    assert loaded.anthropic_output_usd_per_mtok is None
