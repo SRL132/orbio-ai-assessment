@@ -80,6 +80,8 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Changing an earlier answer.** A value that wouldn't pass by itself never replaces an accepted one: "soy Ana" doesn't undo "Ana López". A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
 
+**Unsure values never replace answers on their own.** Only one value can wait for a yes at a time, so any other unsure value in that message is dropped: an earlier answer stands, and a missing one is asked for later. At the recap, a "no" that came back with unsure values, or several unsure changes at once, changes nothing, and the agent asks what to change. One unsure change on its own is confirmed first. A yes to "no license, right?" doesn't count if the same message gives a different answer ("carnet moto y coche"): it's checked as a correction.
+
 **Keeps refusing the recap.** After 3 replies in a row that neither confirm nor change it (`max_recap_rounds`), hand off to a recruiter (`recap_unconfirmed`) instead of repeating it.
 
 **Writes after the outcome.** Asking to move the interview or to talk to a person reaches the review queue, and any booking stands until a recruiter acts. After a knockout the rejection stands. Anything else gets the closing message.

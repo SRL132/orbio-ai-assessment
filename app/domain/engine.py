@@ -35,6 +35,7 @@ from app.domain.models import (
     InterviewBooked,
     InvalidReason,
     OfferSlots,
+    PendingConfirmation,
     Qualified,
     ReAsk,
     Reason,
@@ -386,7 +387,13 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
             return
         fields = rest
     applied = apply_extraction(
-        t.state, fields, t.config, t.now.date(), message=t.message, geo=_locate(t, fields)
+        t.state,
+        fields,
+        t.config,
+        t.now.date(),
+        message=t.message,
+        geo=_locate(t, fields),
+        disagrees=extraction.yes_no is False,
     )
     t.events.extend(applied.events)
     if applied.knockout:
@@ -397,6 +404,25 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
         _ask_next(t, extraction, applied)
 
 
+def _says_otherwise(pending: PendingConfirmation, fields: ExtractedFields, message: str) -> bool:
+    """A yes can't reject someone if the same message gives a different answer ("carnet moto y
+    coche" after "sin carnet, ¿correcto?"): that's a correction, checked like any other. A bare
+    "sí" is a yes, whatever value the model read into it."""
+    if pending.outcome != "knockout" or len(message.split()) < 2:
+        return False
+
+    def plain(value: object) -> str:
+        return str(getattr(value, "value", value)).casefold()
+
+    for attr in FIELD_GROUPS[pending.field]:
+        extracted = getattr(fields, attr)
+        if extracted is not None and (
+            attr not in pending.values or plain(extracted.value) != plain(pending.values[attr])
+        ):
+            return True
+    return False
+
+
 def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields | None:
     """The candidate answers our "did I get that right?" question. Returns the fields still to
     apply from this message, or None when this turn is fully handled."""
@@ -405,7 +431,11 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
         return extraction.fields
     group = FIELD_GROUPS[pending.field]
     # Code decides: a "yes" only confirms if the candidate actually wrote something.
-    said_yes = extraction.yes_no is True and has_words(t.message)
+    said_yes = (
+        extraction.yes_no is True
+        and has_words(t.message)
+        and not _says_otherwise(pending, extraction.fields, t.message)
+    )
     corrected = not said_yes and any(getattr(extraction.fields, attr) is not None for attr in group)
     others = [a for a in type(extraction.fields).model_fields if a not in group]
     if not said_yes and not corrected and any(getattr(extraction.fields, a) for a in others):
@@ -490,7 +520,7 @@ def _on_recap_reply(t: _Turn, extraction: ExtractionResult, applied: ApplyResult
             add_review_reason(t.state, Reason.RECAP_UNCONFIRMED)
             _close(t, Status.NEEDS_REVIEW)
             t.actions.append(HandOff(reason="review"))
-        elif extraction.yes_no is False:
+        elif extraction.yes_no is False or applied.doubted:
             t.say("ask_change")
         else:
             t.actions.append(Recap())
