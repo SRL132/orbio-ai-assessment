@@ -160,6 +160,20 @@ def test_an_ungrounded_knockout_does_not_reject_anyone(
     assert state.candidate.meta[FieldName.LICENSE].status == FieldStatus.NEEDS_REVIEW
 
 
+def test_every_part_of_a_field_is_checked_even_after_a_missing_one(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    """The city is known and only the zone is proposed: an invented zone is still caught."""
+    state.candidate.city = "Madrid"
+    fields = ex(zone="Chamberí").fields
+    apply_extraction(state, fields, config, TODAY, message="no sé qué decirte")
+    assert state.candidate.meta[FieldName.LOCATION].status == FieldStatus.NEEDS_REVIEW
+    assert (
+        ReviewReason(reason=Reason.UNGROUNDED_ANSWER, field=FieldName.LOCATION)
+        in state.review_reasons
+    )
+
+
 def test_quotes_match_ignoring_case_accents_and_punctuation(
     state: ConversationState, config: ClientConfig
 ) -> None:
