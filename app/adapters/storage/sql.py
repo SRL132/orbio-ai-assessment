@@ -55,6 +55,7 @@ from app.domain.models import (
     ConversationState,
     DomainEvent,
     EventType,
+    LlmOutput,
     Outbound,
     StoredMessage,
 )
@@ -175,6 +176,21 @@ class EventRow(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
 
 
+class LlmOutputRow(Base):
+    """Raw LLM replies, if capture is on. Personal data: erased with the conversation."""
+
+    __tablename__ = "llm_outputs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(128))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+
+
 class ChannelContactRow(Base):
     """Who a WhatsApp number belongs to: their latest conversation."""
 
@@ -277,7 +293,7 @@ def erase_conversations(
     time (the event log can't be replayed from a part of itself), and leave proof it happened.
     `rows` have the conversation's id, status and updated_at. Runs in the caller's transaction."""
     ids = [row.id for row in rows]
-    for table in (EventRow, MessageRow, InterviewRow, ChannelContactRow):
+    for table in (EventRow, MessageRow, InterviewRow, ChannelContactRow, LlmOutputRow):
         session.execute(delete(table).where(table.conversation_id.in_(ids)))
     session.execute(delete(ConversationRow).where(ConversationRow.id.in_(ids)))
     session.add_all(
@@ -631,6 +647,36 @@ class SqlRepository:
                 )
             ).all()
             return [UUID(i) for i in ids]
+
+    def save_llm_outputs(self, conversation_id: UUID, outputs: list[LlmOutput]) -> None:
+        now = self._clock.now()
+        with self._sessions.begin() as session:
+            session.add_all(
+                LlmOutputRow(
+                    id=str(uuid4()),
+                    conversation_id=str(conversation_id),
+                    client_id=self._client_id,
+                    kind=output.kind,
+                    provider=output.provider,
+                    model=output.model[:128],
+                    text=output.text,
+                    created_at=now,
+                )
+                for output in outputs
+            )
+
+    def llm_outputs(self, conversation_id: UUID) -> list[LlmOutput]:
+        row = LlmOutputRow
+        query = (
+            select(row)
+            .where(row.conversation_id == str(conversation_id), row.client_id == self._client_id)
+            .order_by(row.created_at, row.id)
+        )
+        with self._sessions() as session:
+            return [
+                LlmOutput(kind=r.kind, provider=r.provider, model=r.model, text=r.text)
+                for r in session.scalars(query)
+            ]
 
     def events(self, conversation_id: UUID) -> list[DomainEvent]:
         return [event for _, event in self.timeline(conversation_id)]

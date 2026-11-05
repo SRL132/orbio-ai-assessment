@@ -10,7 +10,7 @@ from app import cli
 from app.adapters.clock.clocks import SystemClock
 from app.adapters.storage.sql import ConversationRow, SqlRepository, make_engine
 from app.api.auth import verify_password
-from app.domain.models import ConversationState
+from app.domain.models import ConversationState, LlmOutput
 
 
 def test_hash_password_prints_a_verifiable_hash(
@@ -64,6 +64,26 @@ def test_rebuild_state_finds_then_repairs_damage(
     assert str(conversation_id) in capsys.readouterr().out
     assert cli.main(["cli", "rebuild-state"]) == 0
     assert cli.main(["cli", "rebuild-state", "--check"]) == 0
+
+
+def test_llm_outputs_prints_a_conversations_raw_replies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    url = f"sqlite:///{tmp_path / 'c.db'}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    engine = make_engine(url)
+    repo = SqlRepository(engine, SystemClock(), "grupo_sazon")
+    state = ConversationState(client_id="grupo_sazon")
+    repo.create(state, [], [])
+    repo.save_llm_outputs(
+        state.conversation_id,
+        [LlmOutput(kind="extract", provider="p", model="m", text="the raw reply")],
+    )
+    engine.dispose()
+
+    assert cli.main(["cli", "llm-outputs", str(state.conversation_id)]) == 0
+
+    assert "the raw reply" in capsys.readouterr().out
 
 
 def test_unknown_command_shows_usage(capsys: pytest.CaptureFixture[str]) -> None:

@@ -16,6 +16,7 @@ from app.domain.models import (
     DomainEvent,
     ExtractionResult,
     GeoPlace,
+    LlmOutput,
     Outbound,
     ReAsk,
     StoredMessage,
@@ -132,6 +133,12 @@ class Repository(Protocol):
         ...
 
     def events(self, conversation_id: UUID) -> list[DomainEvent]: ...
+
+    def save_llm_outputs(self, conversation_id: UUID, outputs: list[LlmOutput]) -> None:
+        """Keep raw LLM replies for debugging. They are erased with the conversation."""
+        ...
+
+    def llm_outputs(self, conversation_id: UUID) -> list[LlmOutput]: ...
 
     def timeline(self, conversation_id: UUID) -> list[tuple[datetime, DomainEvent]]:
         """Every event with its timestamp, oldest first."""

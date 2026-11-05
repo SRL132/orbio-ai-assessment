@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from app import capture
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import ScriptedExtractor, TemplateResponder
@@ -346,3 +347,94 @@ def test_no_version_records_nothing(
     state = service.repo.get(cid)
     assert state is not None
     assert state.agent_version is None
+
+
+class ReportingExtractor:
+    """Stands in for an LLM adapter: reports the raw reply, as the real adapters do."""
+
+    def __init__(self, result: ExtractionResult) -> None:
+        self.result = result
+
+    def extract(self, state, text, config, today) -> ExtractionResult:
+        capture.report("extract", "test", "test-model", f"raw reply to: {text}")
+        return self.result
+
+
+def capturing_service(
+    config: ClientConfig, ports: Ports, clock: FakeClock, result: ExtractionResult, on: bool = True
+) -> ScreeningService:
+    service = make_service(config, replace(ports, extractor=ReportingExtractor(result)), clock)
+    service.capture_llm_outputs = on
+    return service
+
+
+def consented(service: ScreeningService):
+    cid = service.start_conversation()
+    state = service.repo.get(cid)
+    assert state is not None
+    state.stage = Stage.COLLECTING
+    service.repo.save_turn(state, [], [], [])
+    return cid
+
+
+def test_raw_llm_replies_are_kept_when_capture_is_on(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = capturing_service(config, ports, clock, ExtractionResult(intent="answer"))
+    cid = consented(service)
+    service.receive(cid, "me llamo Ana")
+    service.process_pending(cid)
+
+    assert [(o.kind, o.provider, o.model, o.text) for o in service.repo.llm_outputs(cid)] == [
+        ("extract", "test", "test-model", "raw reply to: me llamo Ana")
+    ]
+
+
+def test_raw_llm_replies_are_not_kept_by_default(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = capturing_service(config, ports, clock, ExtractionResult(intent="answer"), on=False)
+    cid = consented(service)
+    service.receive(cid, "me llamo Ana")
+    service.process_pending(cid)
+
+    assert service.repo.llm_outputs(cid) == []
+
+
+def test_a_redacted_message_leaves_no_raw_reply(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    result = ExtractionResult(intent="answer", sensitive_data=True)
+    service = capturing_service(config, ports, clock, result)
+    cid = consented(service)
+    service.receive(cid, "mi DNI es 12345678Z")
+    service.process_pending(cid)
+
+    assert all(m.text != "mi DNI es 12345678Z" for m in service.repo.messages(cid))  # it's redacted
+    assert service.repo.llm_outputs(cid) == []
+
+
+def test_a_message_sent_before_consent_leaves_no_raw_reply(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = capturing_service(config, ports, clock, ExtractionResult(intent="answer"))
+    cid = service.start_conversation()
+    service.receive(cid, "soy Ana, vivo en la calle Mayor 3")
+    service.process_pending(cid)
+
+    assert all("calle Mayor" not in m.text for m in service.repo.messages(cid))  # it's redacted
+    assert service.repo.llm_outputs(cid) == []
+
+
+def test_erasing_a_conversation_erases_its_raw_replies(
+    config: ClientConfig, ports: Ports, clock: FakeClock
+) -> None:
+    service = capturing_service(config, ports, clock, ExtractionResult(intent="answer"))
+    cid = consented(service)
+    service.receive(cid, "me llamo Ana")
+    service.process_pending(cid)
+    assert service.repo.llm_outputs(cid)
+
+    service.erase(cid, "rec@example.com")
+
+    assert service.repo.llm_outputs(cid) == []

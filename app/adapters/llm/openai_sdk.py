@@ -15,7 +15,7 @@ from typing import Any, Literal
 import openai
 from openai.types.chat import ChatCompletion
 
-from app import metrics
+from app import capture, metrics
 from app.adapters.llm.anthropic_sdk import RefusalError
 from app.adapters.llm.prompting import (
     extractor_system,
@@ -102,6 +102,7 @@ class OpenAILLM:
         )
         self._log(kind, response, started)
         message = response.choices[0].message
+        capture.report(kind, "openai", self._model, str(message.content or message.refusal or ""))
         if message.refusal:
             raise RefusalError("refusal")
         if not message.content:
