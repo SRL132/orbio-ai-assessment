@@ -207,6 +207,35 @@ def test_sensitive_data_is_flagged_for_redaction(chat: Chat) -> None:
     assert result.replies[0] == chat.config.template("es", "sensitive_data")
 
 
+def test_a_redacted_turn_keeps_no_quote_of_the_message(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Ana López"))
+    extraction = ex(has_license=True, vehicle=Vehicle.MOTO, sensitive_data=True)
+    assert extraction.fields.vehicle is not None
+    extraction.fields.vehicle.quote = "moto, mi DNI es 12345678Z"
+
+    chat.say(extraction, text="moto, mi DNI es 12345678Z")
+
+    assert chat.state.candidate.vehicle == Vehicle.MOTO
+    assert "12345678Z" not in chat.state.model_dump_json()
+    assert chat.state.candidate.meta[FieldName.FULL_NAME].quote == "Ana López"  # an earlier turn
+
+
+def test_a_value_waiting_for_confirmation_keeps_no_quote_of_a_redacted_message(chat: Chat) -> None:
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Marta Puig", has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Barcelona", zone="Gràcia"))
+    chat.say(ex(availability=[Availability.FULL_TIME], schedule=[Schedule.EVENING]))
+    extraction = ex(full_name="Mai Mai", sensitive_data=True)
+    assert extraction.fields.full_name is not None
+    extraction.fields.full_name.quote = "Mai Mai, DNI 12345678Z"
+
+    chat.say(extraction, text="Mai Mai, DNI 12345678Z")
+
+    assert chat.state.confirming is not None
+    assert "12345678Z" not in chat.state.model_dump_json()
+
+
 def test_a_data_request_stops_the_screening_and_goes_to_review(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López"))

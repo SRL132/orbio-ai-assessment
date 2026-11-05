@@ -81,6 +81,18 @@ def test_wrong_expectation_is_reported(config: ClientConfig) -> None:
     assert any("status in_progress" in f for f in result.failures)
 
 
+def test_text_that_was_stored_is_reported(config: ClientConfig) -> None:
+    scenario = Scenario(
+        id="x",
+        description="",
+        persona="",
+        steps=["Sí", "Ana López"],
+        expect=Expect(status="in_progress", never_stored=["Ana López"]),
+    )
+    result = Harness(config, KeywordExtractor(), TemplateResponder()).run_scripted(scenario)
+    assert "stored 'Ana López'" in result.failures
+
+
 def test_regressions_ratchet(config: ClientConfig) -> None:
     harness = Harness(config, KeywordExtractor(), TemplateResponder())
     baseline = summarize([harness.run_scripted(s) for s in load_scenarios(["no_license"])])
