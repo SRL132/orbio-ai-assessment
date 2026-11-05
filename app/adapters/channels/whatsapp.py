@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import re
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
