@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -27,6 +28,7 @@ from app.domain.models import (
     EventType,
     ExtractedFields,
     ExtractionResult,
+    FieldMeta,
     FieldName,
     FieldStatus,
     GeoLookup,
@@ -66,6 +68,7 @@ from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
 from app.domain.validators import (
+    COUNTRY_READBACK,
     ZONE_READBACK,
     final_review_reasons,
     is_known_place,
@@ -104,6 +107,15 @@ class _Turn:
     @classmethod
     def begin(cls, state: ConversationState, config: ClientConfig, ports: Ports) -> _Turn:
         return cls(state.model_copy(deep=True), state, config, ports, ports.clock.now())
+
+    @property
+    def today(self) -> date:
+        """The date where the candidate is, not in UTC: an evening in Mexico is already tomorrow
+        there. Until their location is known, the client's default timezone."""
+        location_id = self.state.candidate.location_id
+        location = self.config.location(location_id) if location_id else None
+        zone = location.timezone if location else self.config.default_timezone
+        return self.now.astimezone(ZoneInfo(zone)).date()
 
     def say(self, template: SayTemplate) -> None:
         self.actions.append(Say(template=template))
@@ -157,7 +169,7 @@ def turn(
     t.state.last_inbound_at = t.now
     t.state.reminders_sent = 0
     try:
-        extraction = ports.extractor.extract(t.state, message.text, config, t.now.date())
+        extraction = ports.extractor.extract(t.state, message.text, config, t.today)
     except LLMUnavailable as exc:
         return _hold_for_retry(t, exc)
     except Exception as exc:  # graceful failure: ask again, never count it against the candidate
@@ -196,7 +208,7 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
     """Called by the scheduler. Sends the next reminder, or marks the candidate abandoned."""
     now = ports.clock.now()
     if (
-        state.status != Status.IN_PROGRESS
+        not _waits_for_candidate(state)
         or state.next_reminder_at is None
         or now < state.next_reminder_at
     ):
@@ -215,6 +227,12 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
             t.state.next_reminder_at = base + timedelta(
                 hours=hours[-1] + config.abandon_after_hours
             )
+    elif t.state.stage == Stage.SCHEDULING:
+        # Still qualified, so not abandoned: a person takes over booking the interview. Nothing is
+        # sent, since this far along WhatsApp's window has usually closed.
+        t.state.offered_slots = []
+        t.event(EventType.NO_SLOT_PICKED)
+        _send_to_review(t, Reason.NO_SLOT_PICKED)
     else:
         drop = t.state.awaiting.value if t.state.awaiting else t.state.stage.value
         t.state.dropped_at = drop
@@ -289,7 +307,7 @@ def _on_closed(t: _Turn, message: InboundMessage) -> TurnResult:
     may be such a request, so it isn't answered as if it weren't: no LLM means retry it later,
     and a bad answer means asking them to write it again, as in an open conversation."""
     try:
-        extraction = t.ports.extractor.extract(t.state, message.text, t.config, t.now.date())
+        extraction = t.ports.extractor.extract(t.state, message.text, t.config, t.today)
     except LLMUnavailable as exc:
         return _hold_for_retry(t, exc)
     except Exception as exc:
@@ -395,7 +413,7 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
         t.state,
         fields,
         t.config,
-        t.now.date(),
+        t.today,
         message=t.message,
         geo=_locate(t, fields),
         disagrees=extraction.yes_no is False,
@@ -425,10 +443,13 @@ def _names_the_city_read_back(
 def _insists_on_the_name(
     pending: PendingConfirmation, fields: ExtractedFields, message: str
 ) -> bool:
+    """They reject our reading, but repeat the name we read: the zone we took it for, or the city
+    whose country we asked about."""
+    read_as = {ZONE_READBACK: "zone", COUNTRY_READBACK: "city"}.get(pending.note or "")
     return (
-        pending.note == ZONE_READBACK
+        read_as is not None
         and fields.city is not None
-        and normalize(fields.city.value) == normalize(str(pending.values["zone"]))
+        and normalize(fields.city.value) == normalize(str(pending.values[read_as]))
         and is_grounded(fields, pending.field, message)
     )
 
@@ -487,8 +508,9 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
         t.state.confirming = None
         t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="no")
         if _insists_on_the_name(pending, extraction.fields, t.message):
-            # "No, la ciudad de Salamanca": it isn't the neighbourhood, and the config can't tell
-            # us more, so a person decides. Asking again would only read the same thing back.
+            # "No, la ciudad de Salamanca" or "no, Guadalajara de España": it isn't what we read,
+            # and the config can't tell us more, so a person decides. Asking again would only read
+            # the same thing back.
             give_up_on_field(t.state, pending.field, t.config)
             t.event(EventType.FIELD_GAVE_UP, field=pending.field.value)
             return extraction.fields.model_copy(update=dict.fromkeys(group))
@@ -671,6 +693,9 @@ def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
     choice = extraction.slot_choice
     if choice is not None and 1 <= choice <= len(state.offered_slots) and calendar:
         slot = state.offered_slots[choice - 1]
+        if slot <= t.now:  # they came back after it passed: never book the past
+            _reoffer_expired_slots(t)
+            return
         if calendar.book(location_id, slot, state.conversation_id):
             state.interview_at = slot
             state.offered_slots = []
@@ -696,6 +721,9 @@ def _on_scheduling(t: _Turn, extraction: ExtractionResult) -> None:
         state.no_slot_fits = True  # the offer stays open: they can still pick one
         t.event(EventType.NO_SLOT_FITS)
         t.say("no_slot_fits")
+        return
+    if any(slot <= t.now for slot in state.offered_slots):  # don't show them a stale list again
+        _reoffer_expired_slots(t)
         return
     if choice is not None or extraction.intent in _ANSWER_INTENTS:
         t.say("slot_unclear")  # "7", or a time that isn't on the list: say why we ask again
@@ -743,7 +771,25 @@ def _disqualify(t: _Turn, reason: Reason) -> None:
     t.actions.append(Disqualify(reason=reason))
 
 
+def _start_date_passed(t: _Turn) -> bool:
+    """A date can pass between the answer and the recap (they came back days later). Ask again:
+    it's nobody's fault, so it doesn't count as a failed attempt."""
+    candidate = t.state.candidate
+    if candidate.start_date is None or candidate.start_date >= t.today:
+        return False
+    candidate.start_date = None
+    candidate.meta[FieldName.START_DATE] = FieldMeta()
+    t.state.stage = Stage.COLLECTING
+    t.state.awaiting = FieldName.START_DATE
+    t.event(EventType.START_DATE_EXPIRED)
+    t.say("start_date_passed")
+    t.actions.append(AskField(field=FieldName.START_DATE))
+    return True
+
+
 def _finalize(t: _Turn) -> None:
+    if _start_date_passed(t):
+        return
     for reason in final_review_reasons(t.state.candidate, t.config):
         add_review_reason(t.state, reason)
     if t.state.review_reasons:
@@ -753,6 +799,13 @@ def _finalize(t: _Turn) -> None:
         _close(t, Status.QUALIFIED)
         t.actions.append(Qualified())
         _offer_slots(t)
+
+
+def _reoffer_expired_slots(t: _Turn) -> None:
+    t.state.no_slot_fits = False
+    t.event(EventType.SLOTS_EXPIRED)
+    t.say("slots_expired")
+    _offer_slots(t)
 
 
 def _offer_slots(t: _Turn) -> None:
@@ -819,11 +872,19 @@ def _finish(t: _Turn, schedule_reminder: bool = True, hold: bool = False) -> Tur
     )
 
 
+def _waits_for_candidate(state: ConversationState) -> bool:
+    """The screening is open, or they're qualified and haven't picked an interview slot yet."""
+    return state.status == Status.IN_PROGRESS or state.stage == Stage.SCHEDULING
+
+
 def _schedule_reminder(t: _Turn) -> None:
-    """While the screening is open, the next reminder counts from the candidate's last message."""
+    """While we wait for the candidate, the next reminder counts from their last message."""
+    if not _waits_for_candidate(t.state):
+        t.state.next_reminder_at = None  # e.g. they just booked: nothing left to chase
+        return
     hours = t.config.reminders_for(t.state.channel)
     base = t.state.last_inbound_at or t.state.started_at
-    if t.state.status != Status.IN_PROGRESS or not hours or base is None:
+    if not hours or base is None:
         return
     t.state.next_reminder_at = base + timedelta(hours=hours[0])
     t.actions.append(ScheduleReminder(at=t.state.next_reminder_at))

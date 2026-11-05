@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 67,
+    "passed": 71,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -170,7 +170,7 @@
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
-        "turns": 16
+        "turns": 22
       },
       "invalid_date_then_valid": {
         "field_accuracy": 1.0,
@@ -298,6 +298,18 @@
         "replies_failed": 0,
         "turns": 7
       },
+      "shared_city_confirms_the_country": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 5
+      },
+      "shared_city_in_the_other_country_reaches_a_person": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 7
+      },
       "shares_id_number": {
         "field_accuracy": 1.0,
         "passed": true,
@@ -335,6 +347,18 @@
         "turns": 9
       },
       "silence_5_returns_after_abandoned_at_recap": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
+      },
+      "silence_5b_start_date_passes_while_away": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 11
+      },
+      "silence_5c_qualified_but_picks_no_slot": {
         "field_accuracy": 1.0,
         "passed": true,
         "replies_failed": 0,
@@ -407,7 +431,7 @@
         "turns": 5
       }
     },
-    "total": 67
+    "total": 71
   },
   "openrouter/openai/gpt-5.6-terra/scripted": {
     "field_accuracy": 1.0,

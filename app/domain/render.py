@@ -41,11 +41,12 @@ from app.domain.models import (
     SayTemplate,
     Schedule,
     ScheduleReminder,
+    Stage,
     Vehicle,
 )
 from app.domain.policy import missing_count
 from app.domain.ports import Ports
-from app.domain.validators import ZONE_READBACK
+from app.domain.validators import COUNTRY_READBACK, ZONE_READBACK
 
 _EMOJI = re.compile("[\U0001f300-\U0001faff☀-➿]")
 
@@ -131,6 +132,17 @@ def render(
                             city=str(pending.values["city"]),
                         )
                     )
+                elif pending is not None and pending.note == COUNTRY_READBACK:
+                    location = config.location(str(pending.values["location_id"]))
+                    replies.append(
+                        fill(
+                            "confirm_country",
+                            city=str(pending.values["city"]),
+                            country=config.country_names[location.country][lang]
+                            if location
+                            else "",
+                        )
+                    )
                 elif (
                     pending is not None
                     and pending.field == FieldName.LOCATION
@@ -157,7 +169,10 @@ def render(
 
 
 def _reminder_key(number: int, state: ConversationState) -> str:
-    """The reminder that reads right: at the recap no question is left, only the confirmation."""
+    """The reminder that reads right: at the recap no question is left, only the confirmation,
+    and a qualified candidate only has to pick an interview slot."""
+    if state.stage == Stage.SCHEDULING:
+        return f"reminder_{number}_slots"
     missing = missing_count(state.candidate)
     suffix = {0: "_recap", 1: "_one"}.get(missing, "")
     return f"reminder_{number}{suffix}"
@@ -325,6 +340,7 @@ _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "recap": _COMMON | {"summary"},
     "confirm_value": _COMMON | {"value"},
     "confirm_zone": _COMMON | {"zone", "city"},
+    "confirm_country": _COMMON | {"city", "country"},
     "confirm_outside_area": _COMMON | {"value"},
     "offer_slots": _COMMON | {"slots"},
     "interview_booked": _COMMON | {"when"},
@@ -357,7 +373,7 @@ def required_templates(config: ClientConfig) -> set[str]:
         *(
             f"reminder_{n}{suffix}"
             for n in range(1, reminders + 1)
-            for suffix in ("", "_one", "_recap")
+            for suffix in ("", "_one", "_recap", "_slots")
         ),
         "answer_unknown",
         "handoff_human",
@@ -365,6 +381,7 @@ def required_templates(config: ClientConfig) -> set[str]:
         "recap",
         "confirm_value",
         "confirm_zone",
+        "confirm_country",
         "confirm_outside_area",
         "qualified",
         "offer_slots",

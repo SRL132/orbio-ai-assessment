@@ -641,7 +641,8 @@ class SqlRepository:
             ids = session.scalars(
                 select(ConversationRow.id).where(
                     ConversationRow.client_id == self._client_id,
-                    ConversationRow.status == "in_progress",
+                    # "qualified": still choosing an interview slot (others have no reminder set)
+                    ConversationRow.status.in_(("in_progress", "qualified")),
                     ConversationRow.next_reminder_at.is_not(None),
                     ConversationRow.next_reminder_at <= now,
                 )

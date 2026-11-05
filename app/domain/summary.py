@@ -34,6 +34,7 @@ REASON_TEXT: dict[str, str] = {
     Reason.LOCATION_UNVERIFIED: "place could not be checked (lookup failed)",
     Reason.INTERVIEW_CHANGE: "asked to change the interview",
     Reason.RECAP_UNCONFIRMED: "did not confirm the recap after several tries",
+    Reason.NO_SLOT_PICKED: "qualified, but did not pick an interview slot after the reminders",
 }
 
 

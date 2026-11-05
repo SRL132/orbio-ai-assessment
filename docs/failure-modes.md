@@ -1,0 +1,112 @@
+# Failure modes: audit
+
+> Known ways agents like this fail, checked against this code on 2026-11-06 at commit `c430230` (928 tests pass, 8 skipped; offline evals 67/67). Gaps 1–5 have since been fixed, with tests; the rest are still open. Design: [`process-design.md`](process-design.md). Pilot: [`pilot-plan.md`](pilot-plan.md).
+
+No list can prove every edge case is covered. Synthetic scenarios only find the failures someone imagined ([`real-data-evals.md`](real-data-evals.md) says the same), so this one lowers the risk and the pilot's knockout review remains the real test.
+
+**How each finding was checked**
+
+- **Reproduced:** run on the real engine or validators with scripted extractions and no LLM. It shows what the code does once the model has read a message that way, not how often a live model reads it that way.
+- **Read:** seen in the code, not run.
+- **Needs live test:** depends on how a real model behaves. No live evals were run for this audit.
+
+## Summary
+
+Hard decisions are well protected: the model can't qualify or reject anyone by itself. The gaps found are mostly elsewhere: time, place names shared across countries, conversations with no upper bound, the free-text reply check, and promises that depend on people.
+
+## Gaps to fix
+
+### Before any real candidate
+
+Gaps 1–5 are fixed: the Evidence column shows what happened before the fix. Live evals haven't been re-run on them. Two limits remain: the `shared_name` flags are set by hand, and someone in Mexico who gives a date before their location is read on the default timezone ([appendix E](process-design-appendix.md#e-conversation-rules-in-detail)).
+
+| # | Failure | Evidence | Fix |
+| --- | --- | --- | --- |
+| 1 | Fixed. **A city name shared by two countries picks the wrong country.** Guadalajara, León and Mérida are real Spanish cities, but the config serves them only in Mexico. A Spanish postal code doesn't change the result | Reproduced: `Guadalajara` + `19001` gives `mx-guadalajara`. Also `Córdoba` + `94500` (Veracruz) gives `es-cordoba`, and `Valladolid` + `97780` (Yucatán) gives `es-valladolid` | In `validate_location`, a postal code that doesn't match the city's prefixes must not pass silently. Read back the country when a name exists in both, and send it to review if it's still unclear. A Madrid-only pilot config would avoid this, but the rollout to both countries wouldn't |
+| 2 | Fixed. **"Today" is the UTC date.** `engine.turn` passes `now.date()` to the extractor and validators, though locations have timezones. Every evening in Mexico the date is a day ahead | Reproduced: at 20:00 on 6 Nov in Mexico City the extractor is told 7 Nov, and "6 Nov" is rejected as `in_past`. "Mañana" would also land a day late | Work out the date in the candidate's timezone: the location's once known, otherwise a client default |
+| 3 | Fixed. **An interview can be booked in the past.** Offered slots never expire, and neither `_on_scheduling` nor `SqlCalendar.book` checks the time | Reproduced with a stub calendar that, like the real `book`, has no time check: 30 days later, "la 1" replies "¡Hecho! Tu entrevista es el mié 4/11" | Refuse a past slot and offer fresh ones |
+| 4 | Fixed. **A qualified candidate who doesn't pick a slot is never chased.** Reminders only run for `in_progress`, and the status is already `qualified` | Reproduced: `next_reminder_at=None` at the scheduling stage | Send the usual reminders during scheduling. If there's still no answer, hand off to a recruiter |
+| 5 | Fixed. **A start date can be in the past by the time they qualify.** It's checked when given, not at the end | Reproduced: a candidate back at the recap 10 days later says yes and qualifies with a start date 10 days old | Re-check the date in `_finalize`, and ask again if it has passed |
+| 6 | **The reply check can't see content.** `check_reply` only checks length, question count and, on voice, emoji and "·" lists. The responder's free text is the one place an invented promise can reach a candidate, and a wrong job statement is a pilot stop condition | Reproduced: it passes "¡Estás contratada! Te pagamos 2.000 €", "Soy una persona real, no un bot" and a line rejecting someone for nationality. Whether a live model can be led to write these needs a live test | See [trade-off T1](#trade-offs) |
+| 7 | **A misheard "yes" can reject someone on voice.** Name and location are always read back, but license isn't, so one speech recognition error rejects at once. On chat too, location is now read back before a knockout and license isn't | Reproduced: `has_license=false` at 0.95 disqualifies at once on both channels, while a location knockout asks first | See [trade-off T2](#trade-offs) |
+| 8 | **"I can't talk now" counts as a failed answer.** These candidates are often on a delivery. The extractor has no intent for it, and `other` counts as an attempt | Reproduced given `intent=other`: two "estoy conduciendo, luego te digo" send the license field to `needs_review` as `field_failed_twice`. The live intent needs a test: it may read as `data_request` ("no puedo seguir"), which is worse because it closes the screening. No scenario covers either | Add a `deferral` intent: no attempt counted, a short "no problem" reply, and reminders count from it |
+| 9 | **Sensitive data detection is too narrow and relies on the model.** The prompt lists ID, social security, bank and health data, but the process design also excludes nationality. Immigration status, religion, ethnicity and criminal records ("me lo quitaron por alcohol") aren't listed. The DNI/NIE/CURP/IBAN regex exists only in the offline `KeywordExtractor` | Reproduced: a DNI the model doesn't flag is stored in clear (`redact_inbound=False`). The prompt list was read | Run the regex in the engine as well as the model's flag, and widen the prompt's list. This changes a prompt, so it needs the live evals |
+| 10 | **Nothing covers minimum age.** A Spanish AM moped license is available at 15, while work under 16 is prohibited, and under-18s can't work nights ([ET art. 6, secondary](https://loentiendo.com/articulo-6-del-estatuto-de-los-trabajadores/), [AM age, secondary](https://www.race.es/carnet-moto-am)). So "has a license" doesn't imply old enough, and a 17-year-old can pick "evening" | Read: no age handling in the app, templates, FAQ or scenarios. Not legal advice; Mexico's rules weren't checked | See [trade-off T3](#trade-offs) |
+
+### Before WhatsApp or scale
+
+| # | Failure | Evidence | Fix |
+| --- | --- | --- | --- |
+| 11 | **Conversations have no upper limit.** Off-topic messages, questions, an unclear consent and an unclear slot choice all repeat forever, each one a paid LLM call and, on WhatsApp, a paid reply ([OWASP LLM10](https://invicti.com/blog/web-security/owasp-top-10-risks-llm-security-2025)) | Reproduced: 200 turns of each and all still open. The per-minute limit is only on the web chat route, not the WhatsApp path. `invite_only` is off by default | A budget per conversation in the client config, then hand off or close. Apply the rate limit to WhatsApp too |
+| 12 | **A WhatsApp delivery failure changes nothing.** `status: failed` only writes a log line, so the candidate later looks like they went silent | Read: `api/whatsapp.py`. Failures also arrive after the send was accepted ([secondary](https://chakrahq.com/article/whatsapp-api-error-codes-help-explained/amp/)) | Record an event and a metric. A candidate we can't reach goes to review, and analytics shouldn't count them as a drop-off |
+| 13 | **Reminders ignore local night.** A message at 23:30 in Madrid gets a reminder at 01:30 | Reproduced | Push reminders to the next morning, except where that would miss the WhatsApp window: then send earlier, not later |
+| 14 | **Every non-text message gets "I only read text".** That includes reactions and location pins, and each reply costs money. A pin is a reasonable answer to "where do you live?" | Read: `parse_webhook` turns any other type into `text=None`, and `reply_text_only` has no cap. Payload shapes weren't checked against Meta's docs | Ignore reactions, reply once per conversation or per burst, and see [T4](#trade-offs) for voice notes |
+| 15 | **"hola" after a booked interview opens a new conversation.** Later messages about the interview then land in the new consent flow, not the one holding the booking | Read: `_continues` restarts on an exact greeting once a chat has ended | Don't restart while a future interview exists |
+| 16 | **Records of qualified and needs-review candidates are never deleted automatically.** Nor are those who agreed to stay on file. Retention covers only disqualified and abandoned | Read: `ERASABLE` in `retention.py`. It matches the appendix, so it's a design gap, not a bug | Get periods from counsel for each status and for keep-on-file, then add them to the config |
+| 17 | **Promises depend on things nobody is alerted to.** Candidates are told a recruiter replies in 2 working days, but Alertmanager has no receiver. An override doesn't notify the candidate either | Read: already documented in `architecture.md`, except the override, where `service.override` has no visible send | Add an alert receiver before the pilot, and show "tell the candidate" as an open task after an override |
+| 18 | **You can't tell which model decided.** `agent_version` keeps the primary model even for a fallback turn, and Haiku fails about 5% of scenarios against Terra's 0.5% | Read: `bootstrap.agent_version` says so | Record the provider on the turn's events, and put knockouts decided by the fallback in front of a recruiter |
+
+### Test gaps
+
+| Blind spot | Why it matters | Add |
+| --- | --- | --- |
+| Voice evals use typed transcripts | Clean test input hides clipping, restarts and accent-specific errors ([secondary](https://getautonoma.com/blog/how-to-test-a-voice-ai-agent)). Speech recognition error rates have been shown to differ widely by speaker group ([Koenecke et al., PNAS 2020](https://econpapers.repec.org/RePEc:nas:journl:v:117:y:2020:p:7684-7689)) | A small set of real recorded audio, with Spanish and Mexican speakers, before voice reaches candidates |
+| Profanity as filler | "Joder, sí", "no mames, claro que sí" could count as abuse strikes. A false positive goes to review, so the harm is bounded | Scenarios in both countries' slang |
+| Other languages | The schema allows only `es` and `en`. French, Arabic or Portuguese is untested, and Catalan is the only other language with a scenario | Scenarios, then [T5](#trade-offs) |
+| Injection reaching the responder | The extractor has scenarios, but the responder also sees recent candidate text | Scenarios that try to draw out a promise or a human claim |
+| Outcome gaps between groups | Analytics break results down by version. No one compares knockouts and drop-off by language or channel. Rules can be neutral and outcomes still not ([Mobley v. Workday](https://www.hklaw.com/en/insights/publications/2025/05/federal-court-allows-collective-action-lawsuit-over-alleged), still being litigated) | Those breakdowns in the pilot review. No protected attributes need collecting |
+| No accommodation route | The [HireVue/Intuit complaint](https://www.fisherphillips.com/en/news-insights/ai-screening-systems-face-fresh-scrutiny-6-key-takeaways-from-claims-filed-against-hiring-technology-company.html), only allegations so far, concerns a deaf applicant asking for captions. Asking for a person works here, but nothing tells candidates that it's available for this | One sentence in the privacy notice or FAQ |
+
+## Trade-offs
+
+These have no clearly right answer. Each has a recommendation, for you or the client to overrule.
+
+| # | Decision | Recommendation | Why, and what it costs |
+| --- | --- | --- | --- |
+| T1 | LLM-written questions, or templates only | **Keep LLM wording on chat and add a deterministic check.** Reject money amounts, hiring or qualifying words and claims of being human, using per-language lists in the config, and fall back to the template. Log every rejection | Templates alone remove the risk, and voice already uses them for plain questions. But a warm tone is part of the completion bet, and nothing has measured the difference. Word lists miss paraphrases, so if the pilot sees one real violation, go to templates |
+| T2 | Read back a license knockout | **Always on voice. On chat, unless the message is exactly the "No tengo" option** | A wrong rejection loses a candidate who rarely comes back, and the read-back costs one turn, only for people being rejected. An exact tap on an option has nothing to misread. Self-reported confidence can't make this call: studies find it [poorly calibrated](https://arxiv.org/pdf/2512.24289), and the direction [varies by task](https://researchdiscovery.drexel.edu/esploro/outputs/bookChapter/Conformal-Prediction-forRisk-Controlled-Medical-Entity-Extraction/991022196651104721) |
+| T3 | How to handle minimum age | **Don't add a date of birth or an eighth field.** State the requirement in the greeting, send anyone who says they're underage to review, add a FAQ entry, and have the recruiter check at interview. Counsel sets the age per country | Asking for a date of birth collects more data than screening needs and invites age bias, the theme of the Workday case. A statement can be ignored, but the interview still checks |
+| T4 | WhatsApp voice notes | **Stay text-only for the pilot, and count `non_text_message` by stage.** Build transcription only if the count is high, reusing the voice read-backs | The pilot is web chat, so there's no data yet. Transcription adds a data processor and new errors. If notes turn out to be common on WhatsApp, this becomes a launch blocker |
+| T5 | Other languages | **Don't translate.** Detect them, send one fixed ES/EN notice, and go to review without counting failed attempts | Full support multiplies the templates and evals to maintain. Without this, those candidates fail attempts through no fault of theirs |
+| T6 | Correcting a knockout after the chat has closed | **Allow it, as during the keep-on-file question.** Low priority | It's stated policy that the rejection stands, but the closing message already invites them to apply again and "hola" restarts on WhatsApp, so strictness stops nobody and only adds friction |
+| T7 | Candidates lying, or retrying after learning the rule | **Accept it.** Keep the honest rejection reason, verify the license at interview, and show recruiters earlier attempts from the same number | The agent can't verify a license, and hiding the reason would make rejections less fair and harder to contest. The cost is a few interviews, against the recruiter time saved on everyone else |
+| T8 | Fake names ("asdf qwer", "Mickey Mouse" both pass) | **Accept them.** No blocklist | Real names are too varied. Cyrillic, Arabic, Chinese, Vietnamese and hyphenated names all passed. A single name goes to review, not rejection. A fake name costs one glance |
+| T9 | Stop requests with no "are you sure?" | **Keep it.** It's a rights request, a person sees it, and a misread is recoverable | Asking again burdens people exercising a right. Test the "no puedo seguir ahora" misread from gap 8 |
+| T10 | Everything unclear goes to review | **Keep it, and add a limit:** the pilot plan has no target for review share. Propose one to the client, measured from week 1 | Review is the safe default, but enough of it recreates the workload the product exists to remove |
+| T11 | Fallback model, or hold until the primary returns | **Keep the fallback**, plus gap 18 | Holding makes candidates wait through an outage of unknown length, and some won't come back. Gap 18 limits the accuracy cost to where it matters |
+| T12 | Human sign-off on every knockout (GDPR Art. 22) | **Keep reading all of them in weeks 1–2 as planned, and don't reduce to sampling in Spain until counsel answers** | Already flagged as open in [appendix C](process-design-appendix.md#c-regulatory-and-platform-context). Sampling after two weeks is a legal call, not only an error-rate one |
+| T13 | Interview reminders and no-show handling | **Leave for after the pilot** | It's outside the screening brief and affects hiring results, not decisions. Measure no-shows first |
+
+## Already covered
+
+Checked against the known failure lists, with evidence in the code or scenarios.
+
+| Failure mode | How it's handled |
+| --- | --- |
+| Invented values, or values talked in by injection ([SAGE](https://arxiv.org/pdf/2609.00434), [OWASP LLM01](https://invicti.com/blog/web-security/owasp-top-10-risks-llm-security-2025)) | Quotes must appear in the message, and a value that fails can't decide anything. Scenarios and property tests |
+| Too much agency ([OWASP LLM06](https://invicti.com/blog/web-security/owasp-top-10-risks-llm-security-2025)) | The LLM has no tools and decides nothing. Rules are in Python, with import-linter and mutation tests |
+| Invented policy answers ([Moffatt v. Air Canada](https://www.cxtoday.com/conversational-ai/court-orders-air-canada-to-pay-out-for-chatbots-bad-advice/)) | FAQ answers are approved text sent word for word, chosen by id. Gap 6 is what's left |
+| State drift, lost or contradictory values ([TRACER](https://arxiv.org/pdf/2607.03974)) | Slot-filling on structured state, an event log that replays to the saved state, and rules on corrections |
+| Duplicate, concurrent or bursty messages ([secondary](https://www.ycloud.com/blog/whatsapp-webhook-reliability-retries-idempotency.md)) | Delivery claims, conversation leases with fencing, debounce and message numbering |
+| Provider outages ([When the Database Fails](https://arxiv.org/pdf/2606.31307)) | Retries, circuit breaker, fallback, messages held instead of lost, fixed replies. A failed lookup goes to review, never a knockout |
+| Agent memory poisoning ([Microsoft taxonomy](https://microsoft.com/en-us/security/blog/2025/04/24/new-whitepaper-outlines-the-taxonomy-of-failure-modes-in-ai-agents)) | Context is only the last 6 stored messages, read as data, and it can't fill a field |
+| Default logins and guessable IDs (McHire, [appendix C](process-design-appendix.md#c-regulatory-and-platform-context)) | One account per recruiter, random UUIDs, signed cookies and rate limits |
+| Unsafe output in the dashboard ([OWASP LLM05](https://invicti.com/blog/web-security/owasp-top-10-risks-llm-security-2025)) | No `\|safe` in the templates, and the only `innerHTML` writes clear the log. Read, not penetration-tested |
+| Confirmation and recap loops | Attempts capped at 2 and recap rounds at 3, then a person |
+| A misheard name or town on voice ([secondary](https://hamming.ai/blog/7-voice-agent-asr-failure-modes-in-production)) | Always read back, then typed if wrong. Push-to-talk avoids barge-in and endpointing problems altogether, at the cost of feeling less natural |
+| Disclosure and consent | The first message says it's automated, the notice comes before data is collected, and "are you a bot" has a scenario and FAQ entry |
+| Re-stating a knockout at the keep-on-file question | Reproduced: "sí, guardadlos, vivo en Bilbao" keeps the data and the outcome. Nothing reopens |
+
+## Sources
+
+Vendor blogs were used for practitioner patterns only, and no figures are taken from them. Preprints aren't peer reviewed, and legal sources are engineer-read, not advice.
+
+Taxonomies: [ChatChecker](https://arxiv.org/pdf/2507.16792), [TRACER](https://arxiv.org/pdf/2607.03974), [SAGE](https://arxiv.org/pdf/2609.00434), [Microsoft agentic failure modes](https://microsoft.com/en-us/security/blog/2025/04/24/new-whitepaper-outlines-the-taxonomy-of-failure-modes-in-ai-agents), [OWASP LLM Top 10 2025, secondary](https://invicti.com/blog/web-security/owasp-top-10-risks-llm-security-2025).
+
+Voice: [Picovoice](https://picovoice.ai/guide/voice-agents/common-failure-modes/), [Hamming](https://hamming.ai/blog/7-voice-agent-asr-failure-modes-in-production), [Future AGI](https://futureagi.com/blog/voice-agent-asr-failure-modes-2026/), [Koenecke et al.](https://econpapers.repec.org/RePEc:nas:journl:v:117:y:2020:p:7684-7689).
+
+Hiring and liability: [Workday, Holland & Knight](https://www.hklaw.com/en/insights/publications/2025/05/federal-court-allows-collective-action-lawsuit-over-alleged), [Workday, spring 2026 update](https://www.gunder.com/en/news-insights/client-news/client-insight-quarterly-employment-law-update-spring-2026), [HireVue/Intuit complaint, Fisher Phillips](https://www.fisherphillips.com/en/news-insights/ai-screening-systems-face-fresh-scrutiny-6-key-takeaways-from-claims-filed-against-hiring-technology-company.html), [Air Canada](https://www.cxtoday.com/conversational-ai/court-orders-air-canada-to-pay-out-for-chatbots-bad-advice/).
+
+WhatsApp: [webhook reliability](https://www.ycloud.com/blog/whatsapp-webhook-reliability-retries-idempotency.md), [webhook guide](https://hookdeck.com/webhooks/platforms/guide-to-whatsapp-webhooks-features-and-best-practices), [error codes](https://chakrahq.com/article/whatsapp-api-error-codes-help-explained/amp/). All secondary, and how edited or deleted messages appear wasn't established, so check Meta's reference before launch.
+
+Confidence: [EU taxonomy extraction](https://arxiv.org/pdf/2512.24289), [Mind the Confidence Gap](https://arxiv.org/html/2502.11028v3), [conformal prediction for entity extraction](https://researchdiscovery.drexel.edu/esploro/outputs/bookChapter/Conformal-Prediction-forRisk-Controlled-Medical-Entity-Extraction/991022196651104721).

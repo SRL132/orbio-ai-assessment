@@ -28,6 +28,7 @@ from app.domain.models import (
     Stage,
 )
 from app.domain.validators import (
+    COUNTRY_READBACK,
     ZONE_READBACK,
     Outcome,
     normalize,
@@ -217,8 +218,9 @@ def _why_confirm(
     """Why to confirm with the candidate before this counts, or None if it counts now: the place
     came from the geocoder (so they see which place we understood), the channel always confirms
     this field, the model wasn't sure, or it replaces an earlier answer nobody asked about. A place
-    is also read back when the city came from the config, and before it rejects anyone."""
-    if outcome.note in ("geocoded", ZONE_READBACK):
+    is also read back when the city came from the config or another country has one of that name,
+    and before it rejects anyone."""
+    if outcome.note in ("geocoded", ZONE_READBACK, COUNTRY_READBACK):
         return outcome.note
     if name == FieldName.LOCATION and outcome.kind == "knockout":
         return "before_rejecting"  # a misread place mustn't turn anyone away unchecked

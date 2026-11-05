@@ -259,7 +259,17 @@ def test_due_reminders(repo: SqlRepository, state: ConversationState, clock: Fak
     assert repo.due_reminders(clock.now()) == []
     assert repo.due_reminders(clock.now() + timedelta(hours=2)) == [state.conversation_id]
 
+    # Qualified but still choosing an interview slot: still chased.
     state.status = Status.QUALIFIED
+    repo.save_turn(state, [], [], [])
+    assert repo.due_reminders(clock.now() + timedelta(hours=3)) == [state.conversation_id]
+
+    state.next_reminder_at = None
+    repo.save_turn(state, [], [], [])
+    assert repo.due_reminders(clock.now() + timedelta(hours=3)) == []
+
+    state.status = Status.NEEDS_REVIEW
+    state.next_reminder_at = clock.now()
     repo.save_turn(state, [], [], [])
     assert repo.due_reminders(clock.now() + timedelta(hours=3)) == []
 

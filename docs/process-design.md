@@ -51,7 +51,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | Availability | One or more of full time, part time, weekends | "Whenever" → full time, confirmed back |
 | Preferred schedule | One or more of morning, afternoon, evening, flexible | Clock times map to a slot ("from 7pm" = evening) |
 | Experience | Years ≥ 0; platform known or "other" | "No" = 0, still valid. "A few months" = 0.25 |
-| Start date | Today or later | "Next Monday" → a date, confirmed back. Over 60 days away is flagged |
+| Start date | Today or later | "Next Monday" → a date, confirmed back. Over 60 days away is flagged. Checked again when they confirm the recap: a date that has passed by then is asked again |
 
 ## Edge cases
 
@@ -79,7 +79,7 @@ Every conversation ends in one status, set by code, with a summary for the recru
 | --- | --- | --- | --- |
 | **Qualified** | All fields valid, no knockout | A recap, then interview slots to book in the chat (a callback would bring back the 60% no-answer problem) | Top of the dashboard, with summary and transcript |
 | **Disqualified** | No license, or clearly outside the area | A warm, honest reason and an offer to keep their details | Filtered list, kept for audit |
-| **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour | A recruiter will contact them, with a timeframe | Review queue with the reason |
+| **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour, or qualified but no interview slot picked after the reminders | A recruiter will contact them, with a timeframe | Review queue with the reason |
 | **Abandoned** | No reply after the last reminder, or consent declined | Nothing more, or a short acknowledgement if they declined | Drop-off stage, for analytics |
 
 ## Message tone and length

@@ -88,6 +88,7 @@ class Reason(StrEnum):
     LOCATION_UNVERIFIED = "location_unverified"
     INTERVIEW_CHANGE = "interview_change"
     RECAP_UNCONFIRMED = "recap_unconfirmed"
+    NO_SLOT_PICKED = "no_slot_picked"
 
 
 # Knockouts end the screening; each needs a `disqualified_<reason>` template.
@@ -419,6 +420,8 @@ SayTemplate = Literal[
     "offer_human",
     "qualified_no_slots",
     "slot_taken",
+    "slots_expired",
+    "start_date_passed",
     "no_slot_fits",
     "retype_hint",
     "slot_unclear",
@@ -520,6 +523,9 @@ class EventType(StrEnum):
     KEEP_ON_FILE = "keep_on_file"
     SLOTS_OFFERED = "slots_offered"
     SLOT_TAKEN = "slot_taken"
+    SLOTS_EXPIRED = "slots_expired"
+    NO_SLOT_PICKED = "no_slot_picked"
+    START_DATE_EXPIRED = "start_date_expired"
     NO_SLOT_FITS = "no_slot_fits"
     PREFERRED_TIMES_GIVEN = "preferred_times_given"
     HUMAN_REQUESTED = "human_requested"
