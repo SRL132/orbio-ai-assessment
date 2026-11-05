@@ -20,6 +20,7 @@ from app.adapters.storage.sql import ErasureRow, EventRow, MessageRow
 from app.api.auth import hash_password, parse_users, verify_password
 from app.api.main import create_app
 from app.bootstrap import Container, build
+from app.domain.models import Status
 from app.settings import Settings
 from tests.conftest import submit
 
@@ -182,6 +183,17 @@ def test_analytics_page(logged_in: TestClient, container: Container) -> None:
     assert "Completion rate" in page
     assert "Screened within 24 h of applying (1 of 1)" in page
     assert "Funnel" in page
+
+
+def test_analytics_shows_an_overturned_knockout(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí", "Luis Pérez", "no tengo")
+    assert "Knockouts a recruiter overturned (0 of 1)" in logged_in.get("/dashboard/analytics").text
+
+    container.service.override(cid, Status.QUALIFIED, "has a license after all", "rec@example.com")
+
+    assert "Knockouts a recruiter overturned (1 of 1)" in logged_in.get("/dashboard/analytics").text
 
 
 def test_interview_booked_end_to_end(logged_in: TestClient, container: Container) -> None:
