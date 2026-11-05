@@ -27,6 +27,8 @@ That runs without an LLM, on keyword rules, and the chat says so. For the demo w
 - WhatsApp: candidates message your WhatsApp number and get the same screening, with reply buttons, and reminders on their phone. Setup below.
 - Recruiter dashboard: http://127.0.0.1:8000/dashboard. Create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
 
+To see the dashboard with candidates on it, run `uv run python -m app.cli seed-demo` once, with the app stopped. It plays nine invented chats through the real engine: qualified (one with an interview booked), disqualified, needs review, abandoned and in progress. It's free and offline, whatever `LLM_PROVIDER` says, so their replies are the keyword mode's templates. It only fills an empty database, and refuses unless `DEMO_MODE=true` and `INVITE_ONLY=false`.
+
 The database schema is managed with Alembic migrations, which run automatically at startup. A demo database created before migrations existed is refused with a clear message: delete `data/sazon.db` once.
 
 ### WhatsApp (with Meta's test number)

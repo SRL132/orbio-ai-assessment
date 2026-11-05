@@ -239,6 +239,23 @@ def build(settings: Settings | None = None) -> Container:
     )
 
 
+def build_offline_service(settings: Settings, db: Engine, clock: Clock) -> ScreeningService:
+    """A service on the keyword extractor and a fixed list of towns, whatever `settings` name:
+    it can't reach a paid provider or the network. For seeding demo data."""
+    config = with_public_links(load_client_config(settings.client_id), settings)
+    extractor, responder = make_llm(settings, provider="fake")
+    ports = Ports(
+        extractor=FastPathExtractor(extractor),
+        responder=responder,
+        clock=clock,
+        calendar=SqlCalendar(db, config, clock),
+        geocoder=FakeGeocoder(),
+    )
+    repo = SqlRepository(db, clock, config.client_id)
+    version = agent_version(settings.model_copy(update={"llm_provider": "fake"}))
+    return ScreeningService(repo, config, ports, agent_version=version)
+
+
 def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChannel | None:
     if settings.whatsapp_access_token is None:
         return None
