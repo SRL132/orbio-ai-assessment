@@ -6,8 +6,8 @@
 
 - [ ] `.env` with `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), `LLM_FALLBACK_PROVIDER=openrouter`, `LLM_FALLBACK_MODEL=anthropic/claude-haiku-5.5`, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
 - [ ] WhatsApp: record the flow beforehand (app running with the `WHATSAPP_*` settings, an ngrok tunnel up, the webhook verified in Meta's dashboard, your phone a verified test recipient). The live demo plays the recording, so it depends on neither.
-- [ ] Two browser windows: the candidate chat on a phone-sized window (`/chat`), the dashboard on the other (`/dashboard`).
-- [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice).
+- [ ] Two browser windows: the candidate chat on a phone-sized window, the dashboard on the other (`/dashboard`). The deployed site is invite-only, so make one link per chat at `/dashboard/invite` and open each in a private window.
+- [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice). The time buttons only exist locally, so the abandoned one can't be seeded on the deployed site.
 - [ ] Terminal ready with `uv run python -m evals` and `uv run pytest -q`.
 - [ ] Check the regulatory claims in [appendix C](process-design-appendix.md#c-regulatory-and-platform-context) before quoting any of them.
 
@@ -18,9 +18,9 @@
 3. **Edge cases (3 min), each in a new chat:**
    - "No tengo carnet": a kind knockout in under a minute, plus the keep-on-file question.
    - "Quiero hablar con una persona": immediate hand-off.
-   - Go silent: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
+   - Go silent, on localhost: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
 4. **Recruiter side (5 min).** Invite page (CSV in, signed links out: no ATS needed) → counters and the "asked for a human" filter → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, how to reach them, transcript, timeline) → override with a reason (the original decision stays) → the "unfinished applications" download → analytics funnel and drop-off.
-5. **Voice (1 min).** Open `/voice` in Chrome and answer one or two questions by voice. Call it what it is: a channel proof, push-to-talk with browser speech recognition, on the same engine and dashboard. It isn't a phone call: the measured latency is LLM time only, and there's no streaming or interruption handling. Be ready to say what a real-time call would change.
+5. **Voice (1 min).** Open `/voice` on localhost in Chrome, as it's off on the deployed site, and answer one or two questions by voice. Call it what it is: a channel proof, push-to-talk with browser speech recognition, on the same engine and dashboard. It isn't a phone call: the measured latency is LLM time only, and there's no streaming or interruption handling. Be ready to say what a real-time call would change.
 6. **WhatsApp (1 min).** Play the recording: the same screening with reply buttons, and a reminder arriving on the phone. Live only if you have time left.
 
 Why this beats the status quo: no missed calls, recruiters only see qualified candidates and real edge cases, structured data ready for the ATS, and the interview is booked without a callback.
@@ -43,7 +43,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 - **"You built Prometheus and mutation testing before choosing a model. Why that order?"** Have your honest answer ready. It was the wrong order, and it hid a real bug: only Gemini could pass the schema, which nobody saw until the comparison ran on every vendor.
 - **"Why do the commits labelled days 0–5 share a date?"** Have your real answer ready.
 - **"You built a lot. What would you cut, and what are you sure of?"** Pick three stories you can tell without notes, and be ready to walk through any file in `app/domain` and `app/worker`. Candidates: the schema bug that only showed when every vendor ran; the clean-clone crash that all the gates missed, because nothing loaded `.env.example`; and the promise to write back that recruiters couldn't keep until a review caught it. Cuts to name: Prometheus, mutation testing and the geocoder could all have waited for the first client.
-- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 700+ tests, and the eval suite. "I can walk you through any file."
+- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 860+ tests, and the eval suite. "I can walk you through any file."
 
 ## 5–10 min video
 
