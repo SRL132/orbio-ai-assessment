@@ -20,6 +20,7 @@ from app.adapters.storage.sql import ErasureRow, EventRow, MessageRow
 from app.api.auth import hash_password, parse_users, verify_password
 from app.api.main import create_app
 from app.bootstrap import Container, build
+from app.domain.models import Status
 from app.settings import Settings
 from tests.conftest import submit
 
