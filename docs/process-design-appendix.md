@@ -51,7 +51,7 @@ The brief leaves these open. Each has a working default in config, so it can cha
 | Assumption | Working default | Why it matters |
 | --- | --- | --- |
 | Which license counts | Has a license for the vehicle they'd use; detailed rules per country (A) | Delivery is often by moped or motorbike, so a car license alone may be the wrong check |
-| Service areas | One list of zones and postal codes per location (45 locations); a plausible set is invented for the demo | The zone knockout is only as good as this list |
+| Service areas | One list of zones and postal codes per location (45 locations); for the demo, 45 real cities with their postal codes stand in for the client's list | The zone knockout is only as good as this list |
 | Experience | Nice to have, never a knockout | Requiring it would shrink a pool that is already hard to reach |
 | Channel | WhatsApp in production, web chat for the demo | Decides reminder rules and message templates |
 | Data retention | 6 months for disqualified and abandoned, unless the candidate opts in | GDPR / LFPDPPP |
