@@ -331,3 +331,22 @@ def test_a_zone_alone_is_kept_until_the_city_arrives(config: ClientConfig) -> No
     assert outcome.problem == "missing"
     assert outcome.updates == {"zone": "Sants"}
     assert validate_location(None, None, None, config).updates == {}
+
+
+@pytest.mark.parametrize(
+    ("said", "kept"), [("Tetuán", "Tetuán"), ("tetuan", "tetuan"), ("La Condesa", "La Condesa")]
+)
+def test_a_listed_zone_read_as_a_city_is_kept_and_rejects_nobody(
+    config: ClientConfig, said: str, kept: str
+) -> None:
+    outcome = validate_location(said, None, None, config)
+    assert (outcome.kind, outcome.problem) == ("invalid", "missing")
+    assert outcome.updates == {"zone": kept}
+
+
+def test_a_listed_zone_read_as_a_city_keeps_a_zone_already_given(config: ClientConfig) -> None:
+    assert validate_location("Salamanca", "Centro", None, config).updates == {"zone": "Centro"}
+
+
+def test_a_served_city_named_like_a_zone_is_still_the_city(config: ClientConfig) -> None:
+    assert validate_location("Madrid", "Tetuán", None, config).kind == "valid"
