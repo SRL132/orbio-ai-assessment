@@ -38,6 +38,7 @@ recap: |-
   {summary}
   Is everything correct?
 confirm_value: "Just to check: {value}, right?"
+confirm_country: "Just to check: {city}, in {country}, right?"
 confirm_zone: "Just to check: {zone}, a neighbourhood of {city}, right?"
 confirm_outside_area: "Just to check: you live in the city of {value}, right? If it's a neighbourhood, tell me which city."
 ask_change: Sure, what would you like to change?
@@ -49,6 +50,8 @@ offer_slots: |-
   Reply with the number. If none works, say "none".
 interview_booked: Done! Your interview is on {when}. We'll send you the base's address. See you soon!
 slot_taken: Oops, that time was just taken. Here are some others.
+slots_expired: Those times have passed. Here are some new ones.
+start_date_passed: The start date you gave me has passed.
 no_slot_fits: No problem. Which days and times would suit you? I'll pass it on to the recruiter.
 preferred_times_noted: Noted. A recruiter will write to you to set up the interview.
 handoff_disqualified: I've noted it. A person on the recruiting team will review your case and write to you if anything changes.
@@ -69,6 +72,8 @@ reminder_1_one: Hi again! Only 1 question left for your application. Shall we co
 reminder_2_one: We're keeping your spot a bit longer, 1 question left. Shall we finish it?
 reminder_1_recap: Hi again! All that's left is to confirm your details. Are they correct?
 reminder_2_recap: We're keeping your spot a bit longer, you only need to confirm your details. Are they correct?
+reminder_1_slots: Hi again! All that's left is to pick a time for your interview. Which one suits you?
+reminder_2_slots: We're holding your place a little longer, all that's left is to pick an interview time. Which one suits you?
 interview_change_noted: Noted. A person on the team will write to you to change it; until then, your interview stays as it is.
 closed: Your application is already registered. If you need anything, a recruiter will get in touch.
 closed_disqualified: Thanks for writing. This application is closed, but you're welcome to apply again any time.

@@ -365,11 +365,47 @@
 
 - id: silence_5_returns_after_abandoned_at_recap
   description: Answers everything, goes silent at the recap until abandoned, then confirms it.
-  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts tomorrow.
-  steps: [Sí, Raúl Díaz, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí]
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts on Monday.
+  steps: [Sí, Raúl Díaz, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, el lunes, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí]
   expect:
     status: qualified
     events_include: [abandoned]
+
+- id: silence_5b_start_date_passes_while_away
+  description: The start date passes during the silence, so confirming the recap asks for a new one.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts tomorrow, and says Monday when asked again.
+  steps: [Sí, Raúl Díaz, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, mañana, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}, Sí, el lunes, Sí]
+  expect:
+    status: qualified
+    events_include: [abandoned, start_date_expired]
+
+- id: silence_5c_qualified_but_picks_no_slot
+  description: Qualifies, never picks an interview slot, and a recruiter takes over after the reminders.
+  persona: Raúl Díaz, Retiro (Madrid), moto license. Full time, afternoons, no experience, starts on Monday. Goes quiet when offered interview times.
+  steps: [Sí, Raúl Díaz, Moto, "Madrid, Retiro", Jornada completa, Tardes, nunca, el lunes, Sí, {wait_hours: 2}, {wait_hours: 22}, {wait_hours: 24}]
+  expect:
+    status: needs_review
+    reminders_sent: 2
+    review_reasons_include: [no_slot_picked]
+    events_include: [no_slot_picked]
+
+- id: shared_city_confirms_the_country
+  description: Guadalajara exists in Spain and Mexico. The country is read back, and a yes applies it.
+  persona: Raúl Díaz, Guadalajara (Mexico), moto license.
+  steps: [Sí, Raúl Díaz, Moto, Guadalajara, Sí]
+  expect:
+    status: in_progress
+    fields: {location_id: mx-guadalajara}
+    awaiting: availability
+
+- id: shared_city_in_the_other_country_reaches_a_person
+  description: From the Guadalajara in Spain, which isn't served. Nobody is rejected or placed in Mexico.
+  persona: Raúl Díaz, from Guadalajara in Spain, moto license. Says no when asked if it's in Mexico.
+  steps: [Sí, Raúl Díaz, Moto, Guadalajara, "No", Guadalajara, "No"]
+  expect:
+    status: in_progress
+    awaiting: availability
+    field_status: {location: needs_review}
 
 - id: silence_6_never_consents
   description: Never answers the opening message at all; abandoned at consent.

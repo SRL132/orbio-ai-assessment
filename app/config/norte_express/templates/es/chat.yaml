@@ -40,6 +40,7 @@ recap: |-
   {summary}
   ¿Es todo correcto?
 confirm_value: "Solo para confirmar: {value}, ¿correcto?"
+confirm_country: "Solo para confirmar: {city}, en {country}, ¿correcto?"
 confirm_zone: "Solo para confirmar: {zone}, barrio de {city}, ¿correcto?"
 confirm_outside_area: "Solo para confirmar: vives en la ciudad de {value}, ¿correcto? Si es un barrio, dime de qué ciudad."
 ask_change: Claro, ¿qué quieres cambiar?
@@ -51,6 +52,8 @@ offer_slots: |-
   Responde con el número. Si no te va ninguno, dime «ninguno».
 interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la dirección de la base. ¡Hasta pronto!
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
+slots_expired: Esos horarios ya han pasado. Te propongo otros.
+start_date_passed: La fecha de inicio que me diste ya ha pasado.
 no_slot_fits: Sin problema. ¿Qué días y horas te irían mejor? Se lo paso al reclutador.
 preferred_times_noted: Apuntado. Un reclutador te escribirá para fijar la entrevista.
 handoff_disqualified: Lo he anotado. Una persona del equipo de selección revisará tu caso y te escribirá si hay algún cambio.
@@ -71,6 +74,8 @@ reminder_1_one: ¡Hola de nuevo! Solo nos falta 1 pregunta para tu candidatura. 
 reminder_2_one: Te guardamos el sitio un poco más, queda 1 pregunta. ¿La terminamos?
 reminder_1_recap: ¡Hola de nuevo! Ya solo falta que confirmes tus datos. ¿Están bien?
 reminder_2_recap: Te guardamos el sitio un poco más, solo falta que confirmes tus datos. ¿Están bien?
+reminder_1_slots: ¡Hola de nuevo! Ya solo falta elegir el horario de tu entrevista. ¿Cuál te va mejor?
+reminder_2_slots: Te guardamos el sitio un poco más, solo falta elegir el horario de tu entrevista. ¿Cuál te va mejor?
 interview_change_noted: Lo apunto. Una persona del equipo te escribirá para cambiarla; hasta entonces, tu entrevista sigue como está.
 closed: Tu candidatura ya está registrada. Si necesitas algo, un reclutador se pondrá en contacto.
 closed_disqualified: Gracias por escribirnos. Esta candidatura ya está cerrada, pero puedes volver a presentarte cuando quieras.

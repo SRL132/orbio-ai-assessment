@@ -5,6 +5,13 @@
 
 client_id: grupo_sazon
 
+# What "today" means until the candidate's location is known.
+default_timezone: Europe/Madrid
+# For reading back a city that exists in both countries (shared_name on a location).
+country_names:
+  ES: {es: España, en: Spain}
+  MX: {es: México, en: Mexico}
+
 persona:
   name: Lucía
   company: Grupo Sazón
@@ -111,6 +118,7 @@ locations:
     timezone: America/Mexico_City
     nearby: [Naucalpan, Tlalnepantla, Ciudad Nezahualcóyotl]
   - id: mx-guadalajara
+    shared_name: true
     lat: 20.6597
     lon: -103.3496
     country: MX
@@ -149,6 +157,7 @@ locations:
     postal_prefixes: ["030"]
     nearby: [San Vicente del Raspeig, El Campello]
   - id: es-cordoba
+    shared_name: true
     lat: 37.8882
     lon: -4.7794
     country: ES
@@ -156,6 +165,7 @@ locations:
     postal_prefixes: ["140"]
     nearby: [Almodóvar del Río]
   - id: es-valladolid
+    shared_name: true
     lat: 41.6523
     lon: -4.7245
     country: ES
@@ -307,6 +317,7 @@ locations:
     timezone: America/Ciudad_Juarez
     nearby: [Praxedis G. Guerrero]
   - id: mx-leon
+    shared_name: true
     lat: 21.125
     lon: -101.6859
     country: MX
@@ -324,6 +335,7 @@ locations:
     timezone: America/Mexico_City
     nearby: [Corregidora, El Marqués]
   - id: mx-merida
+    shared_name: true
     lat: 20.9674
     lon: -89.5926
     country: MX

@@ -5,6 +5,7 @@ from YAML is an adapter concern; the domain only defines and reads this schema.
 """
 
 from typing import Self
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -21,6 +22,11 @@ class ServiceLocation(BaseModel):
     )
     postal_prefixes: list[str] = Field(default_factory=list)
     timezone: str = "Europe/Madrid"
+    shared_name: bool = Field(
+        default=False,
+        description="Another country we hire in has a different city of this name (Guadalajara, "
+        "Spain and Mexico): read the country back, unless the postal code settles it.",
+    )
     nearby: list[str] = Field(
         default_factory=list,
         description="Places just outside the area: they go to human review, not a knockout.",
@@ -105,6 +111,15 @@ class ClientConfig(BaseModel):
     availability_days_only: DaysOnlyRule = Field(default_factory=DaysOnlyRule)
     max_abuse_strikes: int = 2
     far_start_days: int = 60
+    default_timezone: str = Field(
+        default="Europe/Madrid",
+        description='What "today" means until the candidate\'s location, and so its timezone, '
+        "is known.",
+    )
+    country_names: dict[str, dict[Language, str]] = Field(
+        default_factory=dict,
+        description="Country names per language, for reading back a location with `shared_name`.",
+    )
     reminder_hours: list[float] = Field(default_factory=lambda: [2.0, 24.0])
     channel_reminder_hours: dict[str, list[float]] = Field(
         default_factory=dict,
@@ -148,6 +163,17 @@ class ClientConfig(BaseModel):
         ids = [entry.id for entry in self.faq]
         if len(ids) != len(set(ids)):
             raise ValueError("FAQ ids must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def _places_can_be_used(self) -> Self:
+        """A bad timezone or a missing country name should stop the app at startup, not fail a
+        candidate's turn."""
+        for zone in (self.default_timezone, *(loc.timezone for loc in self.locations)):
+            ZoneInfo(zone)
+        for loc in self.locations:
+            if loc.shared_name and loc.country not in self.country_names:
+                raise ValueError(f"{loc.id} has shared_name: country_names needs {loc.country}")
         return self
 
     def faq_answer(self, faq_id: str | None, language: Language) -> str | None:

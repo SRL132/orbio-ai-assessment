@@ -69,6 +69,7 @@ class Outcome:
 
 
 ZONE_READBACK = "zone_readback"  # note on a location whose city came from the config
+COUNTRY_READBACK = "country_readback"  # note on a city another country also has
 
 
 def normalize(text: str) -> str:
@@ -251,6 +252,17 @@ def _digits(text: str) -> str:
     return "".join(ch for ch in text if ch.isdigit())
 
 
+def _served(location: ServiceLocation, zone: str | None) -> Outcome:
+    """A served city or zone. The name alone can't tell Guadalajara, Spain from Guadalajara,
+    Mexico, so the candidate confirms the country of a city another country also has."""
+    return Outcome.valid(
+        note=COUNTRY_READBACK if location.shared_name else None,
+        location_id=location.id,
+        city=location.city,
+        zone=zone,
+    )
+
+
 def validate_location(
     city: str | None,
     zone: str | None,
@@ -271,13 +283,20 @@ def validate_location(
                     location_id=served_city.id, city=served_city.city, postal_code=pc, zone=zone
                 )
             if not served_city.zones:
-                return Outcome.valid(location_id=served_city.id, city=served_city.city, zone=zone)
+                if (
+                    pc
+                ):  # the code belongs elsewhere: maybe a city of the same name in another country
+                    return Outcome.review(
+                        Reason.POSTAL_CODE_NOT_LISTED,
+                        city=served_city.city,
+                        postal_code=pc,
+                        zone=zone,
+                    )
+                return _served(served_city, zone)
             if zone:
                 listed = {_zone_key(z) for z in served_city.zones}
                 if _zone_key(zone) in listed:  # "La Condesa" is the listed "Condesa"
-                    return Outcome.valid(
-                        location_id=served_city.id, city=served_city.city, zone=zone
-                    )
+                    return _served(served_city, zone)
                 if _is_nearby(zone, [served_city]):
                     return Outcome.review(Reason.BORDERLINE_ZONE, city=served_city.city, zone=zone)
                 return Outcome.review(Reason.ZONE_NOT_LISTED, city=served_city.city, zone=zone)
