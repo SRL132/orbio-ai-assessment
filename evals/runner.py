@@ -10,6 +10,7 @@ relative dates ("mañana", "el lunes") are deterministic.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from collections.abc import Callable
@@ -21,13 +22,14 @@ from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, Field
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
+from sqlalchemy.orm import Session
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.llm.usage import UsageMeter
-from app.adapters.storage.sql import REDACTED, SqlRepository, make_engine
+from app.adapters.storage.sql import REDACTED, EventRow, SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
     Channel,
@@ -58,6 +60,8 @@ class Expect(BaseModel):
     disqualify_reason: str | None = None
     keep_on_file: bool | None = None
     redacted: bool | None = None
+    # Text that must appear nowhere in the saved state or the raw event log, state deltas included.
+    never_stored: list[str] = Field(default_factory=list)
     reminders_sent: int | None = None
     awaiting: str | None = None
     max_turns: int | None = None
@@ -278,6 +282,14 @@ class Harness:
         if expect.redacted is not None:
             redacted = any(m.text == REDACTED for m in messages)
             check(redacted == expect.redacted, f"redacted {redacted}")
+        if expect.never_stored:
+            with Session(self._engines[-1]) as session:
+                log = session.scalars(
+                    select(EventRow.data).where(EventRow.conversation_id == str(cid))
+                ).all()
+            stored = state.model_dump_json() + json.dumps(log, ensure_ascii=False)
+            for text in expect.never_stored:
+                check(text not in stored, f"stored {text!r}")
         if expect.interview_booked is not None:
             booked = state.interview_at is not None
             check(booked == expect.interview_booked, f"interview booked {booked}")

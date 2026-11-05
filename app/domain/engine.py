@@ -88,6 +88,7 @@ class _Turn:
     """One engine step in progress: a working copy of the state and what the step decided."""
 
     state: ConversationState
+    earlier: ConversationState  # as the step found it, never changed
     config: ClientConfig
     ports: Ports
     now: datetime
@@ -98,7 +99,7 @@ class _Turn:
 
     @classmethod
     def begin(cls, state: ConversationState, config: ClientConfig, ports: Ports) -> _Turn:
-        return cls(state.model_copy(deep=True), config, ports, ports.clock.now())
+        return cls(state.model_copy(deep=True), state, config, ports, ports.clock.now())
 
     def say(self, template: SayTemplate) -> None:
         self.actions.append(Say(template=template))
@@ -753,7 +754,21 @@ def _ask_current(t: _Turn) -> None:
 # --- Finishing ------------------------------------------------------------------------------------
 
 
+def _forget_redacted_quotes(t: _Turn) -> None:
+    """A redacted message must not survive in a quote of it, which would reach the state, the
+    event log and the dashboard. The values stay, and so do quotes from earlier turns."""
+    earlier = t.earlier.candidate.meta
+    for name, meta in t.state.candidate.meta.items():
+        if name not in earlier or meta.quote != earlier[name].quote:
+            meta.quote = None
+    pending, waiting = t.state.confirming, t.earlier.confirming
+    if pending is not None and (waiting is None or pending.quote != waiting.quote):
+        pending.quote = None
+
+
 def _finish(t: _Turn, schedule_reminder: bool = True, hold: bool = False) -> TurnResult:
+    if t.redact:
+        _forget_redacted_quotes(t)
     if schedule_reminder:
         _schedule_reminder(t)
     t.state.progress = progress(t.state.candidate, t.config)

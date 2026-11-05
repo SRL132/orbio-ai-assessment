@@ -147,6 +147,7 @@
   expect:
     status: in_progress
     redacted: true
+    never_stored: ["12345678Z"]
     fields: {full_name: Ana López}
 
 - id: goes_silent
