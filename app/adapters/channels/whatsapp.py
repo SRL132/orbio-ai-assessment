@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,6 +95,16 @@ def build_typing(message_id: str) -> dict[str, Any]:
     }
 
 
+_LONG_NUMBER = re.compile(r"\d{6,}")  # an error title must never put a phone number in the logs
+
+
+@dataclass(frozen=True)
+class DeliveryReport:
+    status: str  # sent, delivered, read or failed
+    error_code: int | None = None
+    error_title: str = ""
+
+
 def parse_webhook(payload: dict[str, Any]) -> list[WhatsAppInbound]:
     """Incoming candidate messages. Delivery statuses and other events are ignored."""
     found: list[WhatsAppInbound] = []
@@ -114,6 +125,25 @@ def parse_webhook(payload: dict[str, Any]) -> list[WhatsAppInbound]:
                 found.append(
                     WhatsAppInbound(
                         wa_id=str(message["from"]), message_id=str(message["id"]), text=text
+                    )
+                )
+    return found
+
+
+def delivery_reports(payload: dict[str, Any]) -> list[DeliveryReport]:
+    """What Meta says happened to our messages. Accepting a send doesn't mean it arrived: a message
+    can fail afterwards (payment, recipient, window), and this is the only place that says so.
+    Keeps no recipient or message id, so a report is safe to log."""
+    found: list[DeliveryReport] = []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            for status in change.get("value", {}).get("statuses", []):
+                errors = status.get("errors") or [{}]
+                found.append(
+                    DeliveryReport(
+                        status=str(status.get("status", "unknown")),
+                        error_code=errors[0].get("code"),
+                        error_title=_LONG_NUMBER.sub("<number>", str(errors[0].get("title", ""))),
                     )
                 )
     return found

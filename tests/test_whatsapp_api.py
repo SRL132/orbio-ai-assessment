@@ -139,3 +139,39 @@ def test_partial_configuration_fails_fast(tmp_path: Path) -> None:
                 whatsapp_phone_number_id="123",
             )
         )
+
+
+def status_update(status: str, **extra: object) -> tuple[bytes, dict[str, str]]:
+    report = {"id": "wamid.SECRET", "recipient_id": "34600000001", "status": status, **extra}
+    return signed({"entry": [{"changes": [{"value": {"statuses": [report]}}]}]})
+
+
+def test_a_failed_delivery_is_logged_with_its_reason_but_no_number(
+    container: Container, caplog: pytest.LogCaptureFixture
+) -> None:
+    error = {"code": 131042, "title": "Payment issue for 34600000001"}
+    raw, headers = status_update("failed", errors=[error])
+    with TestClient(create_app(container)) as client, caplog.at_level("INFO", "app.whatsapp"):
+        assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+    assert "whatsapp_delivery_failed code=131042 title=Payment issue for <number>" in caplog.text
+    assert "34600000001" not in caplog.text
+    assert "wamid" not in caplog.text
+
+
+def test_a_successful_delivery_is_logged_without_an_error(
+    container: Container, caplog: pytest.LogCaptureFixture
+) -> None:
+    raw, headers = status_update("delivered")
+    with TestClient(create_app(container)) as client, caplog.at_level("INFO", "app.whatsapp"):
+        assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+    assert "whatsapp_delivery status=delivered" in caplog.text
+    assert "whatsapp_delivery_failed" not in caplog.text
+
+
+def test_a_failure_without_details_is_still_logged(
+    container: Container, caplog: pytest.LogCaptureFixture
+) -> None:
+    raw, headers = status_update("failed")
+    with TestClient(create_app(container)) as client, caplog.at_level("INFO", "app.whatsapp"):
+        assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+    assert "whatsapp_delivery_failed code=None" in caplog.text
