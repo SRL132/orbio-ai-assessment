@@ -28,6 +28,7 @@ from app.api.invites import (
     INVITE_MAX_AGE,
     MAX_INVITE_ROWS,
     MAX_UPLOAD_BYTES,
+    VOICE_URL,
     WHATSAPP_URL,
     InviteError,
     InviteLinks,
@@ -41,7 +42,15 @@ from app.api.limits import QUARTER_HOUR, client_ip
 from app.bootstrap import Container
 from app.domain.config import ClientConfig
 from app.domain.engine import OVERRIDABLE
-from app.domain.models import Availability, Candidate, FieldName, Language, Schedule, Status
+from app.domain.models import (
+    Availability,
+    Candidate,
+    Channel,
+    FieldName,
+    Language,
+    Schedule,
+    Status,
+)
 from app.domain.render import field_values
 from app.domain.summary import describe_reason, local_time
 from app.worker.service import ConversationBusy
@@ -275,9 +284,10 @@ async def create_invites(
     _: Csrf,
     count: Annotated[int | None, Form()] = None,
     applications: Annotated[UploadFile | None, File()] = None,
+    voice: Annotated[bool, Form()] = False,
 ) -> Response:
-    """Signed chat links as a CSV, in the order given. Other columns in the upload (a phone, say)
-    come back as they were, for the recruiter's mail merge: they're never stored or logged."""
+    """Signed links as a CSV, in the order given. Other columns in the upload (a phone, say) come
+    back as they were, for the recruiter's mail merge: they're never stored or logged."""
     base = _public_base(request, c)
     if not base:
         return _invite_page(request, c, user, "Set PUBLIC_BASE_URL first.", 400)
@@ -294,12 +304,13 @@ async def create_invites(
         return _invite_page(request, c, user, str(exc), 400)
 
     links: InviteLinks = request.app.state.invites
-    whatsapp = _whatsapp_invites(c)
+    whatsapp = None if voice else _whatsapp_invites(c)
+    channel: Channel = "voice" if voice else "whatsapp" if whatsapp else "chat"
 
     def create() -> list[str]:
         ids = [
             c.service.start_conversation(
-                "whatsapp" if whatsapp else "chat",
+                channel,
                 datetime.fromisoformat(row["applied_at"]),
                 invited_by=user,
                 application_ref=reference_of(row),
@@ -309,11 +320,14 @@ async def create_invites(
         return [whatsapp.url(i) if whatsapp else base + links.path(i) for i in ids]
 
     urls = await asyncio.to_thread(create)
+    column = VOICE_URL if voice else WHATSAPP_URL if whatsapp else None
     return Response(
-        links_csv(rows, urls, WHATSAPP_URL) if whatsapp else links_csv(rows, urls),
+        links_csv(rows, urls, column) if column else links_csv(rows, urls),
         media_type="text/csv",
         headers={
-            "Content-Disposition": 'attachment; filename="chat-links.csv"',
+            "Content-Disposition": (
+                f'attachment; filename="{"voice" if voice else "chat"}-links.csv"'
+            ),
             "Cache-Control": "no-store",
         },
     )
@@ -330,13 +344,13 @@ async def unfinished_invites(request: Request, c: App, user: Recruiter) -> Respo
     whatsapp = _whatsapp_invites(c)
 
     def link(invite: UnfinishedInvite) -> str:
-        if whatsapp is None or invite.channel == "chat":
+        if whatsapp is None or invite.channel != "whatsapp":
             return base + links.path(invite.conversation_id)
         return whatsapp.chat_url() if invite.opened else whatsapp.url(invite.conversation_id)
 
     invites = await asyncio.to_thread(c.queries.unfinished_invites)
     body = unfinished_csv(
-        [(i, link(i)) for i in invites if whatsapp or i.channel == "chat"],
+        [(i, link(i)) for i in invites if whatsapp or i.channel != "whatsapp"],
         whatsapp=whatsapp is not None,
     )
     return Response(

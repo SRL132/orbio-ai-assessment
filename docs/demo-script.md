@@ -20,7 +20,7 @@
    - "Quiero hablar con una persona": immediate hand-off.
    - Go silent, on localhost: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
 4. **Recruiter side (5 min).** Invite page (CSV in, signed links out: no ATS needed) → counters and the "asked for a human" filter → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, how to reach them, transcript, timeline) → override with a reason (the original decision stays) → the "unfinished applications" download → analytics funnel and drop-off.
-5. **Voice (1 min).** Open `/voice` on localhost in Chrome, as it's off on the deployed site, and answer one or two questions by voice. Call it what it is: a channel proof, push-to-talk with browser speech recognition, on the same engine and dashboard. It isn't a phone call: the measured latency is LLM time only, and there's no streaming or interruption handling. Be ready to say what a real-time call would change.
+5. **Voice (1 min).** Open a voice link in Chrome (tick "Make voice links" at `/dashboard/invite`) and answer one or two questions by voice. Call it what it is: a channel proof, push-to-talk with browser speech recognition, on the same engine and dashboard. It isn't a phone call: the measured latency is LLM time only, and there's no streaming or interruption handling. Be ready to say what a real-time call would change.
 6. **WhatsApp (1 min).** Play the recording: the same screening with reply buttons, and a reminder arriving on the phone. Live only if you have time left.
 
 Why this beats the status quo: no missed calls, recruiters only see qualified candidates and real edge cases, structured data ready for the ATS, and the interview is booked without a callback.

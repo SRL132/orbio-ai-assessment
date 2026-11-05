@@ -12,6 +12,8 @@
   <p class="muted">Add an <code>application_ref</code> column with your own id for each applicant: it's kept, so the candidate's page and the list below can point you back to them. Other columns, such as a phone number, come back in the download so you can match links to people. They aren't stored.</p>
   <h2>Or just a number</h2>
   <label>Links to make, up to {{ max_rows }}. They count as applying now. <input type="number" name="count" min="1" max="{{ max_rows }}"></label>
+  <h2>Channel</h2>
+  <label><input type="checkbox" name="voice" value="true"> Make voice links: the candidate talks to Lucía on a web page in Chrome or Edge, or types in other browsers.</label>
   <p><button type="submit">Download links</button></p>
 </form>
 <div class="card">

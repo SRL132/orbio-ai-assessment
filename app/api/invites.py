@@ -1,7 +1,8 @@
-"""Chat invite links: signed, expiring, and made from a list of applications.
+"""Chat and voice invite links: signed, expiring, and made from a list of applications.
 
 Used by the ATS endpoint and the recruiter's invite page. A link names only a conversation, and
-no contact details are stored: whoever invites the candidate also sends them the link. Once
+no contact details are stored: whoever invites the candidate also sends them the link. The
+link opens the page for that conversation's channel. Once
 WHATSAPP_INVITE_NUMBER is set, the recruiter's links open WhatsApp instead of the web chat.
 """
 
@@ -22,6 +23,7 @@ MAX_INVITE_ROWS = 1000  # about a week of applications
 MAX_UPLOAD_BYTES = 1024 * 1024
 _APPLIED_AT = "applied_at"
 _URL = "chat_url"
+VOICE_URL = "voice_url"
 WHATSAPP_URL = "whatsapp_url"
 REFERENCE_COLUMN = "application_ref"
 # Letters, digits and . _ - only: it's stored and comes back in CSVs that open in a spreadsheet,
@@ -65,7 +67,7 @@ def parse_applications(raw: bytes, now: datetime) -> list[dict[str, str]]:
         reader = csv.DictReader(io.StringIO(text))
         if _APPLIED_AT not in (reader.fieldnames or []):
             raise InviteError(f"The file needs an {_APPLIED_AT} column.")
-        for column in (_URL, WHATSAPP_URL):
+        for column in (_URL, VOICE_URL, WHATSAPP_URL):
             if column in (reader.fieldnames or []):
                 raise InviteError(f"The file already has a {column} column: were these links made?")
         rows = list(reader)
@@ -110,7 +112,7 @@ def unfinished_csv(rows: list[tuple[UnfinishedInvite, str]], whatsapp: bool = Fa
     """Who to chase, with a fresh link each: their own stops working after INVITE_MAX_AGE."""
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    columns = [REFERENCE_COLUMN, _APPLIED_AT, "opened", _URL]
+    columns = [REFERENCE_COLUMN, _APPLIED_AT, "opened", _URL, VOICE_URL]
     writer.writerow([*columns, WHATSAPP_URL] if whatsapp else columns)
     for invite, url in rows:
         writer.writerow(
@@ -119,7 +121,8 @@ def unfinished_csv(rows: list[tuple[UnfinishedInvite, str]], whatsapp: bool = Fa
                 invite.applied_at.isoformat() if invite.applied_at else "",
                 "yes" if invite.opened else "no",
                 url if invite.channel == "chat" else "",
-                *([url if invite.channel != "chat" else ""] if whatsapp else []),
+                url if invite.channel == "voice" else "",
+                *([url if invite.channel == "whatsapp" else ""] if whatsapp else []),
             ]
         )
     return out.getvalue()

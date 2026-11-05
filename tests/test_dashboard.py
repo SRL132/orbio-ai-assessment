@@ -762,6 +762,56 @@ def test_web_links_stay_while_whatsapp_invites_are_off_even_with_the_channel_on(
         assert "whatsapp_url" not in client.get("/dashboard/invite/unfinished.csv").text
 
 
+def test_voice_links_open_the_voice_page_on_an_invite_only_site(tmp_path: Path) -> None:
+    with invite_client(
+        tmp_path, "http://localhost:8000", demo_mode=True, invite_only=True
+    ) as client:
+        response = upload(client, CSV_OK, voice="true")
+        assert "voice-links.csv" in response.headers["content-disposition"]
+        rows = links(response)
+        assert "chat_url" not in rows[0]
+
+        opened = client.get(rows[0]["voice_url"], follow_redirects=False)
+        assert opened.status_code == 303
+        location = opened.headers["location"]
+        assert location.startswith("/voice?conversation=")
+        cid = UUID(location.split("=")[1])
+        container: Container = client.app.state.container  # type: ignore[attr-defined]
+        state = container.service.get(cid)
+        assert state is not None
+        assert (state.channel, state.invite_pending) == ("voice", False)
+
+        page = client.get(location).text
+        assert 'id="start" type="button" disabled' not in page
+        assert "open the voice link" not in page
+        assert f'const INVITED = "{cid}";' in page
+        # A voice message runs in the request, so the reply is there straight away.
+        sent = client.post(f"/api/conversations/{cid}/messages", json={"text": "Sí"})
+        assert sent.status_code == 202
+        messages = client.get(f"/api/conversations/{cid}/messages").json()["messages"]
+        assert messages[-1]["direction"] == "out"
+
+
+def test_voice_links_win_over_whatsapp_invites(tmp_path: Path) -> None:
+    extra = {**WHATSAPP, "whatsapp_invite_number": "15551868329"}
+    with invite_client(tmp_path, "http://localhost:8000", **extra) as client:
+        rows = links(upload(client, count="1", voice="true"))
+        assert rows[0]["voice_url"].startswith("http://localhost:8000/chat/invite/")
+        assert "whatsapp_url" not in rows[0]
+
+
+def test_unfinished_voice_invites_get_a_fresh_voice_link(tmp_path: Path) -> None:
+    with invite_client(tmp_path, "http://localhost:8000") as client:
+        container: Container = client.app.state.container  # type: ignore[attr-defined]
+        container.service.start_conversation("voice", invited_by="rec", application_ref="V-1")
+        container.service.start_conversation("chat", invited_by="rec", application_ref="C-1")
+        rows = {row["application_ref"]: row for row in unfinished(client)}
+        assert rows["V-1"]["chat_url"] == ""
+        assert rows["V-1"]["voice_url"].startswith("http://localhost:8000/chat/invite/")
+        assert rows["C-1"]["voice_url"] == ""
+        assert rows["C-1"]["chat_url"].startswith("http://localhost:8000/chat/invite/")
+
+
 def test_with_an_invite_number_links_open_whatsapp(tmp_path: Path) -> None:
     extra = {**WHATSAPP, "whatsapp_invite_number": "+1 555 186 8329"}
     with invite_client(tmp_path, "http://localhost:8000", **extra) as client:

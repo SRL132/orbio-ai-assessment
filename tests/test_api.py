@@ -299,7 +299,19 @@ def test_invite_only_turns_off_the_clock_fast_forward(invite_only: TestClient) -
 
 
 def test_invite_only_voice_page_says_it_needs_a_link(invite_only: TestClient) -> None:
-    assert 'id="start" type="button" disabled' in invite_only.get("/voice").text
+    page = invite_only.get("/voice").text
+    assert 'id="start" type="button" disabled' in page
+    assert "open the voice link" in page
+    assert "const INVITED = null;" in page
+
+
+def test_voice_page_ignores_a_conversation_this_browser_did_not_open(
+    invite_only: TestClient,
+) -> None:
+    someone_elses = "00000000-0000-0000-0000-000000000000"
+    page = invite_only.get(f"/voice?conversation={someone_elses}").text
+    assert 'id="start" type="button" disabled' in page
+    assert someone_elses not in page
 
 
 def test_invite_only_still_works_with_a_signed_link(invite_only: TestClient) -> None:

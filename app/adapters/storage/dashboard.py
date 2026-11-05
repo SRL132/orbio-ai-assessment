@@ -160,7 +160,7 @@ class DashboardQueries:
                 .where(
                     ConversationRow.client_id == self._client_id,
                     ConversationRow.status.in_([Status.IN_PROGRESS.value, Status.ABANDONED.value]),
-                    ConversationRow.channel.in_(["chat", "whatsapp"]),
+                    ConversationRow.channel.in_(["chat", "voice", "whatsapp"]),
                 )
                 .order_by(ConversationRow.applied_at)
             ).all()
