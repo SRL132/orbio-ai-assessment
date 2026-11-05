@@ -17,6 +17,7 @@ from app.domain.models import (
 )
 from app.domain.policy import (
     apply_extraction,
+    give_up_on_field,
     missing_count,
     next_missing_field,
     register_failed_attempt,
@@ -265,3 +266,12 @@ def test_a_first_name_alone_is_still_kept_while_the_name_is_missing(
     state.stage, state.awaiting = Stage.COLLECTING, FieldName.FULL_NAME
     apply_extraction(state, ex(full_name="Ana").fields, config, TODAY, message="Ana")
     assert state.candidate.full_name == "Ana"
+
+
+def test_giving_up_on_a_field_uses_up_its_attempts_and_sends_it_to_review(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    give_up_on_field(state, FieldName.LOCATION, config)
+    meta = state.candidate.meta[FieldName.LOCATION]
+    assert meta.attempts == config.max_attempts
+    assert (meta.status, meta.note) == (FieldStatus.NEEDS_REVIEW, "failed_twice")

@@ -146,6 +146,7 @@ def test_outside_area_is_disqualified(chat: Chat) -> None:
     chat.say(ex(city="Bilbao"))
     assert chat.state.status == Status.IN_PROGRESS  # a misread place rejects nobody unchecked
     assert chat.state.disqualify_reason is None
+    assert {"field": "location", "why": "before_rejecting"} in [e.data for e in chat.result.events]
     assert "vives en la ciudad de Bilbao" in chat.result.replies[-1]
     assert "barrio" in chat.result.replies[-1]
     chat.say(ex(yes_no=True), "sí")
