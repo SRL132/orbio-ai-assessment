@@ -23,6 +23,6 @@ data/
 .idea/
 .vscode/
 
-# Eval run outputs (baseline.json is committed; per-run results are not)
+# Eval run outputs (baseline.json and history.jsonl are committed; full results are not)
 evals/results/
 mutants/

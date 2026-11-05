@@ -10,6 +10,8 @@ from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
     ConversationState,
+    DomainEvent,
+    EventType,
     FieldName,
     FieldStatus,
     Stage,
@@ -125,6 +127,43 @@ def test_analytics_empty(config: ClientConfig) -> None:
     a = _analytics(config, [])
     assert a.completion_rate == 0.0
     assert a.median_minutes is None
+    assert (a.knockouts, a.knockouts_overturned, a.overturn_rate) == (0, 0, None)
+
+
+def _override(old: Status, new: Status) -> DomainEvent:
+    return DomainEvent(
+        type=EventType.OVERRIDE, data={"from": old.value, "to": new.value, "reason": "r"}
+    )
+
+
+def test_overturn_rate_counts_recruiters_undoing_knockouts(config: ClientConfig) -> None:
+    knockout = DomainEvent(type=EventType.KNOCKOUT, data={"reason": "no_license"})
+    undone = _override(Status.DISQUALIFIED, Status.QUALIFIED)
+    engine = make_engine("sqlite:///:memory:")
+    repo = SqlRepository(engine, FakeClock(START), config.client_id)
+    for status, events in [
+        (Status.QUALIFIED, [knockout, undone]),
+        (Status.NEEDS_REVIEW, [knockout, undone, _override(Status.QUALIFIED, Status.NEEDS_REVIEW)]),
+        (Status.DISQUALIFIED, [knockout]),
+        (Status.DISQUALIFIED, [knockout]),
+        # Not an overturn: the agent didn't knock this one out, the recruiter disqualified it.
+        (Status.QUALIFIED, [_override(Status.DISQUALIFIED, Status.QUALIFIED)]),
+        # Not an overturn: the override leaves it disqualified.
+        (Status.DISQUALIFIED, [_override(Status.QUALIFIED, Status.DISQUALIFIED)]),
+    ]:
+        repo.create(_state(config, status, 1), events, [])
+    other = SqlRepository(engine, FakeClock(START), "someone_else")
+    other.create(
+        ConversationState(client_id="someone_else", status=Status.QUALIFIED),
+        [knockout, undone],
+        [],
+    )
+
+    a = DashboardQueries(engine, config.client_id).analytics(config.field_priority, START)
+    engine.dispose()
+
+    assert (a.knockouts, a.knockouts_overturned) == (4, 2)
+    assert a.overturn_rate == 0.5
 
 
 def test_share_screened_within_target_hours(config: ClientConfig) -> None:
