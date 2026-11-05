@@ -21,16 +21,19 @@ from fastapi.templating import Jinja2Templates
 from pydantic import SecretStr
 
 from app import metrics
-from app.adapters.storage.dashboard import Filters
+from app.adapters.channels.whatsapp_invites import WhatsAppInvites
+from app.adapters.storage.dashboard import Filters, UnfinishedInvite
 from app.api.auth import parse_users, verify_password
 from app.api.invites import (
     INVITE_MAX_AGE,
     MAX_INVITE_ROWS,
     MAX_UPLOAD_BYTES,
+    WHATSAPP_URL,
     InviteError,
     InviteLinks,
     links_csv,
     parse_applications,
+    public_base,
     reference_of,
     unfinished_csv,
 )
@@ -250,15 +253,18 @@ def _invite_page(
             "max_rows": MAX_INVITE_ROWS,
             "max_age_days": INVITE_MAX_AGE // (24 * 3600),
             "base_url": _public_base(request, c),
+            "whatsapp_invites": _whatsapp_invites(c) is not None,
         },
         status_code=code,
     )
 
 
 def _public_base(request: Request, c: Container) -> str:
-    """Links leave the building, so they need the public address. Only a local demo may guess."""
-    base = c.settings.public_base_url or (str(request.base_url) if c.settings.demo_mode else "")
-    return base.rstrip("/")
+    return public_base(c.settings.public_base_url, c.settings.demo_mode, str(request.base_url))
+
+
+def _whatsapp_invites(c: Container) -> WhatsAppInvites | None:
+    return c.whatsapp.invites if c.whatsapp is not None else None
 
 
 @router.post("/dashboard/invite", response_model=None)
@@ -288,24 +294,23 @@ async def create_invites(
         return _invite_page(request, c, user, str(exc), 400)
 
     links: InviteLinks = request.app.state.invites
+    whatsapp = _whatsapp_invites(c)
 
     def create() -> list[str]:
-        return [
-            base
-            + links.path(
-                c.service.start_conversation(
-                    "chat",
-                    datetime.fromisoformat(row["applied_at"]),
-                    invited_by=user,
-                    application_ref=reference_of(row),
-                )
+        ids = [
+            c.service.start_conversation(
+                "whatsapp" if whatsapp else "chat",
+                datetime.fromisoformat(row["applied_at"]),
+                invited_by=user,
+                application_ref=reference_of(row),
             )
             for row in rows
         ]
+        return [whatsapp.url(i) if whatsapp else base + links.path(i) for i in ids]
 
     urls = await asyncio.to_thread(create)
     return Response(
-        links_csv(rows, urls),
+        links_csv(rows, urls, WHATSAPP_URL) if whatsapp else links_csv(rows, urls),
         media_type="text/csv",
         headers={
             "Content-Disposition": 'attachment; filename="chat-links.csv"',
@@ -322,9 +327,17 @@ async def unfinished_invites(request: Request, c: App, user: Recruiter) -> Respo
     if not base:
         return _invite_page(request, c, user, "Set PUBLIC_BASE_URL first.", 400)
     links: InviteLinks = request.app.state.invites
+    whatsapp = _whatsapp_invites(c)
+
+    def link(invite: UnfinishedInvite) -> str:
+        if whatsapp is None or invite.channel == "chat":
+            return base + links.path(invite.conversation_id)
+        return whatsapp.chat_url() if invite.opened else whatsapp.url(invite.conversation_id)
+
     invites = await asyncio.to_thread(c.queries.unfinished_invites)
     body = unfinished_csv(
-        [(invite, base + links.path(invite.conversation_id)) for invite in invites]
+        [(i, link(i)) for i in invites if whatsapp or i.channel == "chat"],
+        whatsapp=whatsapp is not None,
     )
     return Response(
         body,

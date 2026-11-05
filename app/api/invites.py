@@ -1,7 +1,8 @@
 """Chat invite links: signed, expiring, and made from a list of applications.
 
 Used by the ATS endpoint and the recruiter's invite page. A link names only a conversation, and
-no contact details are stored: whoever invites the candidate also sends them the link.
+no contact details are stored: whoever invites the candidate also sends them the link. Once
+WHATSAPP_INVITE_NUMBER is set, the recruiter's links open WhatsApp instead of the web chat.
 """
 
 from __future__ import annotations
@@ -21,10 +22,17 @@ MAX_INVITE_ROWS = 1000  # about a week of applications
 MAX_UPLOAD_BYTES = 1024 * 1024
 _APPLIED_AT = "applied_at"
 _URL = "chat_url"
+WHATSAPP_URL = "whatsapp_url"
 REFERENCE_COLUMN = "application_ref"
 # Letters, digits and . _ - only: it's stored and comes back in CSVs that open in a spreadsheet,
 # where a leading = or + would run as a formula.
 REFERENCE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+
+
+def public_base(public_base_url: str, demo_mode: bool, request_base: str) -> str:
+    """Links leave the building, so they need the public address: PUBLIC_BASE_URL in production.
+    Only a local demo may use the address it was reached on, which is localhost."""
+    return (public_base_url or (request_base if demo_mode else "")).rstrip("/")
 
 
 class InviteError(ValueError):
@@ -57,8 +65,9 @@ def parse_applications(raw: bytes, now: datetime) -> list[dict[str, str]]:
         reader = csv.DictReader(io.StringIO(text))
         if _APPLIED_AT not in (reader.fieldnames or []):
             raise InviteError(f"The file needs an {_APPLIED_AT} column.")
-        if _URL in (reader.fieldnames or []):
-            raise InviteError(f"The file already has a {_URL} column: were these links made?")
+        for column in (_URL, WHATSAPP_URL):
+            if column in (reader.fieldnames or []):
+                raise InviteError(f"The file already has a {column} column: were these links made?")
         rows = list(reader)
     except csv.Error:
         raise InviteError("That file isn't a readable CSV.") from None
@@ -97,28 +106,30 @@ def _check_applied_at(value: str | None, line: int, now: datetime) -> None:
         raise InviteError(f"Line {line}: {_APPLIED_AT} is in the future.")
 
 
-def unfinished_csv(rows: list[tuple[UnfinishedInvite, str]]) -> str:
+def unfinished_csv(rows: list[tuple[UnfinishedInvite, str]], whatsapp: bool = False) -> str:
     """Who to chase, with a fresh link each: their own stops working after INVITE_MAX_AGE."""
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow([REFERENCE_COLUMN, _APPLIED_AT, "opened", _URL])
+    columns = [REFERENCE_COLUMN, _APPLIED_AT, "opened", _URL]
+    writer.writerow([*columns, WHATSAPP_URL] if whatsapp else columns)
     for invite, url in rows:
         writer.writerow(
             [
                 invite.reference,
                 invite.applied_at.isoformat() if invite.applied_at else "",
                 "yes" if invite.opened else "no",
-                url,
+                url if invite.channel == "chat" else "",
+                *([url if invite.channel != "chat" else ""] if whatsapp else []),
             ]
         )
     return out.getvalue()
 
 
-def links_csv(rows: list[dict[str, str]], urls: list[str]) -> str:
+def links_csv(rows: list[dict[str, str]], urls: list[str], column: str = _URL) -> str:
     """The rows as given, each with its link added."""
     out = io.StringIO()
-    writer = csv.DictWriter(out, [*rows[0], _URL], extrasaction="ignore", lineterminator="\n")
+    writer = csv.DictWriter(out, [*rows[0], column], extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
     for row, url in zip(rows, urls, strict=True):
-        writer.writerow({**row, _URL: url})
+        writer.writerow({**row, column: url})
     return out.getvalue()

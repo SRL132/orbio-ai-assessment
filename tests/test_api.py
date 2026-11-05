@@ -2,6 +2,7 @@
 
 import json
 import secrets
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID
 
@@ -207,6 +208,7 @@ def test_ats_registers_an_application_and_the_candidate_opens_the_link(tmp_path:
         # A different browser can't read it until it opens the invite link.
         cid = created["id"]
         assert client.get(f"/api/conversations/{cid}/messages").status_code == 404
+        assert created["chat_url"].startswith("http://testserver/chat/invite/")
         opened = client.get(created["chat_url"], follow_redirects=False)
         assert opened.status_code == 303
         assert opened.headers["location"] == f"/chat?conversation={cid}"
@@ -244,3 +246,75 @@ def test_consent_message_links_to_a_privacy_notice_that_exists(client: TestClien
     assert page.status_code == 200
     assert "6 meses" in page.text
     assert "6 months" in client.get("/privacy?lang=en").text
+
+
+# --- Invite-only: no link, no conversation -----------------------------------------------------
+
+
+ATS_TOKEN = secrets.token_hex(8)
+
+
+@pytest.fixture
+def invite_only(tmp_path: Path) -> Iterator[TestClient]:
+    container = build(
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite:///{tmp_path / 'i.db'}",
+            demo_mode=True,
+            invite_only=True,
+            session_secret=secrets.token_hex(16),
+            ats_token=ATS_TOKEN,
+            debounce_seconds=0,
+        )
+    )
+    with TestClient(create_app(container)) as client:
+        yield client
+
+
+def count_conversations(client: TestClient) -> int:
+    return client.app.state.container.queries.analytics(
+        [], client.app.state.container.clock.now()
+    ).started
+
+
+@pytest.mark.parametrize("body", [None, {"channel": "chat"}, {"channel": "voice"}])
+def test_invite_only_starts_nothing_without_a_link(
+    invite_only: TestClient, body: dict[str, str] | None
+) -> None:
+    response = invite_only.post("/api/conversations", json=body)
+    assert response.status_code == 403
+    assert count_conversations(invite_only) == 0
+
+
+def test_invite_only_refusals_do_no_work_at_any_volume(invite_only: TestClient) -> None:
+    # Refused before the rate limiter, so a flood doesn't write a counter row per request either.
+    responses = {invite_only.post("/api/conversations").status_code for _ in range(50)}
+    assert responses == {403}
+
+
+def test_invite_only_turns_off_the_clock_fast_forward(invite_only: TestClient) -> None:
+    assert invite_only.post("/api/demo/advance", json={"hours": 1}).status_code == 404
+    assert 'data-hours="' not in invite_only.get("/chat").text
+    assert 'data-hours="' not in invite_only.get("/voice").text
+
+
+def test_invite_only_voice_page_says_it_needs_a_link(invite_only: TestClient) -> None:
+    assert 'id="start" type="button" disabled' in invite_only.get("/voice").text
+
+
+def test_invite_only_still_works_with_a_signed_link(invite_only: TestClient) -> None:
+    created = invite_only.post(
+        "/api/v1/applications",
+        json={"applied_at": "2026-01-05T09:00:00+00:00"},
+        headers={"Authorization": f"Bearer {ATS_TOKEN}"},
+    ).json()
+    assert invite_only.get(created["chat_url"], follow_redirects=False).status_code == 303
+    cid = created["id"]
+    sent = invite_only.post(f"/api/conversations/{cid}/messages", json={"text": "Sí"})
+    assert sent.status_code == 202
+    messages = invite_only.get(f"/api/conversations/{cid}/messages").json()["messages"]
+    assert messages[0]["direction"] == "out"
+
+
+def test_invite_only_refuses_a_forged_link(invite_only: TestClient) -> None:
+    assert invite_only.get("/chat/invite/forged", follow_redirects=False).status_code == 404

@@ -2,7 +2,7 @@
 {% block title %}Invite candidates{% endblock %}
 {% block content %}
 <h1>Invite candidates</h1>
-<p class="muted">Make one signed chat link per applicant, then send the links with your own SMS or email tool. Links expire after {{ max_age_days }} days. Reminders start when a candidate opens their link, and unopened links show up under Analytics.</p>
+<p class="muted">Make one signed {% if whatsapp_invites %}WhatsApp{% else %}chat{% endif %} link per applicant, then send the links with your own SMS or email tool.{% if whatsapp_invites %} Each one opens WhatsApp with a code ready to send, and Lucía replies once the candidate sends it.{% endif %} Links expire after {{ max_age_days }} days. Reminders start when a candidate opens their link, and unopened links show up under Analytics.</p>
 {% if error %}<p class="card low" role="alert">{{ error }}</p>{% endif %}
 {% if not base_url %}<p class="card low" role="alert">Set PUBLIC_BASE_URL first: links need the app's public address.</p>{% endif %}
 <form method="post" enctype="multipart/form-data" class="card">
@@ -16,7 +16,7 @@
 </form>
 <div class="card">
   <h2 style="margin-top:0">Chase who hasn't finished</h2>
-  <p class="muted">Web chat can't reach someone who closed the tab, so reminders only show if they come back. Download everyone with an <code>application_ref</code> who is still in progress, each with a fresh link, and send it with your own tool. Do this daily: it's what keeps them inside the 24 h target.</p>
+  <p class="muted">{% if whatsapp_invites %}Web chat can't reach someone who closed the tab, and someone who never sent their WhatsApp code gets no reminders.{% else %}Web chat can't reach someone who closed the tab, so reminders only show if they come back.{% endif %} Download everyone with an <code>application_ref</code> who is still in progress, each with a fresh link, and send it with your own tool. Do this daily: it's what keeps them inside the 24 h target.</p>
   <p><a href="/dashboard/invite/unfinished.csv">Download unfinished applications</a></p>
 </div>
 {% endblock %}

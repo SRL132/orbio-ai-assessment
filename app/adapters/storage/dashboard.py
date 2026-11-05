@@ -101,6 +101,7 @@ class UnfinishedInvite:
     reference: str
     applied_at: datetime | None
     opened: bool
+    channel: str = "chat"
 
 
 class DashboardQueries:
@@ -159,7 +160,7 @@ class DashboardQueries:
                 .where(
                     ConversationRow.client_id == self._client_id,
                     ConversationRow.status.in_([Status.IN_PROGRESS.value, Status.ABANDONED.value]),
-                    ConversationRow.channel == "chat",
+                    ConversationRow.channel.in_(["chat", "whatsapp"]),
                 )
                 .order_by(ConversationRow.applied_at)
             ).all()
@@ -169,6 +170,7 @@ class DashboardQueries:
                     reference=row.state["application_ref"],
                     applied_at=row.applied_at,
                     opened=not row.invite_pending,
+                    channel=row.channel,
                 )
                 for row in rows
                 if row.state.get("application_ref")

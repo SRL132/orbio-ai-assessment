@@ -175,3 +175,45 @@ def test_a_failure_without_details_is_still_logged(
     with TestClient(create_app(container)) as client, caplog.at_level("INFO", "app.whatsapp"):
         assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
     assert "whatsapp_delivery_failed code=None" in caplog.text
+
+
+def test_an_invite_code_through_the_webhook_starts_the_screening(tmp_path: Path) -> None:
+    c = build(settings(tmp_path, session_secret=SECRET, whatsapp_invite_number="15551868329"))
+    assert c.whatsapp is not None
+    assert c.whatsapp.invites is not None
+    fake = FakeWhatsApp()
+    c.whatsapp.client = fake  # type: ignore[assignment]
+    cid = c.service.start_conversation("whatsapp", invited_by="rec", application_ref="APP-1")
+    message = {
+        "from": "346",
+        "id": "wamid.invite",
+        "type": "text",
+        "text": {"body": f"Hola {c.whatsapp.invites.code(cid)}"},
+    }
+    raw, headers = signed({"entry": [{"changes": [{"value": {"messages": [message]}}]}]})
+    with TestClient(create_app(c)) as client:
+        assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+    assert c.service.repo.conversation_for("whatsapp", "346") == cid
+    assert c.whatsapp.dispatch_once() == 1
+    assert fake.sent[0][0] == "346"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [{"invite_only": True}, {"whatsapp_invite_number": "15551868329"}],
+)
+def test_the_webhook_ignores_a_new_number_with_no_code(
+    tmp_path: Path, extra: dict[str, object]
+) -> None:
+    c = build(settings(tmp_path, session_secret=SECRET, **extra))
+    assert c.whatsapp is not None
+    fake = FakeWhatsApp()
+    c.whatsapp.client = fake  # type: ignore[assignment]
+    message = {"from": "346", "id": "wamid.x", "type": "text", "text": {"body": "hola"}}
+    raw, headers = signed({"entry": [{"changes": [{"value": {"messages": [message]}}]}]})
+    with TestClient(create_app(c)) as client:
+        # 200, or Meta keeps retrying for 36 hours
+        assert client.post("/webhooks/whatsapp", content=raw, headers=headers).status_code == 200
+    assert c.service.repo.conversation_for("whatsapp", "346") is None
+    assert c.whatsapp.dispatch_once() == 0
+    assert fake.sent == []

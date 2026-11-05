@@ -34,7 +34,7 @@ from app import metrics, tracing
 from app.adapters.clock.clocks import OffsetClock
 from app.adapters.voice.elevenlabs import MAX_CHARS as MAX_TTS_CHARS
 from app.api.dashboard import router as dashboard_router
-from app.api.invites import REFERENCE_PATTERN, InviteLinks
+from app.api.invites import REFERENCE_PATTERN, InviteLinks, public_base
 from app.api.limits import HOUR, MINUTE, client_ip, too_many
 from app.api.whatsapp import router as whatsapp_router
 from app.bootstrap import Container, build
@@ -206,7 +206,8 @@ def create_app(container: Container | None = None) -> FastAPI:
         conversation_id = await asyncio.to_thread(
             c.service.start_conversation, "chat", body.applied_at, "ats", body.application_ref
         )
-        return {"id": str(conversation_id), "chat_url": invites.path(conversation_id)}
+        base = public_base(c.settings.public_base_url, c.settings.demo_mode, str(request.base_url))
+        return {"id": str(conversation_id), "chat_url": base + invites.path(conversation_id)}
 
     @app.get("/chat/invite/{invite}")
     def accept_invite(request: Request, invite: str) -> RedirectResponse:
@@ -232,7 +233,7 @@ def create_app(container: Container | None = None) -> FastAPI:
             "chat.html",
             {
                 "company": c.config.persona.company,
-                "demo_mode": c.settings.demo_mode,
+                "demo_mode": c.settings.demo_mode and not c.settings.invite_only,
                 "offline": c.settings.llm_provider == "fake",
             },
         )
@@ -243,6 +244,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     ) -> dict[str, str]:
         channel = body.channel if body else "chat"
         c = get(request)
+        if c.settings.invite_only:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "an invite link is needed")
         if not c.limiter.allow(
             f"chat-start:{client_ip(request)}", c.settings.chat_starts_per_ip_per_hour, HOUR
         ):
@@ -335,7 +338,8 @@ def create_app(container: Container | None = None) -> FastAPI:
             "voice.html",
             {
                 "company": c.config.persona.company,
-                "demo_mode": c.settings.demo_mode,
+                "demo_mode": c.settings.demo_mode and not c.settings.invite_only,
+                "invite_only": c.settings.invite_only,
                 "offline": c.settings.llm_provider == "fake",
                 "server_tts": c.tts is not None,
             },
@@ -357,7 +361,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     @app.post("/api/demo/advance")
     async def advance_clock(request: Request, body: AdvanceIn) -> dict[str, object]:
         c = get(request)
-        if not c.settings.demo_mode or not isinstance(c.clock, OffsetClock):
+        if (
+            not c.settings.demo_mode
+            or c.settings.invite_only
+            or not isinstance(c.clock, OffsetClock)
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND)
         c.clock.advance(hours=body.hours)
         changed = await c.runner.tick()

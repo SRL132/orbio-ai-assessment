@@ -78,6 +78,9 @@ CONVERSATION_TURNS = Histogram(
 )
 RATE_LIMITED = Counter("sazon_rate_limited_total", "Requests refused with 429.", ["endpoint"])
 WHATSAPP_SENT = Counter("sazon_whatsapp_messages_total", "WhatsApp outbox results.", ["result"])
+WHATSAPP_NO_INVITE = Counter(
+    "sazon_whatsapp_no_invite_total", "WhatsApp messages ignored: new number, no valid code."
+)
 WHATSAPP_DUPLICATES = Counter(
     "sazon_whatsapp_duplicate_deliveries_total", "WhatsApp webhook retries dropped."
 )

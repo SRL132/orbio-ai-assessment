@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from app import tracing
 from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.channels.whatsapp import WhatsAppClient
+from app.adapters.channels.whatsapp_invites import WhatsAppInvites
 from app.adapters.clock.clocks import OffsetClock, SystemClock
 from app.adapters.config.yaml_loader import load_client_config
 from app.adapters.geo.fake import FakeGeocoder
@@ -221,9 +222,18 @@ def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChan
         settings.whatsapp_phone_number_id,
         settings.whatsapp_api_version,
     )
+    invites = None
+    if settings.whatsapp_invite_number:
+        if settings.session_secret is None:
+            raise ValueError("WHATSAPP_INVITE_NUMBER needs SESSION_SECRET to sign its codes")
+        invites = WhatsAppInvites(
+            settings.session_secret.get_secret_value(), settings.whatsapp_invite_number
+        )
     return WhatsAppChannel(
         service,
         client,
         settings.whatsapp_reminder_template,
+        invites=invites,
+        invite_only=settings.invite_only or invites is not None,
         concurrency=settings.whatsapp_dispatch_concurrency,
     )

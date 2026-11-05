@@ -29,6 +29,7 @@ The database schema is managed with Alembic migrations, which run automatically 
 2. In `.env`, set `WHATSAPP_ACCESS_TOKEN` (the temporary token from the WhatsApp setup page, or a system-user token), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` (App settings → Basic) and a `WHATSAPP_VERIFY_TOKEN` of your choice.
 3. Expose the app: `ngrok http 8000`. In WhatsApp → Configuration, set the callback URL to `https://<ngrok-host>/webhooks/whatsapp` with the same verify token, and subscribe to the `messages` field.
 4. Send "hola" to the test number from your phone.
+5. Optional, once replies arrive: set `WHATSAPP_INVITE_NUMBER` to the same number. `/dashboard/invite` then makes `wa.me` links instead of web chat links, each with a signed code already typed in. The candidate presses send, Lucía answers, and the number is tied to that application. A code works once and lasts 7 days. A new number with no valid code gets no conversation and no reply, because replies cost money; a candidate already in a conversation just carries on.
 
 Replies and reminders go out through an outbox (`messages.delivered`), so a reminder created hours later reaches the phone like any reply. `delivered` only means Meta accepted the send. Meta reports what happened next in a webhook, and a failure is logged as `whatsapp_delivery_failed` with its code and title. Since 1 October 2026 [Meta charges per delivered service message](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages), replies included, and needs a payment method on file; its docs don't say how that applies to test numbers. WhatsApp allows free-form messages only within 24 h of the candidate's last message, so on WhatsApp the reminders go out at 2 h and 23 h. Anything later needs an approved template (`WHATSAPP_REMINDER_TEMPLATE`, paid) or is skipped and logged.
 
@@ -55,11 +56,13 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | —, `claude-haiku-5-5` | The fallback, with `LLM_FALLBACK_PROVIDER=anthropic` |
 | `ATS_TOKEN` | — | Optional: enables `POST /api/v1/applications`, which returns a chat link |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | — | Optional: the WhatsApp channel (all four needed) |
+| `WHATSAPP_INVITE_NUMBER` | — | Optional: turns recruiter invites into WhatsApp links with a code. Leave it empty until replies reach phones |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
 | `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
-| `PUBLIC_BASE_URL` | — | Public address of the app; makes the privacy link absolute (needed on WhatsApp) |
+| `INVITE_ONLY` | `false` | Set it on anything public. Only a signed link, a WhatsApp code or the ATS can start a conversation, so `/chat` and `/voice` start nothing on their own, a WhatsApp message from a new number is ignored, and the fast-forward is off |
+| `PUBLIC_BASE_URL` | — | Public address of the app, used by invite links and the privacy link. Leave it empty locally: with `DEMO_MODE=true`, invite links use the address you opened, such as `localhost` |
 | `RECRUITER_USERS`, `SESSION_SECRET` | — | Dashboard login (no default accounts) |
 
 ## What it does

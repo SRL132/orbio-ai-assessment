@@ -3,7 +3,8 @@
 import threading
 import time
 from datetime import timedelta
-from uuid import UUID
+from urllib.parse import parse_qs, urlparse
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ import sqlalchemy as sa
 from prometheus_client import REGISTRY
 
 from app.adapters.calendar.sql_calendar import SqlCalendar
+from app.adapters.channels.whatsapp_invites import WhatsAppInvites
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
@@ -340,3 +342,153 @@ def test_only_one_process_dispatches_the_outbox(setup) -> None:
     channel.handle(incoming("hola", phone="34600000003"))
     assert other_process.dispatch_once() == 1
     assert len(fake.sent) == 3  # each greeting sent once
+
+
+# --- Invites with a code ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def invited(setup):
+    service, channel, fake, clock = setup
+    channel.invites = WhatsAppInvites("a-test-secret", "+1 (555) 186-8329")
+    channel.invite_only = True
+    cid = service.start_conversation("whatsapp", invited_by="rec", application_ref="APP-1")
+    return service, channel, fake, clock, cid
+
+
+def typed_in(channel: WhatsAppChannel, cid: UUID) -> str:
+    return parse_qs(urlparse(channel.invites.url(cid)).query)["text"][0]
+
+
+def test_invite_link_opens_whatsapp_with_the_code_typed_in(invited) -> None:
+    _, channel, _, _, cid = invited
+    url = channel.invites.url(cid)
+    assert url.startswith("https://wa.me/15551868329?text=Hola%20inv-")
+    assert typed_in(channel, cid) == f"Hola {channel.invites.code(cid)}"
+    assert channel.invites.chat_url() == "https://wa.me/15551868329"
+
+
+def test_sending_the_code_ties_the_number_to_the_application_and_starts_the_screening(
+    invited,
+) -> None:
+    service, channel, fake, clock, cid = invited
+    assert channel.dispatch_once() == 0  # the greeting waits: there's nobody to send it to yet
+
+    clock.advance(hours=48)  # applied two days ago, and the 24 h window only starts now
+    assert channel.handle(incoming(typed_in(channel, cid))) == []
+    assert service.repo.conversation_for("whatsapp", PHONE) == cid
+    state = service.get(cid)
+    assert state.invite_pending is False
+    assert state.application_ref == "APP-1"
+    assert channel.dispatch_once() == 1
+    assert fake.sent[0][0] == PHONE
+    assert "Lucía" in fake.sent[0][1]
+
+    say(service, channel, "Sí")
+    assert service.get(cid).stage != Stage.CONSENT
+    assert all("inv-" not in m.text for m in service.messages(cid))
+
+
+def test_a_code_works_once(invited) -> None:
+    service, channel, _, _, cid = invited
+    channel.handle(incoming(typed_in(channel, cid)))
+    channel.handle(incoming(typed_in(channel, cid), phone="34600999888"))
+    assert service.repo.conversation_for("whatsapp", "34600999888") is None
+    assert service.repo.conversation_for("whatsapp", PHONE) == cid
+
+
+def test_tapping_the_link_again_keeps_the_conversation_and_hides_the_code(invited) -> None:
+    service, channel, fake, _, cid = invited
+    channel.handle(incoming(typed_in(channel, cid)))
+    channel.dispatch_once()
+    say(service, channel, "Sí")  # past consent, so their messages are kept as written
+    asked = len(fake.sent)
+    say(service, channel, typed_in(channel, cid))
+    assert service.repo.conversation_for("whatsapp", PHONE) == cid
+    assert [m.text for m in service.messages(cid) if m.direction == "in"][-1] == "Hola"
+    assert len(fake.sent) > asked  # they're asked again rather than left in silence
+
+
+def test_a_message_that_is_only_a_used_code_still_gets_an_answer(invited) -> None:
+    service, channel, _, _, cid = invited
+    channel.handle(incoming(typed_in(channel, cid)))
+    channel.handle(incoming(channel.invites.code(cid)))
+    assert [m.text for m in service.messages(cid) if m.direction == "in"] == ["Hola"]
+
+
+@pytest.mark.parametrize("bad", ["forged", "expired", "erased", "web chat"])
+def test_a_code_that_cannot_be_claimed_gets_no_conversation_and_no_reply(
+    invited, bad: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, channel, fake, _, cid = invited
+    target = cid
+    if bad == "erased":
+        target = uuid4()
+    elif bad == "web chat":
+        target = service.start_conversation("chat", invited_by="rec")
+    text = typed_in(channel, target)
+    if bad == "forged":
+        text = text[:-3] + ("aaa" if not text.endswith("aaa") else "bbb")
+    elif bad == "expired":
+        real = time.time()
+        monkeypatch.setattr("itsdangerous.timed.time.time", lambda: real + 8 * 24 * 3600)
+
+    assert channel.handle(incoming(text)) == []
+    assert service.repo.conversation_for("whatsapp", PHONE) is None
+    channel.dispatch_once()
+    assert fake.sent == []
+    if bad != "erased":
+        assert service.get(target).invite_pending is True
+
+
+def test_codes_are_ordinary_text_when_invites_are_off(setup) -> None:
+    service, channel, _, _ = setup
+    cid = service.start_conversation("whatsapp", invited_by="rec")
+    code = WhatsAppInvites("a-test-secret", "1").code(cid)
+    channel.handle(incoming(f"Hola {code}"))
+    assert service.get(cid).invite_pending is True
+
+
+@pytest.mark.parametrize("text", ["hola", None, "x" * 4000])
+def test_a_new_number_with_no_code_costs_nothing(invited, text: str | None) -> None:
+    service, channel, fake, _, _ = invited
+    with service.repo._sessions() as session:
+        before = session.scalar(sa.text("select count(*) from conversations"))
+    ignored = REGISTRY.get_sample_value("sazon_whatsapp_no_invite_total") or 0
+    message = incoming(text)
+    assert channel.handle(message) == []
+    assert channel.dispatch_once() == 0
+    assert (fake.sent, fake.typing, fake.templates) == ([], [], [])
+    assert service.repo.conversation_for("whatsapp", PHONE) is None
+    with service.repo._sessions() as session:
+        assert session.scalar(sa.text("select count(*) from conversations")) == before
+    assert REGISTRY.get_sample_value("sazon_whatsapp_no_invite_total") == ignored + 1
+
+
+def test_invite_only_ignores_new_numbers_even_while_invites_are_web_links(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.invite_only = True
+    assert channel.handle(incoming("hola")) == []
+    assert channel.dispatch_once() == 0
+    assert fake.sent == []
+    assert service.repo.conversation_for("whatsapp", PHONE) is None
+
+
+def test_invite_only_lets_a_conversation_already_under_way_carry_on(invited) -> None:
+    service, channel, fake, _, cid = invited
+    channel.handle(incoming(typed_in(channel, cid)))
+    channel.dispatch_once()
+    say(service, channel, "Sí")
+    say(service, channel, "Ana López")
+    assert service.get(cid).candidate.full_name is not None
+    assert len(fake.sent) >= 3
+
+
+def test_invite_only_gives_a_finished_candidate_no_new_conversation(invited) -> None:
+    service, channel, _, _, cid = invited
+    channel.handle(incoming(typed_in(channel, cid)))
+    state = service.get(cid)
+    state.stage, state.status = Stage.CLOSED, Status.QUALIFIED
+    service.repo.save_turn(state, [], [], [], lease_owner=None)
+    assert channel.handle(incoming("hola")) == []
+    assert service.repo.conversation_for("whatsapp", PHONE) == cid

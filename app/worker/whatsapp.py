@@ -14,6 +14,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -23,6 +24,7 @@ import httpx
 from app import metrics
 from app.adapters.channels.quick_replies import quick_replies
 from app.adapters.channels.whatsapp import WhatsAppClient, WhatsAppInbound, parse_webhook
+from app.adapters.channels.whatsapp_invites import WhatsAppInvites
 from app.domain.models import TERMINAL_STATUSES, Channel, Outbound, Stage
 from app.worker.service import ScreeningService
 
@@ -64,12 +66,16 @@ class WhatsAppChannel:
         reminder_template: str | None = None,
         concurrency: int = 1,
         batch: int = 200,
+        invites: WhatsAppInvites | None = None,
+        invite_only: bool = False,
     ) -> None:
         self.service = service
         self.client = client
         self.reminder_template = reminder_template or None
         self.concurrency = concurrency  # conversations sent at once (see dispatch_once)
         self.batch = batch  # messages read from the outbox per run
+        self.invites = invites  # None: invites stay web chat links
+        self.invite_only = invite_only  # a number with no conversation needs a valid code
         self._dispatcher_id = uuid4().hex
 
     # --- Inbound --------------------------------------------------------------------------------
@@ -107,10 +113,22 @@ class WhatsAppChannel:
     def _handle_message(self, message: WhatsAppInbound) -> UUID | None:
         """One new (not retried) message. Returns its conversation if it needs a turn."""
         repo = self.service.repo
+        if self.invites is not None and message.text is not None:
+            invited, rest = self.invites.read(message.text)
+            if invited is not None and self._claim(invited, message.wa_id):
+                return None  # like any first message: the greeting asks for consent
+            if rest != message.text:  # a used or bad code is still not an answer
+                message = replace(message, text=rest or "Hola")
         cid = self._continues(message)
         if cid is None:
             with self._contact_lock(message.wa_id):
                 cid = self._continues(message)  # another message may have opened it meanwhile
+                if cid is None and self.invite_only:
+                    # No conversation, no reply and no LLM call: a reply is paid for per message,
+                    # so anyone texting the number must not be able to run up a bill.
+                    metrics.WHATSAPP_NO_INVITE.inc()
+                    logger.info("whatsapp_no_invite_ignored")
+                    return None
                 if cid is None:
                     # A new candidate (or a returning one saying hello): open a conversation.
                     # The greeting asks for consent, so this first message isn't an answer.
@@ -124,6 +142,20 @@ class WhatsAppChannel:
         if self.service.receive(cid, message.text, channel_message_id=message.message_id):
             return cid
         return None
+
+    def _claim(self, conversation_id: UUID, wa_id: str) -> bool:
+        """Tie a pending WhatsApp invite to this number. Its greeting has been waiting in the
+        outbox for a contact, so it goes out on the next dispatch. Opening it comes first: it
+        restarts the clock that the 24 h window is measured from."""
+        state = self.service.repo.get(conversation_id)
+        if state is None or state.channel != CHANNEL:
+            return False
+        with self._contact_lock(wa_id):
+            if not self.service.open_invite(conversation_id):
+                return False
+            self.service.repo.link_contact(CHANNEL, wa_id, conversation_id)
+        logger.info("whatsapp_invite_claimed id=%s", conversation_id)
+        return True
 
     def _continues(self, message: WhatsAppInbound) -> UUID | None:
         """The conversation this message belongs to, or None if it opens a new one."""

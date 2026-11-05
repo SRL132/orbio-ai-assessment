@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 import httpx
@@ -695,3 +696,108 @@ def test_the_unfinished_list_keeps_the_silent_and_drops_who_declined(
         container.service.send_due_reminders()
 
     assert [r["application_ref"] for r in unfinished(logged_in)] == ["SILENT"]
+
+
+# --- Where invite links point ----------------------------------------------------------------
+
+
+def invite_client(tmp_path: Path, base_url: str, **extra: object) -> TestClient:
+    settings = Settings(  # type: ignore[arg-type]
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'links.db'}",
+        debounce_seconds=0,
+        recruiter_users=f"rec@sazon.test:{hash_password(PASSWORD)}",
+        session_secret=secrets.token_hex(16),
+        **extra,
+    )
+    client = TestClient(create_app(build(settings)), base_url=base_url)
+    submit(client, "/login", {"email": "rec@sazon.test", "password": PASSWORD})
+    return client
+
+
+@pytest.mark.parametrize(
+    ("opened_on", "public", "expected"),
+    [
+        ("http://localhost:8000", "", "http://localhost:8000/chat/invite/"),
+        (
+            "https://evil.example",
+            "https://grupo-sazon-screening.onrender.com/",
+            "https://grupo-sazon-screening.onrender.com/chat/invite/",
+        ),
+    ],
+)
+def test_links_point_at_localhost_locally_and_at_the_deployed_site_in_production(
+    tmp_path: Path, opened_on: str, public: str, expected: str
+) -> None:
+    with invite_client(tmp_path, opened_on, public_base_url=public) as client:
+        assert links(upload(client, count="1"))[0]["chat_url"].startswith(expected)
+
+
+WHATSAPP = {
+    "whatsapp_access_token": "token",
+    "whatsapp_phone_number_id": "123",
+    "whatsapp_verify_token": "verify",
+    "whatsapp_app_secret": "secret",
+}
+
+
+def test_web_links_stay_while_whatsapp_invites_are_off_even_with_the_channel_on(
+    tmp_path: Path,
+) -> None:
+    with invite_client(tmp_path, "http://localhost:8000", **WHATSAPP) as client:
+        assert "chat_url" in links(upload(client, count="1"))[0]
+        assert "chat link" in client.get("/dashboard/invite").text
+        assert "whatsapp_url" not in client.get("/dashboard/invite/unfinished.csv").text
+
+
+def test_with_an_invite_number_links_open_whatsapp(tmp_path: Path) -> None:
+    extra = {**WHATSAPP, "whatsapp_invite_number": "+1 555 186 8329"}
+    with invite_client(tmp_path, "http://localhost:8000", **extra) as client:
+        assert "WhatsApp link" in client.get("/dashboard/invite").text
+        body = "applied_at,application_ref\n2026-01-05T09:00:00+01:00,APP-1\n"
+        row = links(upload(client, body.encode()))[0]
+        assert "chat_url" not in row
+        assert row["whatsapp_url"].startswith("https://wa.me/15551868329?text=")
+
+        container = client.app.state.container
+        channel = container.whatsapp
+        unsent = unfinished(client)[0]
+        assert (unsent["chat_url"], unsent["opened"]) == ("", "no")
+        code = parse_qs(urlparse(unsent["whatsapp_url"]).query)["text"][0]
+        cid, _ = channel.invites.read(code)
+        assert container.service.get(cid).channel == "whatsapp"
+
+        container.service.open_invite(cid)
+        sent = unfinished(client)[0]
+        assert (sent["opened"], sent["whatsapp_url"]) == ("yes", "https://wa.me/15551868329")
+
+
+def test_a_chat_invite_stays_a_chat_link_after_whatsapp_invites_are_turned_on(
+    tmp_path: Path,
+) -> None:
+    extra = {**WHATSAPP, "whatsapp_invite_number": "15551868329"}
+    with invite_client(tmp_path, "http://localhost:8000", **extra) as client:
+        client.app.state.container.service.start_conversation(
+            "chat", invited_by="rec", application_ref="OLD-1"
+        )
+        row = unfinished(client)[0]
+        assert row["chat_url"].startswith("http://localhost:8000/chat/invite/")
+        assert row["whatsapp_url"] == ""
+
+
+def test_whatsapp_invites_left_over_after_turning_them_off_are_not_listed(
+    tmp_path: Path,
+) -> None:
+    with invite_client(tmp_path, "http://localhost:8000") as client:
+        client.app.state.container.service.start_conversation(
+            "whatsapp", invited_by="rec", application_ref="OLD-1"
+        )
+        assert unfinished(client) == []
+        assert "chat_url" in client.get("/dashboard/invite/unfinished.csv").text
+
+
+def test_a_file_that_already_has_whatsapp_links_is_refused(logged_in: TestClient) -> None:
+    body = b"applied_at,whatsapp_url\n2026-01-05T09:00:00+00:00,x\n"
+    response = upload(logged_in, body)
+    assert response.status_code == 400
+    assert "whatsapp_url column" in response.text
