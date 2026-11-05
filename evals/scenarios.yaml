@@ -466,7 +466,7 @@
 - id: invalid_8_junk_to_everything
   description: Replies with junk to every question. Never qualified, never knocked out; ends in review.
   persona: Someone who consents and then only sends numbers and symbols, whatever is asked, and finally confirms.
-  steps: [Sí, "123", "...", "000", "---", "999", "!!!", "...", "1", "2", "...", "-", "...", "...", "...", Sí]
+  steps: [Sí, "123", "...", "000", "---", "999", "!!!", "...", "1", "2", "...", "-", "...", "...", "...", "...", "...", "...", "...", "...", "...", Sí]
   expect:
     status: needs_review
 
