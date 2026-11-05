@@ -216,8 +216,11 @@ def create_app(container: Container | None = None) -> FastAPI:
             conversation_id = invites.read(invite)
         except BadSignature as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "invite not found") from exc
-        get(request).service.open_invite(UUID(conversation_id))
-        response = RedirectResponse(f"/chat?conversation={conversation_id}", status_code=303)
+        service = get(request).service
+        service.open_invite(UUID(conversation_id))
+        state = service.get(UUID(conversation_id))
+        page = "/voice" if state is not None and state.channel == "voice" else "/chat"
+        response = RedirectResponse(f"{page}?conversation={conversation_id}", status_code=303)
         give_ownership(request, response, conversation_id)
         return response
 
@@ -331,8 +334,10 @@ def create_app(container: Container | None = None) -> FastAPI:
         )
 
     @app.get("/voice", response_class=HTMLResponse)
-    def voice_page(request: Request) -> HTMLResponse:
+    def voice_page(request: Request, conversation: str | None = None) -> HTMLResponse:
         c = get(request)
+        # Set only for a browser that opened the invite link (see `accept_invite`).
+        invited = conversation if conversation in owned_conversations(request) else None
         return TEMPLATES.TemplateResponse(
             request,
             "voice.html",
@@ -340,6 +345,7 @@ def create_app(container: Container | None = None) -> FastAPI:
                 "company": c.config.persona.company,
                 "demo_mode": c.settings.demo_mode and not c.settings.invite_only,
                 "invite_only": c.settings.invite_only,
+                "invited": invited,
                 "offline": c.settings.llm_provider == "fake",
                 "server_tts": c.tts is not None,
             },

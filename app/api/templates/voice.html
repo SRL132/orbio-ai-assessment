@@ -7,6 +7,7 @@
   <style>
     :root { --brand:#c2410c; --ink:#1f2937; --muted:#6b7280; --bg:#fff7ed; }
     * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
     body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#f3f4f6; display:flex; justify-content:center; }
     .phone { width:100%; max-width:420px; height:100vh; display:flex; flex-direction:column; background:var(--bg); }
     header { background:var(--brand); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px; }
@@ -25,6 +26,7 @@
     #mic.listening { animation:pulse 1.2s infinite; }
     @keyframes pulse { 0% { box-shadow:0 0 0 0 #c2410c88; } 100% { box-shadow:0 0 0 22px #c2410c00; } }
     #start { border:none; background:var(--brand); color:#fff; border-radius:24px; padding:12px 24px; font-size:16px; cursor:pointer; }
+    #start:disabled { background:#d1d5db; color:var(--muted); cursor:default; }
     #log { flex:1; overflow-y:auto; padding:8px 12px; display:flex; flex-direction:column; gap:6px; border-top:1px solid #fed7aa; }
     .msg { max-width:85%; padding:7px 10px; border-radius:8px; white-space:pre-wrap; font-size:14px; }
     .out { align-self:flex-start; background:#fff; } .in { align-self:flex-end; background:#dcf8c6; }
@@ -51,12 +53,18 @@
     <span class="status" id="status">—</span>
   </header>
   <div id="unsupported" class="warn" hidden>
+    {% if invite_only %}
+    Este navegador no reconoce voz. Usa Chrome o Edge, o escribe abajo.
+    · This browser has no speech recognition: use Chrome or Edge, or type below.
+    {% else %}
     Este navegador no reconoce voz. Usa Chrome o Edge, escribe abajo, o ve al <a href="/chat">chat</a>.
     · This browser has no speech recognition: use Chrome or Edge, type below, or use the <a href="/chat">chat</a>.
+    {% endif %}
   </div>
   <div class="stage">
-    {% if invite_only %}<p>Esta página no está disponible: usa el enlace que te envió el equipo de selección. · Not available here: use the link the hiring team sent you.</p>{% endif %}
-    <button id="start" type="button"{% if invite_only %} disabled{% endif %}>📞 Empezar llamada · Start call</button>
+    {% set needs_link = invite_only and not invited %}
+    {% if needs_link %}<p>Para empezar la llamada, abre el enlace de voz que te envió el equipo de selección. · To start the call, open the voice link the hiring team sent you.</p>{% endif %}
+    <button id="start" type="button"{% if needs_link %} disabled{% endif %}>📞 Empezar llamada · Start call</button>
     <button id="mic" type="button" hidden disabled>Hablar</button>
     <div id="state"></div>
     <div id="caption" aria-live="polite"></div>
@@ -69,6 +77,7 @@
 </div>
 <script>
 const SERVER_TTS = {{ 'true' if server_tts else 'false' }};
+const INVITED = {{ invited | tojson }};  // the conversation from an invite link, if any
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const $ = (id) => document.getElementById(id);
 const mic = $("mic"), stateEl = $("state"), caption = $("caption"), log = $("log");
@@ -188,10 +197,12 @@ async function poll() {
   try {
     const data = await (await api(`/api/conversations/${conversationId}/messages?after=${lastSeq}`)).json();
     language = data.language; status = data.status; callEnded = data.stage === "closed";
+    const first = lastSeq === 0;
     $("status").textContent = status.replace("_", " ");
     for (const m of data.messages) {
       bubble(m.direction, m.text); lastSeq = m.seq;
       if (m.direction === "out") queue.push(m.text);
+      else if (first) queue.length = 0;  // someone coming back hears only where they left off
     }
     if (queue.length) drain(); else micReady();
   } catch (e) { setState("…"); }
@@ -200,8 +211,8 @@ async function poll() {
 $("start").addEventListener("click", async () => {
   $("start").hidden = true; mic.hidden = false; $("form").hidden = false;
   speechSynthesis.getVoices();  // warm up the voice list (needs a user gesture on some browsers)
-  const { id } = await (await api("/api/conversations", { method: "POST", body: JSON.stringify({ channel: "voice" }) })).json();
-  conversationId = id; lastSeq = 0; log.innerHTML = "";
+  conversationId = INVITED ?? (await (await api("/api/conversations", { method: "POST", body: JSON.stringify({ channel: "voice" }) })).json()).id;
+  lastSeq = 0; log.innerHTML = "";
   await poll();
   setInterval(poll, 1500);
 });

@@ -10,7 +10,7 @@ An AI screening agent and recruiter dashboard for **Grupo Sazón**, a (fictional
 
 https://grupo-sazon-screening.onrender.com, on Render's free tier with Neon Postgres. The first visit after a quiet spell can take about a minute while the server wakes up.
 
-It's invite-only, so a chat needs a signed link made on the recruiter dashboard. Voice and the clock fast-forward are off there, so run those locally. WhatsApp replies are blocked for now: messages reach the app, but Meta refuses delivery because the new business account is locked (error 131031).
+It's invite-only, so a chat or voice call needs a signed link made on the recruiter dashboard. The clock fast-forward is off there, so run that locally. WhatsApp replies are blocked for now: messages reach the app, but Meta refuses delivery because the new business account is locked (error 131031).
 
 ## Quick start
 
