@@ -60,6 +60,8 @@ uv run python -m evals.compare                  # the provider comparison, cappe
 
 Live runs record cost (from OpenRouter's `usage.cost`) and seconds per candidate turn. `--budget-usd` stops a run at a spending cap, and an incomplete run can't become a baseline. The comparison writes a Markdown table to `evals/results/compare-<time>.md` with pass rate, field accuracy, p50/p95 seconds per turn and cost per conversation.
 
+Every live run of a whole scenario file also adds one line to `evals/history.jsonl`: when, which model, scores, cost, latency, the ids of the failed scenarios, and a fingerprint of the prompts and client config it ran on. Commit it with the change it measured. A change in the fingerprint with no new line means the behaviour files changed and nothing measured them. The full results in `evals/results/` stay local. Lines from before this file existed have `"fingerprint": null`.
+
 Scores per scenario: outcome correct, field accuracy against the expected record, number of turns, and the output check on every agent message. `evals/baseline.json` holds one entry per provider/model/mode. The offline entry passing says the engine and policy are right; it says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. Live runs are the real measure. `evals/baseline.json` also has a GPT-5.6 Terra entry, but CI has no API key, so no check fails if live results drop. Measured results: [architecture → where the choice stands](architecture.md#where-the-choice-stands).
 
 ## Claude Code hooks

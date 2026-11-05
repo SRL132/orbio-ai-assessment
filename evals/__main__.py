@@ -12,6 +12,7 @@ Live providers cost money and must only ever see synthetic candidates (these sce
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import UTC, datetime
@@ -40,6 +41,9 @@ from evals.runner import (
 EVALS_DIR = Path(__file__).parent
 BASELINE = EVALS_DIR / "baseline.json"
 RESULTS = EVALS_DIR / "results"
+HISTORY = EVALS_DIR / "history.jsonl"
+# What decides the agent's behaviour besides the Python: a change here means a new fingerprint.
+BEHAVIOUR_FILES = (Path("app/adapters/llm/prompts"), Path("app/config"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -126,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         f"cost ${run['cost_usd']:.4f}{'' if complete else ' · STOPPED AT BUDGET'}"
     )
     _save(key, run)
+    if keeps_history(args.provider, args.scenario):
+        append_history(HISTORY, history_entry(key, run, args.scenarios.name))
 
     baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
     subset = args.scenario or args.scenarios != SCENARIOS
@@ -263,6 +269,51 @@ def _save(key: str, run: dict[str, Any]) -> None:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     path = RESULTS / f"{stamp}-{key.replace('/', '_')}.json"
     path.write_text(json.dumps({"key": key, **run}, indent=2) + "\n")
+
+
+def keeps_history(provider: str, scenario_ids: list[str] | None) -> bool:
+    """Live runs of a whole scenario file only: offline runs happen on every test run, and a
+    hand-picked subset can't be compared with anything."""
+    return provider != "fake" and not scenario_ids
+
+
+def behaviour_fingerprint(root: Path = EVALS_DIR.parent) -> str:
+    """Short hash of the prompts and client config this run used."""
+    digest = hashlib.sha256()
+    for directory in BEHAVIOUR_FILES:
+        for path in sorted((root / directory).rglob("*")):
+            if path.suffix in {".md", ".yaml"}:
+                digest.update(path.relative_to(root).as_posix().encode())
+                digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def history_entry(key: str, run: dict[str, Any], scenarios_file: str) -> dict[str, Any]:
+    """One committed line per live run. Scores and scenario ids, never a transcript."""
+    keep = (
+        "passed",
+        "total",
+        "complete",
+        "pass_rate",
+        "field_accuracy",
+        "p50_turn_s",
+        "p95_turn_s",
+        "cost_usd",
+        "cost_per_conversation_usd",
+    )
+    return {
+        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "key": key,
+        "scenarios_file": scenarios_file,
+        "fingerprint": behaviour_fingerprint(),
+        **{k: run[k] for k in keep},
+        "failed": sorted(name for name, s in run["scenarios"].items() if not s["passed"]),
+    }
+
+
+def append_history(path: Path, entry: dict[str, Any]) -> None:
+    with path.open("a", encoding="utf-8") as history:
+        history.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
