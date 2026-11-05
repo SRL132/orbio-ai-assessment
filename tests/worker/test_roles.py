@@ -2,9 +2,11 @@
 
 import asyncio
 import secrets
+import socket
 from datetime import timedelta
 from pathlib import Path
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.api.main import create_app
@@ -46,3 +48,21 @@ def test_the_worker_process_starts_and_stops_cleanly(tmp_path: Path) -> None:
         await asyncio.wait_for(task, 5)
 
     asyncio.run(scenario())
+
+
+def test_a_worker_with_a_metrics_port_serves_its_metrics(tmp_path: Path) -> None:
+    with socket.socket() as free:
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+    configured = settings(tmp_path, "worker").model_copy(update={"metrics_port": port})
+
+    async def scenario() -> str:
+        stop = asyncio.Event()
+        task = asyncio.create_task(run(configured, stop))
+        await asyncio.sleep(0.2)
+        response = await asyncio.to_thread(httpx.get, f"http://127.0.0.1:{port}/metrics")
+        stop.set()
+        await task
+        return response.text
+
+    assert "sazon_turn_seconds" in asyncio.run(scenario())

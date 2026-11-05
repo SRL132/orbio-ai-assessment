@@ -1,0 +1,92 @@
+# The thresholds in docs/architecture.md, "Monitor". Cost and the 2-day review limit are planning
+# figures: replace them with real ones after the pilot.
+groups:
+  - name: sazon
+    rules:
+      - alert: ProcessDown
+        expr: up == 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.job }} at {{ $labels.instance }} can't be scraped"
+
+      # A stopped worker vanishes from DNS instead of reporting up == 0.
+      - alert: NoWorkers
+        expr: absent(up{job="worker"})
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "No worker process is running: nothing answers candidates"
+
+      - alert: SlowTurns
+        expr: histogram_quantile(0.95, sum by (le) (rate(sazon_turn_seconds_bucket[10m]))) > 8
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "p95 turn time is above 8 s: candidates are waiting"
+
+      - alert: HighFallbackRate
+        expr: |
+          sum(rate(sazon_events_total{type=~"extractor_failed|responder_failed|reply_rejected"}[10m]))
+            / sum(rate(sazon_llm_calls_total[10m])) > 0.05
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "More than 5% of LLM calls fail or fall back to a template"
+
+      - alert: MessagesWaiting
+        expr: max(sazon_pending_messages_oldest_seconds) > 60
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "The oldest unprocessed message has waited over 60 s"
+
+      - alert: TurnsHeld
+        expr: sum(increase(sazon_turns_held_total{outcome="held"}[5m])) > 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "No LLM is answering: candidates' messages are held for a retry"
+
+      - alert: TurnsGaveUp
+        expr: sum(increase(sazon_turns_held_total{outcome="gave_up"}[10m])) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "Retries ran out for a candidate's message"
+
+      - alert: CompletionDropped
+        expr: |
+          (
+            sum(increase(sazon_outcomes_total{status=~"qualified|disqualified|needs_review"}[7d]))
+              / sum(increase(sazon_outcomes_total[7d]))
+          ) < 0.8 * (
+            sum(increase(sazon_outcomes_total{status=~"qualified|disqualified|needs_review"}[7d] offset 7d))
+              / sum(increase(sazon_outcomes_total[7d] offset 7d))
+          )
+        for: 1h
+        labels: {severity: ticket}
+        annotations:
+          summary: "Completion fell over 20% week on week"
+
+      - alert: ReviewQueueOld
+        expr: max(sazon_review_queue_oldest_seconds) > 172800
+        for: 1h
+        labels: {severity: ticket}
+        annotations:
+          summary: "A candidate has waited for review over 2 days (calendar days, not working days)"
+
+      - alert: CostPerConversationHigh
+        expr: |
+          sum(rate(sazon_conversation_cost_usd_sum[1d]))
+            / sum(rate(sazon_conversation_cost_usd_count[1d])) > 0.032
+        for: 1h
+        labels: {severity: ticket}
+        annotations:
+          summary: "A conversation costs over 2x the measured $0.016"
+
+      - alert: OutboxStuck
+        expr: max(sazon_whatsapp_outbox_oldest_seconds) > 3600
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "A WhatsApp message has been undelivered for over 1 h"

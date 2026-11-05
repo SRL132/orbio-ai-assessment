@@ -226,7 +226,7 @@ Design only; the demo runs as one process.
 | Provider outage: fallback calls, held turns | The primary is down or rate-limited; candidates are waiting on a retry | any `held` for 5 min, or any `gave_up` |
 | Outbox backlog | ATS sync stuck | undelivered > 1 h |
 
-Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token). Each signal above maps to a metric:
+Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token) on web processes. Worker processes, where turns and LLM calls happen, serve theirs on `METRICS_PORT`, with no token, so keep that port on a private network. `docker compose --profile monitoring up --build` runs Prometheus (`:9090`) and Alertmanager (`:9093`) locally with the rules in `monitoring/alerts.yml`. Alertmanager has no receiver yet, so alerts only show on those pages, and nothing notifies anyone. Each signal above maps to a metric:
 
 | Signal | Metric |
 | --- | --- |

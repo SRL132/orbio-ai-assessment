@@ -3,6 +3,7 @@
 #   docker compose up --scale worker=3   (any number of workers: leases keep them apart)
 # Settings (LLM provider, keys, recruiter accounts) come from .env if present. This is the demo
 # stack: without .env it runs offline, not on the production LLMs the image defaults to.
+#   docker compose --profile monitoring up --build   → adds Prometheus (:9090) and Alertmanager (:9093)
 
 services:
   db:
@@ -49,11 +50,43 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
       LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
       LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+      METRICS_PORT: 9100  # reachable only on the compose network
     healthcheck:
-      disable: true  # no HTTP server to probe
+      disable: true  # only serves metrics
     depends_on:
       app:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    # METRICS_TOKEN comes from .env; Prometheus reads a bearer token only from a file.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        printf %s "$$METRICS_TOKEN" > /tmp/metrics_token &&
+        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml
+        --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["monitoring"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
 volumes:
   pgdata:
+  prometheus:

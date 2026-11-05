@@ -1,0 +1,6 @@
+# Nothing is sent anywhere yet: alerts only show at http://localhost:9093. Add a receiver (email,
+# Slack, on-call) before relying on this.
+route:
+  receiver: nobody
+receivers:
+  - name: nobody

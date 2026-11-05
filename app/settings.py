@@ -96,6 +96,8 @@ class Settings(BaseSettings):
 
     recruiter_users: SecretStr | None = None
     session_secret: SecretStr | None = None
+    # Worker processes: serve metrics on this port, with no token. Keep it on a private network.
+    metrics_port: int | None = None
     # When set, /metrics needs "Authorization: Bearer <token>" (else keep it off the internet).
     metrics_token: SecretStr | None = None
     # The ATS's "Authorization: Bearer <token>" for POST /api/v1/applications (unset: disabled).
