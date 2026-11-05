@@ -15,8 +15,8 @@ from sqlalchemy import ColumnElement, Engine, String, case, cast, func, select, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.adapters.storage.sql import ChannelContactRow, ConversationRow, MessageRow
-from app.domain.models import Availability, FieldName, Schedule, Stage, Status
+from app.adapters.storage.sql import ChannelContactRow, ConversationRow, EventRow, MessageRow
+from app.domain.models import Availability, EventType, FieldName, Schedule, Stage, Status
 
 
 class CandidateItem(BaseModel):
@@ -281,6 +281,8 @@ class DashboardQueries:
             by_language = breakdown(row.language)
             by_channel = breakdown(row.channel)
             by_location = breakdown(row.location_id)
+            by_version = breakdown(row.agent_version)
+            knockouts, overturned = self._knockouts_overturned(session)
 
         funnel = [("started", started), ("consented", n_consented)]
         funnel += [(name.value, count) for name, count in zip(field_order, reached, strict=True)]
@@ -297,13 +299,38 @@ class DashboardQueries:
             by_language=by_language,
             by_channel=by_channel,
             by_location=by_location,
+            by_version=by_version,
             interviews_booked=booked,
             target_hours=target_hours,
             screened_on_time=n_on_time,
             screening_due=n_due,
             screened_on_time_rate=round(n_on_time / n_due, 3) if n_due else None,
             invites_unopened=n_unopened,
+            knockouts=knockouts,
+            knockouts_overturned=overturned,
+            overturn_rate=round(overturned / knockouts, 3) if knockouts else None,
         )
+
+    def _knockouts_overturned(self, session: Session) -> tuple[int, int]:
+        """Candidates knocked out, and how many of them a recruiter moved away from disqualified.
+        A candidate correcting their own answer isn't an overturn: no override event."""
+        event = EventRow
+        knocked_out = (
+            select(event.conversation_id)
+            .where(event.client_id == self._client_id, event.type == EventType.KNOCKOUT.value)
+            .subquery()
+        )
+        knockouts = session.scalar(select(func.count(func.distinct(knocked_out.c.conversation_id))))
+        overturned = session.scalar(
+            select(func.count(func.distinct(event.conversation_id))).where(
+                event.client_id == self._client_id,
+                event.type == EventType.OVERRIDE.value,
+                event.data["from"].as_string() == Status.DISQUALIFIED.value,
+                event.data["to"].as_string() != Status.DISQUALIFIED.value,
+                event.conversation_id.in_(select(knocked_out.c.conversation_id)),
+            )
+        )
+        return knockouts or 0, overturned or 0
 
     def backlog(self) -> dict[str, tuple[int, datetime | None]]:
         """Operational backlogs for monitoring: how many items wait, and since when."""
@@ -368,12 +395,16 @@ class Analytics(BaseModel):
     by_language: dict[str, tuple[int, int]]
     by_channel: dict[str, tuple[int, int]]
     by_location: dict[str, tuple[int, int]]
+    by_version: dict[str, tuple[int, int]]
     interviews_booked: int
     target_hours: float
     screened_on_time: int
     screening_due: int  # applicants whose window has closed, or who were already screened
     screened_on_time_rate: float | None
     invites_unopened: int
+    knockouts: int
+    knockouts_overturned: int  # by a recruiter; the pilot's main safety number
+    overturn_rate: float | None
 
 
 # Reached a final outcome through the conversation (not dropped off).

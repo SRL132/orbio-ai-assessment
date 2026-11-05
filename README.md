@@ -67,6 +67,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
 | `METRICS_TOKEN` | — | Requires a bearer token on `/metrics` |
 | `METRICS_PORT` | — | Worker processes: serve metrics on this port, with no token. Keep it on a private network |
+| `LLM_CAPTURE_OUTPUTS` | `false` | Keep the LLM's raw replies to debug extraction, read with `python -m app.cli llm-outputs <id>`. They hold personal data, so synthetic data only for now |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
 | `CLIENT_IP_HEADER` | — | Behind a proxy, the header it always overwrites with the caller's address, used by rate limits (Render: `True-Client-IP`). Leave it empty with no proxy, or callers can fake their address |

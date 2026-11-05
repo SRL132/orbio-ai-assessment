@@ -10,6 +10,7 @@ import pytest
 from prometheus_client import REGISTRY
 from pydantic import BaseModel
 
+from app import capture
 from app.adapters.llm.anthropic_sdk import FALLBACK_BETA, AnthropicLLM, RefusalError
 from app.adapters.llm.openai_sdk import OpenAILLM
 from app.adapters.llm.openrouter import OpenRouterLLM
@@ -471,3 +472,26 @@ class TestOpenAI:
         llm, _ = self.make(_openai_response(), meter=meter, usd_per_mtok=(2.0, 10.0))
         assert llm.complete("s", "u") == "hola"
         assert meter.cost_usd == pytest.approx((1000 * 2 + 100 * 10) / 1e6)
+
+
+def test_openrouter_reports_a_reply_that_then_fails_to_parse(config: ClientConfig) -> None:
+    llm = OpenRouterLLM(
+        "key",
+        "test/model",
+        transport=httpx.MockTransport(
+            lambda _r: httpx.Response(200, json=completion("not json at all"))
+        ),
+    )
+    with capture.collect() as outputs, pytest.raises(ValueError, match=r"(?s)."):
+        llm.extract(ConversationState(client_id="x"), "hola", config, date(2026, 11, 5))
+
+    assert [(o.kind, o.provider, o.model, o.text) for o in outputs] == [
+        ("extract", "openrouter", "test/model", "not json at all")
+    ]
+
+
+def test_nothing_is_collected_outside_a_turn(config: ClientConfig) -> None:
+    capture.report("extract", "openrouter", "m", "ignored")
+    with capture.collect() as outputs:
+        pass
+    assert outputs == []

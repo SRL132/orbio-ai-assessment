@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     session_secret: SecretStr | None = None
     # Worker processes: serve metrics on this port, with no token. Keep it on a private network.
     metrics_port: int | None = None
+    # Keep the LLM's raw replies, to debug extraction. They hold personal data: synthetic data only
+    # until counsel has reviewed it. Erased with the conversation; read with `app.cli llm-outputs`.
+    llm_capture_outputs: bool = False
     # When set, /metrics needs "Authorization: Bearer <token>" (else keep it off the internet).
     metrics_token: SecretStr | None = None
     # The ATS's "Authorization: Bearer <token>" for POST /api/v1/applications (unset: disabled).

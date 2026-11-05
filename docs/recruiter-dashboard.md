@@ -47,8 +47,9 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 - Funnel: started → each stage → completed, with drop-off per stage.
 - Completion rate, outcome mix, median time to complete.
 - **Screened within 24 h of applying** (the pilot's success metric): applicants who reached an outcome (qualified, disqualified or needs review) within `screening_target_hours` of applying, out of everyone whose window has closed or who already has an outcome. Time counts from the application date the ATS passes in (`applied_at`), or from the start of the chat when there is none.
-- Breakdown by location and language.
-- Computed with SQL aggregates over projected columns, never by loading every conversation.
+- **Knockouts a recruiter overturned** (the pilot's safety number): candidates the agent knocked out whom an override later moved away from disqualified, out of everyone knocked out. A candidate correcting their own answer doesn't count. Erased conversations drop out of both numbers.
+- Breakdown by location, language and agent version (a hash of the prompts and client config, plus the model), so results can be compared before and after a change.
+- Computed with SQL aggregates over projected columns (overturned knockouts: over the event log), never by loading every conversation.
 
 ## Rules
 

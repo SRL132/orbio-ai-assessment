@@ -15,7 +15,7 @@ from typing import Any, Literal
 import anthropic
 from anthropic.types.beta import BetaMessage, BetaOutputConfigParam, BetaTextBlockParam
 
-from app import metrics
+from app import capture, metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
@@ -76,9 +76,10 @@ class AnthropicLLM:
             **self._refusal_fallback,
         )
         self._log("extract", response, started)
+        text = "".join(block.text for block in response.content if block.type == "text")
+        capture.report("extract", "anthropic", self._model, text)
         if response.stop_reason == "refusal":
             raise RefusalError("refusal")
-        text = "".join(block.text for block in response.content if block.type == "text")
         return ExtractionResult.model_validate_json(json_object_text(text))
 
     def compose(
@@ -97,9 +98,11 @@ class AnthropicLLM:
             **self._refusal_fallback,
         )
         self._log("compose", response, started)
+        text = "".join(block.text for block in response.content if block.type == "text")
+        capture.report("compose", "anthropic", self._model, text)
         if response.stop_reason == "refusal":
             raise RefusalError("refusal")
-        return "".join(block.text for block in response.content if block.type == "text").strip()
+        return text.strip()
 
     def complete(self, system: str, user: str, max_tokens: int = 4000) -> str:
         """Free-text completion (used by the eval candidate simulator)."""

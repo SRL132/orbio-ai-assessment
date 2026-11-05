@@ -276,6 +276,11 @@ class ConversationState(BaseModel):
     llm_cost_usd: float = Field(
         default=0.0, description="LLM spend on this conversation, where the price is known."
     )
+    agent_version: str | None = Field(
+        default=None,
+        description="The prompts, client config and model of the latest turn. Each change is an "
+        "agent_version_changed event, so a conversation spanning a release can be traced.",
+    )
 
 
 class InboundMessage(BaseModel):
@@ -533,6 +538,7 @@ class EventType(StrEnum):
     RESPONDER_FAILED = "responder_failed"
     REPLY_REJECTED = "reply_rejected"
     NON_TEXT_MESSAGE = "non_text_message"
+    AGENT_VERSION_CHANGED = "agent_version_changed"
     # What changed: the deltas the state is rebuilt from (domain/history.py), not for recruiters.
     STATE_CHANGED = "state_changed"
     # Recruiter actions
@@ -540,6 +546,15 @@ class EventType(StrEnum):
     NOTE_ADDED = "note_added"
     VIEWED = "viewed"
     EXPORTED = "exported"
+
+
+class LlmOutput(BaseModel):
+    """One raw LLM reply, kept only if capture is on. Holds personal data."""
+
+    kind: str
+    provider: str
+    model: str
+    text: str
 
 
 class DomainEvent(BaseModel):

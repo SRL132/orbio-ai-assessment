@@ -53,6 +53,8 @@ uv run alembic revision --autogenerate -m "…"  # after changing models in app/
 docker compose up --build                     # app + Postgres, like production
 uv run python -m evals --check                # offline evals vs evals/baseline.json (free)
 uv run python -m evals --provider openrouter --model <slug> --budget-usd 1   # live (costs money)
+uv run python -m evals.gate                   # free: have these prompts been measured live?
+uv run python -m evals.gate --run --budget-usd 2   # live, only if not (costs money)
 uv run python -m evals.compare                # provider comparison (evals/compare.yaml, capped)
 ```
 

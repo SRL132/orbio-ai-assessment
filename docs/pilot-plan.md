@@ -33,7 +33,7 @@
 | Async chat reaches more people | Applicants screened within 24 h of applying ("screened on time" in Analytics; unopened links count against it) | About 40% reached, over days | ≥ 60% |
 | Candidates finish | Completion rate among those who open the link | Unknown | ≥ 70% |
 | Recruiters see fewer unqualified people | Share of qualified candidates among those who reach a recruiter, and recruiter hours per hire | About 20% of recruiter time well spent | Clear improvement over the control group |
-| Decisions can be trusted | Knockouts a recruiter overturned | Not applicable | ≤ 2% |
+| Decisions can be trusted | Knockouts a recruiter overturned (on Analytics; only meaningful if recruiters read the knockouts) | Not applicable | ≤ 2% |
 | Data can be trusted | Fields a recruiter corrected, sampled from the review | Not applicable | ≤ 5% |
 | Candidates aren't put off | Drop-off per question, and complaints | Not applicable | No single question loses more than 15%, and no complaint left unresolved |
 

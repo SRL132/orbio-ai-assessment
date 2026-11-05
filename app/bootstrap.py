@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import Engine
 
@@ -13,12 +15,13 @@ from app.adapters.calendar.sql_calendar import SqlCalendar
 from app.adapters.channels.whatsapp import WhatsAppClient
 from app.adapters.channels.whatsapp_invites import WhatsAppInvites
 from app.adapters.clock.clocks import OffsetClock, SystemClock
-from app.adapters.config.yaml_loader import load_client_config
+from app.adapters.config.yaml_loader import CONFIG_DIR, load_client_config
 from app.adapters.geo.fake import FakeGeocoder
 from app.adapters.geo.nominatim import NominatimGeocoder
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.fast_path import FastPathExtractor
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.llm.prompting import PROMPTS_DIR
 from app.adapters.llm.resilient import Pair, ResilientLLM
 from app.adapters.llm.usage import UsageMeter
 from app.adapters.storage.dashboard import DashboardQueries
@@ -168,6 +171,24 @@ def with_public_links(config: ClientConfig, settings: Settings) -> ClientConfig:
     return config
 
 
+def agent_version(settings: Settings, config_dir: Path = CONFIG_DIR) -> str:
+    """What this process's agent runs on: a hash of the prompts and the client's config, plus
+    the primary model. A turn answered by the fallback model still carries this value."""
+    model = {
+        "fake": "keyword",
+        "openrouter": settings.openrouter_model,
+        "anthropic": settings.anthropic_model,
+        "openai": settings.openai_model,
+    }.get(settings.llm_provider, "unknown")
+    digest = hashlib.sha256()
+    for directory in (PROMPTS_DIR, config_dir / settings.client_id):
+        for path in sorted(directory.rglob("*")):
+            if path.suffix in {".md", ".yaml"}:
+                digest.update(path.name.encode())
+                digest.update(path.read_bytes())
+    return f"{digest.hexdigest()[:12]} {settings.llm_provider}/{model}"[:128]  # the column's size
+
+
 def build(settings: Settings | None = None) -> Container:
     settings = settings or Settings()
     tracing.configure_logging()
@@ -186,7 +207,13 @@ def build(settings: Settings | None = None) -> Container:
     )
     # Leases run on the system clock: fast-forwarding the demo clock mustn't expire them.
     repo = SqlRepository(db, clock, config.client_id, lease_clock=SystemClock())
-    service = ScreeningService(repo, config, ports)
+    service = ScreeningService(
+        repo,
+        config,
+        ports,
+        agent_version=agent_version(settings),
+        capture_llm_outputs=settings.llm_capture_outputs,
+    )
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
     tts = None

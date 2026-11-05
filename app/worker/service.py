@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
-from app import metrics, tracing
+from app import capture, metrics, tracing
 from app.domain import engine
 from app.domain.config import ClientConfig
 from app.domain.models import (
@@ -54,11 +54,15 @@ class ScreeningService:
         config: ClientConfig,
         ports: Ports,
         recruiter_wait_seconds: float = 10.0,
+        agent_version: str | None = None,
+        capture_llm_outputs: bool = False,
     ) -> None:
         self.repo = repo
         self.config = config
         self.ports = ports
         self.recruiter_wait_seconds = recruiter_wait_seconds
+        self.agent_version = agent_version
+        self.capture_llm_outputs = capture_llm_outputs
 
     @contextmanager
     def _leased(self, conversation_id: UUID, wait_seconds: float = 0.0) -> Iterator[str | None]:
@@ -164,9 +168,10 @@ class ScreeningService:
         started = time.monotonic()
         attributes = {"conversation.id": str(conversation_id), "channel": state.channel}
         with tracing.tracer.start_as_current_span("turn", attributes=attributes) as span:
-            with metrics.turn_cost() as cost:
+            with metrics.turn_cost() as cost, capture.collect() as outputs:
                 result = engine.turn(state, message, self.config, self.ports)
             result.state.llm_cost_usd += cost.usd
+            self._stamp_version(result)
             if result.hold_inbound:
                 metrics.TURNS_HELD.labels("held").inc()
             else:
@@ -181,6 +186,10 @@ class ScreeningService:
                 redact=result.redact_inbound,
                 lease_owner=owner,
             )
+            # A redacted message mustn't survive in the model's quote of it. A held turn runs
+            # again, and whether it needs redacting is only known then.
+            if self.capture_llm_outputs and not (result.redact_inbound or result.hold_inbound):
+                self.repo.save_llm_outputs(conversation_id, outputs)
             span.set_attribute("messages", len(pending))
             span.set_attribute("status", result.state.status.value)
             span.set_attribute("stage", result.state.stage.value)
@@ -195,6 +204,17 @@ class ScreeningService:
             result.state.stage.value,
         )
         return result
+
+    def _stamp_version(self, result: TurnResult) -> None:
+        """Record what this turn ran on, so results can be compared across releases."""
+        if self.agent_version and result.state.agent_version != self.agent_version:
+            result.events.append(
+                DomainEvent(
+                    type=EventType.AGENT_VERSION_CHANGED,
+                    data={"from": result.state.agent_version, "to": self.agent_version},
+                )
+            )
+            result.state.agent_version = self.agent_version
 
     def _recent_messages(
         self, conversation_id: UUID, pending: list[StoredMessage]

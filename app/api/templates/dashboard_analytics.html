@@ -10,6 +10,7 @@
   <div class="counter"><b>{{ '%.0f%%'|format(a.completion_rate * 100) }}</b><span>Completion rate</span></div>
   <div class="counter"><b>{{ a.median_minutes if a.median_minutes is not none else '—' }}{% if a.median_minutes is not none %} min{% endif %}</b><span>Median time to finish</span></div>
   <div class="counter"><b>{{ a.interviews_booked }}</b><span>Interviews booked</span></div>
+  <div class="counter"><b>{{ '%.1f%%'|format(a.overturn_rate * 100) if a.overturn_rate is not none else '—' }}</b><span>Knockouts a recruiter overturned ({{ a.knockouts_overturned }} of {{ a.knockouts }})</span></div>
 </div>
 <p class="muted">Completion = reached qualified, disqualified or needs review through the conversation (not dropped off). Screened within {{ '%g'|format(a.target_hours) }} h counts applicants whose {{ '%g'|format(a.target_hours) }} h have passed, or who already have an outcome; time starts at the application date from the ATS, or at the start of the chat.</p>
 
@@ -44,6 +45,12 @@
 <h2>By channel</h2>
 <table><thead><tr><th>Channel</th><th>Started</th><th>Completed</th></tr></thead><tbody>
   {% for ch, (total, done) in a.by_channel.items() %}<tr><td>{{ ch }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
+</tbody></table>
+
+<h2>By agent version</h2>
+<p class="muted">Prompts and client config (the hash), then the model. Each conversation counts under the version of its latest turn; "unknown" is from before versions were recorded.</p>
+<table><thead><tr><th>Version</th><th>Started</th><th>Completed</th></tr></thead><tbody>
+  {% for version, (total, done) in a.by_version.items() %}<tr><td>{{ version }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
 </tbody></table>
 
 <div class="grid">
