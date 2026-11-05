@@ -138,7 +138,7 @@ A live end-to-end run still found two bugs the scripted suite had passed (an inv
 ## Potential improvements
 
 - **Confirm the model on its own SDK:** run the suite through the direct OpenAI adapter, and Haiku through the Anthropic one, then settle OpenAI's EU data residency and the data processing agreement.
-- **Real user data over more synthetic data:** after the pilot, turn real (anonymized) failures into scenarios, and tune prompts against a held-out set.
+- **Real user data over more synthetic data:** after the pilot, turn real failures into new synthetic scenarios ([design](docs/real-data-evals.md)), and tune prompts against a held-out set.
 - **WhatsApp in production:** a permanent system-user token, approved reminder templates, a template the ATS can trigger so the agent writes first, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.
@@ -148,4 +148,4 @@ A live end-to-end run still found two bugs the scripted suite had passed (an inv
 
 ## Docs
 
-[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md) · [Pilot plan](docs/pilot-plan.md)
+[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md) · [Pilot plan](docs/pilot-plan.md) · [Real conversations into evals](docs/real-data-evals.md)
