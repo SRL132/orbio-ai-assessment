@@ -104,6 +104,7 @@ class ConversationRow(Base):
     city: Mapped[str | None] = mapped_column(String(120))
     zone: Mapped[str | None] = mapped_column(String(120))
     location_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    agent_version: Mapped[str | None] = mapped_column(String(128))
     # JSONB with a GIN index on Postgres, so the dashboard's list filters use an index.
     availability: Mapped[list[str]] = mapped_column(ListColumn, default=list)
     schedule: Mapped[list[str]] = mapped_column(ListColumn, default=list)
@@ -804,6 +805,7 @@ def _project(row: ConversationRow, state: ConversationState, now: datetime) -> N
     row.city = candidate.city
     row.zone = candidate.zone
     row.location_id = candidate.location_id
+    row.agent_version = state.agent_version
     row.availability = [a.value for a in candidate.availability]
     row.schedule = [s.value for s in candidate.schedule]
     row.start_date = candidate.start_date

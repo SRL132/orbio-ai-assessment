@@ -110,6 +110,19 @@ def test_analytics(config: ClientConfig) -> None:
     assert a.by_location == {"unknown": (5, 2)}
 
 
+def test_analytics_compares_agent_versions(config: ClientConfig) -> None:
+    a = _analytics(
+        config,
+        [
+            _state(config, Status.QUALIFIED, 7, agent_version="a"),
+            _state(config, Status.ABANDONED, 2, agent_version="a"),
+            _state(config, Status.QUALIFIED, 7, agent_version="b"),
+            _state(config, Status.QUALIFIED, 7),
+        ],
+    )
+    assert a.by_version == {"a": (2, 1), "b": (1, 1), "unknown": (1, 1)}
+
+
 def test_analytics_empty(config: ClientConfig) -> None:
     a = _analytics(config, [])
     assert a.completion_rate == 0.0

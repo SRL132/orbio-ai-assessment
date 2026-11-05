@@ -12,6 +12,7 @@ from app.domain.config import ClientConfig
 from app.domain.models import (
     ConversationState,
     DomainEvent,
+    EventType,
     ExtractionResult,
     Stage,
     Status,
@@ -302,3 +303,46 @@ def test_every_kind_of_write_can_be_replayed(
     service.override(cid, Status.QUALIFIED, "checked by phone", "recruiter@example.com")
     assert repo.replay(cid) == repo.get(cid)
     assert repo.rebuild_projections(check_only=True) == []
+
+
+def test_a_turn_records_what_it_ran_on_once_per_version(
+    config: ClientConfig, ports: Ports, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service = make_service(config, ports, clock)
+    service.agent_version = "v1 fake/keyword"
+    cid = service.start_conversation()
+
+    def versions() -> list[tuple[object, object]]:
+        return [
+            (e.data["from"], e.data["to"])
+            for e in service.repo.events(cid)
+            if e.type == EventType.AGENT_VERSION_CHANGED
+        ]
+
+    for _ in range(2):
+        service.receive(cid, "hola")
+        service.process_pending(cid)
+    assert versions() == [(None, "v1 fake/keyword")]
+
+    service.agent_version = "v2 fake/keyword"
+    service.receive(cid, "hola")
+    service.process_pending(cid)
+
+    assert versions()[-1] == ("v1 fake/keyword", "v2 fake/keyword")
+    state = service.repo.get(cid)
+    assert state is not None
+    assert state.agent_version == "v2 fake/keyword"
+    assert service.repo.rebuild_projections() == []  # the event log gives the same state
+
+
+def test_no_version_records_nothing(
+    config: ClientConfig, ports: Ports, clock: FakeClock, extractor: ScriptedExtractor
+) -> None:
+    service = make_service(config, ports, clock)
+    cid = service.start_conversation()
+    service.receive(cid, "hola")
+    service.process_pending(cid)
+
+    state = service.repo.get(cid)
+    assert state is not None
+    assert state.agent_version is None
