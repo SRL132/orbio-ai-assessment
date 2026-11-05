@@ -1,4 +1,5 @@
-"""A worker process: turns, reminders, the WhatsApp outbox and cleanup jobs, without HTTP.
+"""A worker process: turns, reminders, the WhatsApp outbox and cleanup jobs. Its only HTTP is
+metrics, on METRICS_PORT if set: turns happen here, so the web process can't report them.
 
     uv run python -m app.worker
 
@@ -13,6 +14,8 @@ import asyncio
 import logging
 import signal
 
+from prometheus_client import start_http_server
+
 from app.bootstrap import build
 from app.settings import Settings
 
@@ -22,6 +25,8 @@ logger = logging.getLogger("app.worker")
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:
     """Run until SIGINT/SIGTERM (or until `stop` is set)."""
     container = build(settings)
+    if settings.metrics_port is not None:
+        start_http_server(settings.metrics_port)
     stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

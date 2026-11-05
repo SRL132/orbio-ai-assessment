@@ -1,0 +1,49 @@
+# docker run --rm -v "$PWD/monitoring:/m" --workdir /m --entrypoint promtool prom/prometheus:v3.5.0 test rules alerts_test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'sazon_pending_messages_oldest_seconds'
+        values: '10 10 90 90 90 90'
+      - series: 'sazon_turns_held_total{outcome="gave_up"}'
+        values: '0 0 0 1 1 1'
+      - series: 'up{job="worker",instance="w1"}'
+        values: '1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: NoWorkers
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: MessagesWaiting
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: MessagesWaiting
+        exp_alerts:
+          - exp_annotations:
+              summary: "The oldest unprocessed message has waited over 60 s"
+            exp_labels: {severity: page}
+      - eval_time: 4m
+        alertname: TurnsGaveUp
+        exp_alerts:
+          - exp_annotations:
+              summary: "Retries ran out for a candidate's message"
+            exp_labels: {severity: page}
+      - eval_time: 5m
+        alertname: ProcessDown
+        exp_alerts:
+          - exp_annotations:
+              summary: "worker at w1 can't be scraped"
+            exp_labels: {severity: page, job: worker, instance: w1}
+  - interval: 1m
+    input_series:
+      - series: 'up{job="web",instance="a"}'
+        values: '1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NoWorkers
+        exp_alerts:
+          - exp_annotations:
+              summary: "No worker process is running: nothing answers candidates"
+            exp_labels: {severity: page, job: worker}

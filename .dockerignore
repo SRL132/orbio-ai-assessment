@@ -12,3 +12,4 @@ evals/results/
 .hypothesis
 .coverage
 .claude/
+monitoring/
