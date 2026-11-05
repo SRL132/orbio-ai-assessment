@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 
-from app.adapters.channels.whatsapp import valid_signature
+from app.adapters.channels.whatsapp import delivery_reports, valid_signature
 from app.bootstrap import Container
 from app.worker.whatsapp import WhatsAppChannel
 
+logger = logging.getLogger("app.whatsapp")
 router = APIRouter()
 
 
@@ -51,6 +53,13 @@ async def receive(request: Request) -> dict[str, str]:
         payload = json.loads(raw)
     except ValueError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid JSON") from None
+    for report in delivery_reports(payload):
+        if report.status == "failed":
+            logger.warning(
+                "whatsapp_delivery_failed code=%s title=%s", report.error_code, report.error_title
+            )
+        else:
+            logger.info("whatsapp_delivery status=%s", report.status)
     conversations = await asyncio.to_thread(channel.handle, payload)
     if c.settings.role == "all":  # "web": a worker process picks them up after the debounce
         for conversation_id in conversations:
