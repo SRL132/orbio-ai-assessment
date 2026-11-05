@@ -57,3 +57,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build the image
         run: docker build --tag sazon-screening:ci .
+      - name: Test the alert rules
+        run: >-
+          docker run --rm --volume "$PWD/monitoring:/m" --workdir /m --entrypoint promtool
+          prom/prometheus:v3.5.0 test rules alerts_test.yml
