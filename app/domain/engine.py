@@ -54,7 +54,9 @@ from app.domain.policy import (
     add_review_reason,
     apply_confirmed,
     apply_extraction,
+    give_up_on_field,
     has_words,
+    is_grounded,
     must_confirm,
     next_missing_field,
     progress,
@@ -64,9 +66,11 @@ from app.domain.ports import LLMUnavailable, Ports
 from app.domain.render import render
 from app.domain.summary import build_summary
 from app.domain.validators import (
+    ZONE_READBACK,
     final_review_reasons,
     is_known_place,
     nearest_location,
+    normalize,
     says_no_language,
 )
 
@@ -405,6 +409,30 @@ def _on_answers(t: _Turn, extraction: ExtractionResult) -> None:
         _ask_next(t, extraction, applied)
 
 
+def _names_the_city_read_back(
+    pending: PendingConfirmation, fields: ExtractedFields, message: str
+) -> bool:
+    """ "En Madrid" after "Tetuán, barrio de Madrid, ¿correcto?" is a yes, if they wrote it."""
+    return (
+        pending.note == ZONE_READBACK
+        and fields.city is not None
+        and normalize(fields.city.value) == normalize(str(pending.values["city"]))
+        and fields.zone is None
+        and is_grounded(fields, pending.field, message)
+    )
+
+
+def _insists_on_the_name(
+    pending: PendingConfirmation, fields: ExtractedFields, message: str
+) -> bool:
+    return (
+        pending.note == ZONE_READBACK
+        and fields.city is not None
+        and normalize(fields.city.value) == normalize(str(pending.values["zone"]))
+        and is_grounded(fields, pending.field, message)
+    )
+
+
 def _says_otherwise(pending: PendingConfirmation, fields: ExtractedFields, message: str) -> bool:
     """A yes can't reject someone if the same message gives a different answer ("carnet moto y
     coche" after "sin carnet, ¿correcto?"): that's a correction, checked like any other. A bare
@@ -432,7 +460,7 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
         return extraction.fields
     group = FIELD_GROUPS[pending.field]
     # Code decides: a "yes" only confirms if the candidate actually wrote something.
-    said_yes = (
+    said_yes = _names_the_city_read_back(pending, extraction.fields, t.message) or (
         extraction.yes_no is True
         and has_words(t.message)
         and not _says_otherwise(pending, extraction.fields, t.message)
@@ -458,6 +486,12 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
     if extraction.yes_no is False or corrected:
         t.state.confirming = None
         t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="no")
+        if _insists_on_the_name(pending, extraction.fields, t.message):
+            # "No, la ciudad de Salamanca": it isn't the neighbourhood, and the config can't tell
+            # us more, so a person decides. Asking again would only read the same thing back.
+            give_up_on_field(t.state, pending.field, t.config)
+            t.event(EventType.FIELD_GAVE_UP, field=pending.field.value)
+            return extraction.fields.model_copy(update=dict.fromkeys(group))
         if corrected:  # "no, Móstoles": the new value goes through the checks again
             return extraction.fields
         if t.state.stage == Stage.RECAP:

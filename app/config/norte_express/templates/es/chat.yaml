@@ -40,6 +40,8 @@ recap: |-
   {summary}
   ¿Es todo correcto?
 confirm_value: "Solo para confirmar: {value}, ¿correcto?"
+confirm_zone: "Solo para confirmar: {zone}, barrio de {city}, ¿correcto?"
+confirm_outside_area: "Solo para confirmar: vives en la ciudad de {value}, ¿correcto? Si es un barrio, dime de qué ciudad."
 ask_change: Claro, ¿qué quieres cambiar?
 qualified: ¡Genial, {name}! Cumples los requisitos 🎉
 qualified_no_slots: Un reclutador te escribirá en 2 días laborables para fijar la entrevista.

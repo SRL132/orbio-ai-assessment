@@ -8,6 +8,7 @@ from app.adapters.config.yaml_loader import load_client_config
 from app.domain.config import ClientConfig
 from app.domain.models import Availability, Candidate, GeoLookup, GeoPlace, Schedule, Vehicle
 from app.domain.validators import (
+    ZONE_READBACK,
     distance_km,
     final_review_reasons,
     is_known_place,
@@ -120,9 +121,10 @@ class TestLocation:
         assert (outcome.kind, outcome.reason) == ("invalid", "zone_missing")
         assert outcome.updates == {"city": "Madrid"}
 
-    def test_a_neighbourhood_alone_still_asks_for_the_city(self, config: ClientConfig) -> None:
+    def test_a_neighbourhood_alone_is_read_back_with_its_city(self, config: ClientConfig) -> None:
         outcome = validate_location(None, "Chamberí", None, config)
-        assert (outcome.kind, outcome.reason) == ("invalid", "missing")
+        assert (outcome.kind, outcome.note) == ("valid", ZONE_READBACK)
+        assert outcome.updates == {"location_id": "es-madrid", "city": "Madrid", "zone": "Chamberí"}
 
     def test_geocoded_town_within_the_radius_goes_to_review(self, config: ClientConfig) -> None:
         geo = GeoLookup(place="Móstoles", found=MOSTOLES)
@@ -325,12 +327,26 @@ def test_listed_zone_matches_with_an_article_or_prefix(said: str) -> None:
     assert outcome.updates["location_id"] == "mx-cdmx"
 
 
-def test_a_zone_alone_is_kept_until_the_city_arrives(config: ClientConfig) -> None:
-    outcome = validate_location(None, "Sants", None, config)
+def test_an_unlisted_zone_alone_is_kept_until_the_city_arrives(config: ClientConfig) -> None:
+    outcome = validate_location(None, "Poblenou", None, config)
     assert outcome.kind == "invalid"
     assert outcome.problem == "missing"
-    assert outcome.updates == {"zone": "Sants"}
+    assert outcome.updates == {"zone": "Poblenou"}
     assert validate_location(None, None, None, config).updates == {}
+
+
+def test_a_zone_two_cities_list_asks_for_the_city_instead_of_guessing(
+    config: ClientConfig,
+) -> None:
+    locations = [
+        loc.model_copy(update={"zones": [*loc.zones, "Sants"]}) if loc.id == "es-madrid" else loc
+        for loc in config.locations
+    ]
+    both = config.model_copy(update={"locations": locations})
+    for city, zone in ((None, "Sants"), ("Sants", None)):
+        outcome = validate_location(city, zone, None, both)
+        assert outcome.kind == "invalid"
+        assert outcome.updates == {"zone": "Sants"}
 
 
 @pytest.mark.parametrize(
@@ -340,12 +356,12 @@ def test_a_listed_zone_read_as_a_city_is_kept_and_rejects_nobody(
     config: ClientConfig, said: str, kept: str
 ) -> None:
     outcome = validate_location(said, None, None, config)
-    assert (outcome.kind, outcome.problem) == ("invalid", "missing")
-    assert outcome.updates == {"zone": kept}
+    assert (outcome.kind, outcome.note) == ("valid", ZONE_READBACK)
+    assert outcome.updates["zone"] == kept
 
 
 def test_a_listed_zone_read_as_a_city_keeps_a_zone_already_given(config: ClientConfig) -> None:
-    assert validate_location("Salamanca", "Centro", None, config).updates == {"zone": "Centro"}
+    assert validate_location("Salamanca", "Centro", None, config).updates["zone"] == "Centro"
 
 
 def test_a_served_city_named_like_a_zone_is_still_the_city(config: ClientConfig) -> None:

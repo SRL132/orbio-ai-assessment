@@ -35,6 +35,15 @@
     awaiting: availability
     fields: {location_id: es-madrid, zone: Tetuán}
 
+- id: neighbourhood_read_back_with_its_city
+  description: A listed neighbourhood alone is read back with its city; a yes completes the location.
+  persona: Paula Serra, Tetuán (Madrid), moto. Confirms when the assistant reads the place back.
+  steps: [Sí, Paula Serra, Moto, vivo en Tetuán, Sí]
+  expect:
+    status: in_progress
+    awaiting: availability
+    fields: {location_id: es-madrid, zone: Tetuán}
+
 - id: shorter_name_keeps_the_full_name
   description: Giving only the first name later doesn't replace the full name already given.
   requires_llm: true

@@ -28,6 +28,7 @@ from app.domain.models import (
     Stage,
 )
 from app.domain.validators import (
+    ZONE_READBACK,
     Outcome,
     normalize,
     validate_availability,
@@ -126,7 +127,7 @@ def _has_letters(message: str) -> bool:
     return any(ch.isalpha() for ch in message)
 
 
-def _grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
+def is_grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
     """Every value proposed for this field quotes words the candidate actually wrote.
 
     The extractor is told the message is data, but that is only a prompt. This is the check in
@@ -215,9 +216,12 @@ def _why_confirm(
 ) -> str | None:
     """Why to confirm with the candidate before this counts, or None if it counts now: the place
     came from the geocoder (so they see which place we understood), the channel always confirms
-    this field, the model wasn't sure, or it replaces an earlier answer nobody asked about."""
-    if outcome.note == "geocoded":
-        return "geocoded"
+    this field, the model wasn't sure, or it replaces an earlier answer nobody asked about. A place
+    is also read back when the city came from the config, and before it rejects anyone."""
+    if outcome.note in ("geocoded", ZONE_READBACK):
+        return outcome.note
+    if name == FieldName.LOCATION and outcome.kind == "knockout":
+        return "before_rejecting"  # a misread place mustn't turn anyone away unchecked
     if must_confirm(name, state, config):
         return "channel"
     if confidence < config.confirm_below_confidence:
@@ -370,7 +374,7 @@ def apply_extraction(
             outcome = Outcome.invalid("out_of_range")
         if outcome.kind == "knockout" and name == FieldName.LICENSE and not _has_letters(message):
             outcome = Outcome.invalid("unclear")  # "000" is junk, not "I have no license"
-        grounded = _grounded(fields, name, message)
+        grounded = is_grounded(fields, name, message)
         if not grounded and outcome.kind in ("knockout", "valid"):
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
         quote, confidence = _evidence(fields, name)
@@ -447,6 +451,12 @@ def apply_confirmed(state: ConversationState) -> ApplyResult:
     outcome = Outcome(pending.outcome, reason=pending.reason, note=pending.note)
     _accept(state, pending.field, values, outcome, evidence, True, result)
     return result
+
+
+def give_up_on_field(state: ConversationState, name: FieldName, config: ClientConfig) -> None:
+    """Stop asking for `name` now, as if its attempts had run out: it goes to review."""
+    state.candidate.meta[name].attempts = config.max_attempts - 1
+    register_failed_attempt(state, name, config)
 
 
 def register_failed_attempt(

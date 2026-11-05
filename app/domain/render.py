@@ -45,6 +45,7 @@ from app.domain.models import (
 )
 from app.domain.policy import missing_count
 from app.domain.ports import Ports
+from app.domain.validators import ZONE_READBACK
 
 _EMOJI = re.compile("[\U0001f300-\U0001faff☀-➿]")
 
@@ -121,7 +122,25 @@ def render(
             case Qualified():
                 replies.append(fill("qualified"))
             case ConfirmField(field=name):
-                replies.append(fill("confirm_value", value=_pending_text(name, state, config)))
+                pending = state.confirming
+                if pending is not None and pending.note == ZONE_READBACK:
+                    replies.append(
+                        fill(
+                            "confirm_zone",
+                            zone=str(pending.values["zone"]),
+                            city=str(pending.values["city"]),
+                        )
+                    )
+                elif (
+                    pending is not None
+                    and pending.field == FieldName.LOCATION
+                    and pending.outcome == "knockout"
+                ):
+                    replies.append(
+                        fill("confirm_outside_area", value=_pending_text(name, state, config))
+                    )
+                else:
+                    replies.append(fill("confirm_value", value=_pending_text(name, state, config)))
             case OfferSlots(slots=slots, location_id=location_id):
                 replies.append(
                     fill("offer_slots", slots=_slot_list(slots, location_id, state, config))
@@ -305,6 +324,8 @@ _COMMON = frozenset({"name", "persona", "company", "missing_count", "privacy_url
 _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "recap": _COMMON | {"summary"},
     "confirm_value": _COMMON | {"value"},
+    "confirm_zone": _COMMON | {"zone", "city"},
+    "confirm_outside_area": _COMMON | {"value"},
     "offer_slots": _COMMON | {"slots"},
     "interview_booked": _COMMON | {"when"},
     "slot_format": frozenset({"weekday", "day", "month", "time"}),
@@ -343,6 +364,8 @@ def required_templates(config: ClientConfig) -> set[str]:
         "needs_review",
         "recap",
         "confirm_value",
+        "confirm_zone",
+        "confirm_outside_area",
         "qualified",
         "offer_slots",
         "interview_booked",

@@ -11,11 +11,13 @@ from app.domain.models import (
     AnswerQuestion,
     AskField,
     Availability,
+    Channel,
     ConversationState,
     ExtractionResult,
     FieldName,
     FieldStatus,
     InboundMessage,
+    Language,
     ReAsk,
     Reason,
     ReviewReason,
@@ -26,6 +28,7 @@ from app.domain.models import (
     Vehicle,
 )
 from app.domain.ports import Ports
+from app.domain.render import check_reply
 from tests.conftest import ex, said
 
 
@@ -141,6 +144,11 @@ def test_outside_area_is_disqualified(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO))
     chat.say(ex(city="Bilbao"))
+    assert chat.state.status == Status.IN_PROGRESS  # a misread place rejects nobody unchecked
+    assert chat.state.disqualify_reason is None
+    assert "vives en la ciudad de Bilbao" in chat.result.replies[-1]
+    assert "barrio" in chat.result.replies[-1]
+    chat.say(ex(yes_no=True), "sí")
     assert chat.state.disqualify_reason == "outside_area"
 
 
@@ -400,6 +408,7 @@ def test_a_corrected_location_after_a_knockout_is_checked_again(chat: Chat) -> N
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO))
     chat.say(ex(city="Bilbao"))
+    chat.say(ex(yes_no=True), "sí")
     assert chat.state.status == Status.DISQUALIFIED
     chat.say(ex(city="Madrid", zone="Chamberí"))
     assert chat.state.status == Status.IN_PROGRESS
@@ -418,7 +427,9 @@ def test_a_correction_that_is_still_outside_knocks_out_again(chat: Chat) -> None
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=True, vehicle=Vehicle.MOTO))
     chat.say(ex(city="Bilbao"))
+    chat.say(ex(yes_no=True), "sí")
     chat.say(ex(city="Zaragoza"))
+    chat.say(ex(yes_no=True), "sí")
     assert chat.state.status == Status.DISQUALIFIED
     assert chat.state.stage == Stage.KEEP_ON_FILE
     assert chat.state.candidate.city == "Zaragoza"
@@ -636,17 +647,63 @@ def test_keep_on_file_is_not_asked_forever(chat: Chat) -> None:
     assert chat.result.replies[-1] == chat.config.template("es", "keep_on_file_no")
 
 
-def test_a_listed_neighbourhood_read_as_a_city_asks_for_the_city(chat: Chat) -> None:
-    """The model read "vivo en Tetuán" as a city: a served Madrid neighbourhood rejected someone."""
+def at_location(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Paula Serra"))
     chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
-    chat.say(ex(city="Tetuán"), "vivo en Tetuán")
+
+
+@pytest.mark.parametrize("reading", [{"city": "Tetuán"}, {"zone": "Tetuán"}])
+def test_a_listed_neighbourhood_is_read_back_with_its_city(
+    chat: Chat, reading: dict[str, str]
+) -> None:
+    """The model read "vivo en Tetuán" as a city: a served Madrid neighbourhood rejected someone."""
+    at_location(chat)
+    chat.say(ex(**reading), "vivo en Tetuán")
     assert chat.state.status == Status.IN_PROGRESS
-    assert chat.state.awaiting == FieldName.LOCATION
+    assert chat.state.candidate.location_id is None  # nothing counts until they say yes
+    assert chat.result.replies[-1] == "Solo para confirmar: Tetuán, barrio de Madrid, ¿correcto?"
+    chat.say(ex(yes_no=True), "sí")
+    candidate = chat.state.candidate
+    assert (candidate.location_id, candidate.city, candidate.zone) == (
+        "es-madrid",
+        "Madrid",
+        "Tetuán",
+    )
+    assert chat.state.awaiting == FieldName.AVAILABILITY
+
+
+def test_naming_the_city_read_back_counts_as_a_yes(chat: Chat) -> None:
+    at_location(chat)
+    chat.say(ex(zone="Tetuán"), "vivo en Tetuán")
     chat.say(ex(city="Madrid"), "en Madrid")
     candidate = chat.state.candidate
     assert (candidate.location_id, candidate.zone) == ("es-madrid", "Tetuán")
+    assert chat.state.awaiting == FieldName.AVAILABILITY
+
+
+def test_a_city_the_candidate_never_wrote_is_no_yes_to_the_read_back(chat: Chat) -> None:
+    at_location(chat)
+    chat.say(ex(zone="Tetuán"), "vivo en Tetuán")
+    chat.say(ex(city="Madrid"), "…")
+    assert chat.state.candidate.location_id is None
+    assert chat.state.candidate.meta[FieldName.LOCATION].status != FieldStatus.VALID
+
+
+def test_a_no_to_the_read_back_asks_again_and_counts_an_attempt(chat: Chat) -> None:
+    at_location(chat)
+    chat.say(ex(zone="Tetuán"), "vivo en Tetuán")
+    chat.say(ex(yes_no=False), "no")
+    assert chat.state.candidate.location_id is None
+    assert chat.state.awaiting == FieldName.LOCATION
+    assert chat.state.candidate.meta[FieldName.LOCATION].attempts == 1
+
+
+def test_a_different_place_at_the_read_back_is_checked_instead(chat: Chat) -> None:
+    at_location(chat)
+    chat.say(ex(zone="Tetuán"), "vivo en Tetuán")
+    chat.say(ex(city="Barcelona", zone="Sants"), "no, en Sants, Barcelona")
+    assert chat.state.candidate.location_id == "es-barcelona"
 
 
 def test_someone_really_from_a_city_named_like_a_zone_goes_to_a_person(chat: Chat) -> None:
@@ -655,7 +712,54 @@ def test_someone_really_from_a_city_named_like_a_zone_goes_to_a_person(chat: Cha
     chat.say(ex(full_name="Paula Serra"))
     chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
     chat.say(ex(city="Salamanca"), "vivo en Salamanca")
+    assert "Salamanca, barrio de Madrid" in chat.result.replies[-1]
     chat.say(ex(city="Salamanca"), "en Salamanca, la ciudad")
+    assert chat.state.candidate.location_id is None
     assert chat.state.status == Status.IN_PROGRESS
     assert chat.state.awaiting != FieldName.LOCATION
     assert "field_failed_twice:location" in [str(r) for r in chat.state.review_reasons]
+
+
+@pytest.mark.parametrize(
+    ("language", "channel", "zone_text", "outside_text"),
+    [
+        (
+            "es",
+            "voice",
+            "Solo para confirmar: Tetuán, barrio de Madrid, ¿correcto?",
+            "Solo para confirmar: vives en la ciudad de Bilbao, ¿correcto? "
+            "Si es un barrio, dime de qué ciudad.",
+        ),
+        (
+            "en",
+            "chat",
+            "Just to check: Tetuán, a neighbourhood of Madrid, right?",
+            "Just to check: you live in the city of Bilbao, right? "
+            "If it's a neighbourhood, tell me which city.",
+        ),
+    ],
+)
+def test_the_read_backs_work_in_each_language_and_channel(
+    config: ClientConfig,
+    ports: Ports,
+    extractor: ScriptedExtractor,
+    language: Language,
+    channel: Channel,
+    zone_text: str,
+    outside_text: str,
+) -> None:
+    def said_after(reading: ExtractionResult, text: str) -> str:
+        state = ConversationState(client_id=config.client_id, channel=channel, language=language)
+        chat = Chat(state, config, ports, extractor)
+        chat.say(ex(yes_no=True, language=language), "sí")
+        chat.state.candidate.full_name = "Paula Serra"
+        chat.state.candidate.meta[FieldName.FULL_NAME].status = FieldStatus.VALID
+        chat.state.candidate.has_license, chat.state.candidate.vehicle = True, Vehicle.MOTO
+        chat.state.candidate.meta[FieldName.LICENSE].status = FieldStatus.VALID
+        chat.state.awaiting = FieldName.LOCATION
+        reply = chat.say(reading, text).replies[-1]
+        assert check_reply(reply, config, channel)  # no list, no emoji, one question
+        return reply
+
+    assert said_after(ex(zone="Tetuán", language=language), "Tetuán") == zone_text
+    assert said_after(ex(city="Bilbao", language=language), "Bilbao") == outside_text

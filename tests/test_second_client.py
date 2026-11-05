@@ -41,7 +41,7 @@ def talk(container: Container, *texts: str) -> list[str]:
 def test_its_own_service_area_decides(container: Container) -> None:
     def status_for(place: str) -> Status:
         cid = container.service.start_conversation()
-        for text in ("si", "Ana Ruiz", "Coche", place):
+        for text in ("si", "Ana Ruiz", "Coche", place, "si"):  # the last one confirms the place
             container.service.receive(cid, text)
             container.service.process_pending(cid)
         state = container.service.get(cid)

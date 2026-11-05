@@ -68,6 +68,9 @@ class Outcome:
         return Outcome("review", reason=reason, updates=updates)
 
 
+ZONE_READBACK = "zone_readback"  # note on a location whose city came from the config
+
+
 def normalize(text: str) -> str:
     """Lowercase, strip accents and collapse whitespace: 'Álvaro  Obregón' -> 'alvaro obregon'."""
     decomposed = unicodedata.normalize("NFKD", text)
@@ -193,6 +196,19 @@ def _is_listed_zone(place: str, locations: list[ServiceLocation]) -> bool:
     return any(wanted == _zone_key(zone) for loc in locations for zone in loc.zones)
 
 
+def _zone_alone(zone: str, config: ClientConfig) -> Outcome:
+    """A neighbourhood with no city. The config knows the city if only one has that name, and the
+    candidate confirms it (note ZONE_READBACK). Otherwise keep it: "vivo en Sants" then "en
+    Barcelona" gives the whole location."""
+    wanted = _zone_key(zone)
+    owners = [loc for loc in config.locations if any(wanted == _zone_key(z) for z in loc.zones)]
+    if len(owners) == 1:
+        return Outcome.valid(
+            note=ZONE_READBACK, location_id=owners[0].id, city=owners[0].city, zone=zone
+        )
+    return Outcome.invalid("missing", zone=zone)
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance (haversine)."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -274,9 +290,9 @@ def validate_location(
         if nearby is not None:
             return Outcome.review(Reason.BORDERLINE_ZONE, city=city, zone=zone)
         if _is_listed_zone(city, config.locations):
-            # "vivo en Tetuán" read as a city: a neighbourhood we serve rejects nobody. Ask for the
-            # city and keep the name. Someone really from a city named like one goes to review.
-            return Outcome.invalid("missing", zone=zone or city)
+            # "vivo en Tetuán" read as a city: a neighbourhood we serve rejects nobody. Someone
+            # really from a city named like one says so at the read-back, and goes to review.
+            return _zone_alone(zone or city, config)
         if geo is not None and normalize(geo.place) == normalize(city):
             return _geocoded(city, zone, geo, config)
         return Outcome.knockout(Reason.OUTSIDE_AREA)
@@ -290,8 +306,8 @@ def validate_location(
         return _geocoded(zone, None, geo, config)
     if pc:
         return Outcome.invalid("city_missing", postal_code=pc)
-    if zone:  # keep it: "vivo en Sants" then "en Barcelona" gives the whole location
-        return Outcome.invalid("missing", zone=zone)
+    if zone:
+        return _zone_alone(zone, config)
     return Outcome.invalid("missing")
 
 

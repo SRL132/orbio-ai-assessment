@@ -230,6 +230,12 @@ def test_junk_is_not_a_no_license_knockout(
 def test_a_neighbourhood_given_first_completes_the_city_given_next(
     state: ConversationState, config: ClientConfig
 ) -> None:
+    # A name two cities list, so the config can't read one back: it waits for the city.
+    locations = [
+        loc.model_copy(update={"zones": [*loc.zones, "Sants"]}) if loc.id == "es-madrid" else loc
+        for loc in config.locations
+    ]
+    config = config.model_copy(update={"locations": locations})
     state.stage, state.awaiting = Stage.COLLECTING, FieldName.LOCATION
     first = apply_extraction(state, ex(zone="Sants").fields, config, TODAY, message="Sants")
     assert first.rejected == {FieldName.LOCATION: "missing"}
