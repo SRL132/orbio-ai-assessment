@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # Only a signed link or code starts a conversation, so nobody else can run up LLM or
     # WhatsApp costs. Set it on anything public. It also turns off the clock fast-forward.
     invite_only: bool = False
+    # Behind a proxy: the header it always overwrites with the caller's address (Render:
+    # True-Client-IP). Empty: the address of whoever connected, which is right with no proxy.
+    client_ip_header: str = ""
     # Where the app is reachable from outside, e.g. https://jobs.example.com. Relative links in
     # messages (the privacy notice) are made absolute with it, which WhatsApp needs.
     public_base_url: str = ""
