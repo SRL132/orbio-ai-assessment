@@ -281,6 +281,7 @@ class DashboardQueries:
             by_language = breakdown(row.language)
             by_channel = breakdown(row.channel)
             by_location = breakdown(row.location_id)
+            by_version = breakdown(row.agent_version)
 
         funnel = [("started", started), ("consented", n_consented)]
         funnel += [(name.value, count) for name, count in zip(field_order, reached, strict=True)]
@@ -297,6 +298,7 @@ class DashboardQueries:
             by_language=by_language,
             by_channel=by_channel,
             by_location=by_location,
+            by_version=by_version,
             interviews_booked=booked,
             target_hours=target_hours,
             screened_on_time=n_on_time,
@@ -368,6 +370,7 @@ class Analytics(BaseModel):
     by_language: dict[str, tuple[int, int]]
     by_channel: dict[str, tuple[int, int]]
     by_location: dict[str, tuple[int, int]]
+    by_version: dict[str, tuple[int, int]]
     interviews_booked: int
     target_hours: float
     screened_on_time: int

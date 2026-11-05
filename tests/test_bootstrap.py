@@ -11,7 +11,7 @@ from app.adapters.llm.keyword import KeywordExtractor
 from app.adapters.llm.openai_sdk import OpenAILLM
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
-from app.bootstrap import Container, build, make_llm, with_public_links
+from app.bootstrap import Container, agent_version, build, make_llm, with_public_links
 from app.domain.validators import validate_location
 from app.settings import Settings
 
@@ -242,3 +242,28 @@ def test_the_example_env_file_loads_as_the_readme_says(monkeypatch: pytest.Monke
     assert loaded.openai_output_usd_per_mtok is None
     assert loaded.anthropic_input_usd_per_mtok is None
     assert loaded.anthropic_output_usd_per_mtok is None
+
+
+def test_agent_version_changes_with_the_config_and_the_model(tmp_path: Path) -> None:
+    client = tmp_path / "grupo_sazon"
+    client.mkdir()
+    (client / "client.yaml").write_text("cities: 7")
+    fake = Settings(_env_file=None, llm_provider="fake", client_id="grupo_sazon")
+    openrouter = Settings(
+        _env_file=None,
+        llm_provider="openrouter",
+        openrouter_model="some/model",
+        client_id="grupo_sazon",
+    )
+
+    before = agent_version(fake, tmp_path)
+
+    assert before.endswith(" fake/keyword")
+    assert agent_version(fake, tmp_path) == before
+    assert agent_version(openrouter, tmp_path).endswith(" openrouter/some/model")
+    (client / "client.yaml").write_text("cities: 45")
+    assert agent_version(fake, tmp_path).split()[0] != before.split()[0]
+
+
+def test_the_agent_version_of_the_real_config_fits_its_column() -> None:
+    assert len(agent_version(Settings(_env_file=None, llm_provider="fake"))) <= 128

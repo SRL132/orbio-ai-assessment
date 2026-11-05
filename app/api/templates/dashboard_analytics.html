@@ -46,6 +46,12 @@
   {% for ch, (total, done) in a.by_channel.items() %}<tr><td>{{ ch }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
 </tbody></table>
 
+<h2>By agent version</h2>
+<p class="muted">Prompts and client config (the hash), then the model. Each conversation counts under the version of its latest turn; "unknown" is from before versions were recorded.</p>
+<table><thead><tr><th>Version</th><th>Started</th><th>Completed</th></tr></thead><tbody>
+  {% for version, (total, done) in a.by_version.items() %}<tr><td>{{ version }}</td><td>{{ total }}</td><td>{{ done }}</td></tr>{% endfor %}
+</tbody></table>
+
 <div class="grid">
   <div>
     <h2>By language</h2>

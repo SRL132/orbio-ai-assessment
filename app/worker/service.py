@@ -54,11 +54,13 @@ class ScreeningService:
         config: ClientConfig,
         ports: Ports,
         recruiter_wait_seconds: float = 10.0,
+        agent_version: str | None = None,
     ) -> None:
         self.repo = repo
         self.config = config
         self.ports = ports
         self.recruiter_wait_seconds = recruiter_wait_seconds
+        self.agent_version = agent_version
 
     @contextmanager
     def _leased(self, conversation_id: UUID, wait_seconds: float = 0.0) -> Iterator[str | None]:
@@ -167,6 +169,7 @@ class ScreeningService:
             with metrics.turn_cost() as cost:
                 result = engine.turn(state, message, self.config, self.ports)
             result.state.llm_cost_usd += cost.usd
+            self._stamp_version(result)
             if result.hold_inbound:
                 metrics.TURNS_HELD.labels("held").inc()
             else:
@@ -195,6 +198,17 @@ class ScreeningService:
             result.state.stage.value,
         )
         return result
+
+    def _stamp_version(self, result: TurnResult) -> None:
+        """Record what this turn ran on, so results can be compared across releases."""
+        if self.agent_version and result.state.agent_version != self.agent_version:
+            result.events.append(
+                DomainEvent(
+                    type=EventType.AGENT_VERSION_CHANGED,
+                    data={"from": result.state.agent_version, "to": self.agent_version},
+                )
+            )
+            result.state.agent_version = self.agent_version
 
     def _recent_messages(
         self, conversation_id: UUID, pending: list[StoredMessage]
