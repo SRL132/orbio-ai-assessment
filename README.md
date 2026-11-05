@@ -61,6 +61,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
 | `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
+| `CLIENT_IP_HEADER` | — | Behind a proxy, the header it always overwrites with the caller's address, used by rate limits (Render: `True-Client-IP`). Leave it empty with no proxy, or callers can fake their address |
 | `INVITE_ONLY` | `false` | Set it on anything public. Only a signed link, a WhatsApp code or the ATS can start a conversation, so `/chat` and `/voice` start nothing on their own, a WhatsApp message from a new number is ignored, and the fast-forward is off |
 | `PUBLIC_BASE_URL` | — | Public address of the app, used by invite links and the privacy link. Leave it empty locally: with `DEMO_MODE=true`, invite links use the address you opened, such as `localhost` |
 | `RECRUITER_USERS`, `SESSION_SECRET` | — | Dashboard login (no default accounts) |

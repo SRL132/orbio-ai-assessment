@@ -1,5 +1,6 @@
 """Rate limits on login and the web chat, counted in the database (shared by all workers)."""
 
+import re
 import secrets
 import threading
 from datetime import UTC, datetime, timedelta
@@ -118,3 +119,62 @@ def test_messages_are_limited_per_conversation(client: TestClient) -> None:
         for _ in range(4)
     ]
     assert codes == [202, 202, 202, 429]
+
+
+def proxied(tmp_path: Path, header: str = "True-Client-IP") -> TestClient:
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'p.db'}",
+        recruiter_users=f"rec@sazon.test:{hash_password(PASSWORD)}",
+        session_secret=secrets.token_hex(16),
+        login_attempts_per_ip_per_15_min=2,
+        client_ip_header=header,
+    )
+    return TestClient(create_app(build(settings)))
+
+
+def attempt(client: TestClient, headers: dict[str, str], number: int) -> int:
+    page = client.get("/login").text
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page)
+    assert token is not None
+    return client.post(
+        "/login",
+        data={
+            "email": f"user{number}@sazon.test",
+            "password": "wrong",
+            "csrf_token": token.group(1),
+        },
+        headers=headers,
+        follow_redirects=False,
+    ).status_code
+
+
+def test_a_new_x_forwarded_for_each_time_does_not_get_round_the_limit(tmp_path: Path) -> None:
+    with proxied(tmp_path) as client:
+        codes = [
+            attempt(
+                client, {"True-Client-IP": "198.51.100.1", "X-Forwarded-For": f"203.0.113.{n}"}, n
+            )
+            for n in range(3)
+        ]
+    assert codes == [401, 401, 429]
+
+
+def test_two_callers_behind_the_proxy_have_their_own_limits(tmp_path: Path) -> None:
+    with proxied(tmp_path) as client:
+        first = [attempt(client, {"True-Client-IP": "198.51.100.1"}, n) for n in range(3)]
+        assert first == [401, 401, 429]
+        assert attempt(client, {"True-Client-IP": "198.51.100.2"}, 9) == 401
+
+
+@pytest.mark.parametrize("bad", ["not-an-address", "x" * 500, "1.2.3.4, 5.6.7.8"])
+def test_a_header_that_is_not_an_address_is_not_used_as_one(tmp_path: Path, bad: str) -> None:
+    with proxied(tmp_path) as client:
+        codes = [attempt(client, {"True-Client-IP": f"{bad}{n}"}, n) for n in range(3)]
+    assert codes == [401, 401, 429]  # all counted against the connection instead
+
+
+def test_with_no_header_set_the_callers_headers_are_ignored(tmp_path: Path) -> None:
+    with proxied(tmp_path, header="") as client:
+        codes = [attempt(client, {"True-Client-IP": f"198.51.100.{n}"}, n) for n in range(3)]
+    assert codes == [401, 401, 429]
