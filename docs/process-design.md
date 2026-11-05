@@ -9,7 +9,9 @@ Today 13 recruiters make about 975 calls a week for about 1,000 applications. Wi
 1. **Async first.** Candidates reply when it suits them, so a missed call no longer loses a candidate.
 2. **Knockouts early.** License and service area come right after the name, so nobody spends 5 minutes before being turned away.
 3. **Code decides, the LLM talks.** Python owns every pass/fail rule. The LLM extracts answers and words questions; job answers are approved text.
-4. **A human is always reachable.** Unclear cases go to a review queue. A rejected candidate who asks for a person gets in front of a recruiter, who can overturn the rejection.
+4. **A person can step in.** Unclear cases go to a review queue. A rejected candidate who asks for a human is flagged for a recruiter, who can overturn the rejection.
+
+The candidate makes the first move: they open a signed link, or send a WhatsApp code, from a recruiter or the ATS. The agent doesn't message anyone first.
 
 ## Conversation stages
 

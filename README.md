@@ -6,6 +6,12 @@ An AI screening agent and recruiter dashboard for **Grupo Sazón**, a (fictional
 
 **The product:** candidates are screened in a chat, in Spanish or English, whenever it suits them, and book their interview there too. Recruiters open a dashboard and only spend time on the qualified candidates and the cases the agent flagged for a human.
 
+## Live demo
+
+https://grupo-sazon-screening.onrender.com, on Render's free tier with Neon Postgres. The first visit after a quiet spell can take about a minute while the server wakes up.
+
+It's invite-only, so a chat needs a signed link made on the recruiter dashboard. Voice and the clock fast-forward are off there, so run those locally. WhatsApp replies are blocked for now: messages reach the app, but Meta refuses delivery because the new business account is locked (error 131031).
+
 ## Quick start
 
 ```bash
@@ -70,6 +76,8 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 **Conversation** ([process design](docs/process-design.md)): consent and an automated-assistant disclosure first, then the seven screening questions, one per message, with the two knockouts (license, service area) right after the name. Answers can come in any order and several at once. The agent re-asks invalid or unclear answers with examples, and after two failed tries it moves on and flags the field. It follows Spanish ↔ English switches, answers job questions with approved FAQ text (the LLM picks the entry, code sends the words), offers a human when the candidate seems frustrated, and hands off right away when asked. Sensitive data such as an ID number is redacted. Reminders go out at 2 h and 24 h, then the candidate is marked abandoned. Qualified candidates book an interview slot in the chat. The same flow runs as a **voice call** (`/voice`): push-to-talk speech recognition in the browser, spoken replies (browser voice or ElevenLabs), wording adapted for speech.
 
+**How a conversation starts:** a recruiter or the ATS sends the candidate a signed link, and the candidate opens it. The agent doesn't message anyone first. With `WHATSAPP_INVITE_NUMBER` set, the link opens WhatsApp with a code ready to send, so the candidate writes first and no paid template is needed to begin.
+
 **Outcomes:** qualified (plus a booked interview), disqualified (kindly, with an offer to keep their details), needs review (with the reason), or abandoned (with the drop-off point). Each comes with a short summary for the recruiter.
 
 **Dashboard** ([spec](docs/recruiter-dashboard.md)): an invite page that turns a CSV of applications into signed chat links, so a pilot needs no ATS; a filterable candidate list (including by channel, and rejected candidates who asked for a human) with counters; a review queue (oldest first, with reasons), a detail page (summary, each answer with the candidate's own words and a confidence score, transcript, timeline), status overrides with a required reason, notes, JSON export, and an analytics page (funnel, drop-off, completion rate, median time, by language and location). Every view and change is in the audit log.
@@ -104,7 +112,7 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 700+ tests (property tests included) with a coverage ratchet (≥ 98%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 860+ tests (property tests included) with a coverage ratchet (≥ 98%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
 The suite has 83 synthetic scenarios, plus 14 from the held-out run (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 66 that work offline; the other 17 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
@@ -128,7 +136,7 @@ A live end-to-end run still found two bugs the scripted suite had passed (an inv
 
 - **Confirm the model on its own SDK:** run the suite through the direct OpenAI adapter, and Haiku through the Anthropic one, then settle OpenAI's EU data residency and the data processing agreement.
 - **Real user data over more synthetic data:** after the pilot, turn real (anonymized) failures into scenarios, and tune prompts against a held-out set.
-- **WhatsApp in production:** a permanent system-user token, approved reminder templates, a message-status webhook to track delivery and read receipts, and a business-verified number.
+- **WhatsApp in production:** a permanent system-user token, approved reminder templates, a template the ATS can trigger so the agent writes first, a message-status webhook to track delivery and read receipts, and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
 - **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
