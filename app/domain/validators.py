@@ -188,6 +188,11 @@ def _zone_key(zone: str) -> str:
     return text or normalize(zone)
 
 
+def _is_listed_zone(place: str, locations: list[ServiceLocation]) -> bool:
+    wanted = _zone_key(place)
+    return any(wanted == _zone_key(zone) for loc in locations for zone in loc.zones)
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance (haversine)."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -268,6 +273,10 @@ def validate_location(
         nearby = _is_nearby(city, config.locations)
         if nearby is not None:
             return Outcome.review(Reason.BORDERLINE_ZONE, city=city, zone=zone)
+        if _is_listed_zone(city, config.locations):
+            # "vivo en Tetuán" read as a city: a neighbourhood we serve rejects nobody. Ask for the
+            # city and keep the name. Someone really from a city named like one goes to review.
+            return Outcome.invalid("missing", zone=zone or city)
         if geo is not None and normalize(geo.place) == normalize(city):
             return _geocoded(city, zone, geo, config)
         return Outcome.knockout(Reason.OUTSIDE_AREA)

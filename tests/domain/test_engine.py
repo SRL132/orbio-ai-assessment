@@ -634,3 +634,28 @@ def test_keep_on_file_is_not_asked_forever(chat: Chat) -> None:
     assert chat.state.stage == Stage.CLOSED
     assert chat.state.keep_on_file is False  # nothing kept without a yes
     assert chat.result.replies[-1] == chat.config.template("es", "keep_on_file_no")
+
+
+def test_a_listed_neighbourhood_read_as_a_city_asks_for_the_city(chat: Chat) -> None:
+    """The model read "vivo en Tetuán" as a city: a served Madrid neighbourhood rejected someone."""
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Paula Serra"))
+    chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Tetuán"), "vivo en Tetuán")
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.awaiting == FieldName.LOCATION
+    chat.say(ex(city="Madrid"), "en Madrid")
+    candidate = chat.state.candidate
+    assert (candidate.location_id, candidate.zone) == ("es-madrid", "Tetuán")
+
+
+def test_someone_really_from_a_city_named_like_a_zone_goes_to_a_person(chat: Chat) -> None:
+    """Salamanca is a Madrid zone and a city we don't serve: nobody is rejected on a guess."""
+    chat.say(ex(yes_no=True))
+    chat.say(ex(full_name="Paula Serra"))
+    chat.say(ex(has_license=True, vehicle=Vehicle.MOTO))
+    chat.say(ex(city="Salamanca"), "vivo en Salamanca")
+    chat.say(ex(city="Salamanca"), "en Salamanca, la ciudad")
+    assert chat.state.status == Status.IN_PROGRESS
+    assert chat.state.awaiting != FieldName.LOCATION
+    assert "field_failed_twice:location" in [str(r) for r in chat.state.review_reasons]
