@@ -1,4 +1,5 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -11,6 +12,7 @@ from app.adapters.llm.openai_sdk import OpenAILLM
 from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
 from app.bootstrap import Container, build, make_llm, with_public_links
+from app.domain.validators import validate_location
 from app.settings import Settings
 
 
@@ -162,6 +164,33 @@ def test_public_base_url_makes_the_privacy_link_absolute() -> None:
     settings = Settings(_env_file=None, public_base_url="https://jobs.example.com/")
     assert with_public_links(config, settings).privacy_url == "https://jobs.example.com/privacy"
     assert with_public_links(config, Settings(_env_file=None)).privacy_url == "/privacy"
+
+
+def test_grupo_sazon_has_its_45_locations_with_what_each_one_needs() -> None:
+    locations = load_client_config("grupo_sazon").locations
+    assert len(locations) == 45
+    assert len({loc.id for loc in locations}) == 45
+    assert len({(loc.country, loc.city) for loc in locations}) == 45
+    assert {loc.country for loc in locations} == {"ES", "MX"}
+    for loc in locations:
+        ZoneInfo(loc.timezone)  # raises if the zone doesn't exist
+        assert loc.lat is not None
+        assert loc.lon is not None
+        assert loc.postal_prefixes, loc.city
+        assert all(prefix.isdigit() for prefix in loc.postal_prefixes), loc.city
+        assert loc.id.startswith(loc.country.lower()), loc.city
+        expected_zone = "Europe/" if loc.country == "ES" else "America/"
+        assert loc.timezone.startswith(expected_zone), loc.city
+
+
+def test_every_grupo_sazon_location_is_served_by_city_and_postal_code() -> None:
+    config = load_client_config("grupo_sazon")
+    for loc in config.locations:
+        code = loc.postal_prefixes[0].ljust(5, "0")
+        outcome = validate_location(loc.city, None, code, config)
+        assert (outcome.kind, outcome.updates["location_id"]) == ("valid", loc.id), loc.city
+        for town in loc.nearby:
+            assert validate_location(town, None, None, config).kind == "review", town
 
 
 def test_whatsapp_invites_need_a_secret_to_sign_codes(tmp_path: Path) -> None:
