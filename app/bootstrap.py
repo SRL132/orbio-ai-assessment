@@ -207,7 +207,13 @@ def build(settings: Settings | None = None) -> Container:
     )
     # Leases run on the system clock: fast-forwarding the demo clock mustn't expire them.
     repo = SqlRepository(db, clock, config.client_id, lease_clock=SystemClock())
-    service = ScreeningService(repo, config, ports, agent_version=agent_version(settings))
+    service = ScreeningService(
+        repo,
+        config,
+        ports,
+        agent_version=agent_version(settings),
+        capture_llm_outputs=settings.llm_capture_outputs,
+    )
     runner = Runner(service, settings.debounce_seconds, settings.reminder_interval_seconds)
     queries = DashboardQueries(db, config.client_id)
     tts = None

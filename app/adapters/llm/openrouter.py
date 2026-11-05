@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from app import metrics
+from app import capture, metrics
 from app.adapters.llm.prompting import (
     extractor_system,
     extractor_user,
@@ -156,6 +156,7 @@ class OpenRouterLLM:
             (time.monotonic() - started) * 1000,
         )
         content = data["choices"][0]["message"].get("content")
+        capture.report(kind, "openrouter", self._model, str(content or ""))
         if not content:
             raise ValueError("empty completion")
         return str(content)

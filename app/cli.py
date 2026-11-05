@@ -2,10 +2,12 @@
 
 uv run python -m app.cli hash-password
 uv run python -m app.cli rebuild-state [--check]    # projections from the event log
+uv run python -m app.cli llm-outputs <conversation id>   # raw LLM replies, if capture was on
 """
 
 import getpass
 import sys
+from uuid import UUID
 
 from app.adapters.clock.clocks import SystemClock
 from app.adapters.storage.sql import SqlRepository, make_engine
@@ -25,8 +27,21 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[1:] in (["rebuild-state"], ["rebuild-state", "--check"]):
         return rebuild_state(check_only=argv[2:] == ["--check"])
+    if len(argv) == 3 and argv[1] == "llm-outputs":
+        return llm_outputs(UUID(argv[2]))
     print(__doc__, file=sys.stderr)
     return 2
+
+
+def llm_outputs(conversation_id: UUID) -> int:
+    """Print a conversation's raw LLM replies, oldest first. They hold personal data."""
+    settings = Settings()
+    engine = make_engine(settings.database_url)
+    outputs = SqlRepository(engine, SystemClock(), settings.client_id).llm_outputs(conversation_id)
+    engine.dispose()
+    for output in outputs:
+        print(output.model_dump_json())
+    return 0
 
 
 def rebuild_state(*, check_only: bool) -> int:

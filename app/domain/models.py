@@ -548,6 +548,15 @@ class EventType(StrEnum):
     EXPORTED = "exported"
 
 
+class LlmOutput(BaseModel):
+    """One raw LLM reply, kept only if capture is on. Holds personal data."""
+
+    kind: str
+    provider: str
+    model: str
+    text: str
+
+
 class DomainEvent(BaseModel):
     type: EventType
     data: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
