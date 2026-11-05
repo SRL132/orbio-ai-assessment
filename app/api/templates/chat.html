@@ -89,7 +89,7 @@ async function newConversation() {
     localStorage.removeItem("conversationId");
     log.innerHTML = "";
     bubble("out", "Para empezar necesitas el enlace que te envió el equipo de selección. · You need the link the hiring team sent you to start.");
-    document.querySelectorAll("form, #new").forEach(el => { el.hidden = true; });
+    document.querySelectorAll("form, #new").forEach(el => { el.style.display = "none"; });
     return;
   }
   conversationId = id;
