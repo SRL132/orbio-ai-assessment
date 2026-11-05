@@ -70,6 +70,8 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 
 "Download unfinished applications" lists everyone with a reference who is still in progress or was abandoned for silence, with a fresh link, because web chat can't reach someone who closed the tab. Candidates who declined consent aren't on it.
 
+With `WHATSAPP_INVITE_NUMBER` set, the same page makes `wa.me` links instead (a `whatsapp_url` column), each with a signed code already typed in. Sending it ties the number to that application, and the greeting goes out then. A code works once. The unfinished list gives a new code to anyone who hasn't sent theirs, and a plain link to the chat for anyone who has. It stays off until Meta delivers replies. With it on, a new number that writes with no valid code is ignored: no conversation, no reply, no LLM call. `INVITE_ONLY=true` applies the same rule to the web chat and voice pages, and to WhatsApp while invites are still web links.
+
 An invited conversation has no reminders until the link is opened, and it stays out of the candidate list and counters until then. Analytics shows "Invited, not opened", and those applicants still count against "screened on time", so the agent's reach isn't flattered. Unopened invites are erased after the retention period.
 
 ## Rejected candidates who ask for a human

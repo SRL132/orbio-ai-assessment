@@ -107,16 +107,19 @@ class ScreeningService:
         logger.info("conversation_started id=%s channel=%s", state.conversation_id, channel)
         return state.conversation_id
 
-    def open_invite(self, conversation_id: UUID) -> None:
-        """The candidate opened their invite link: start the reminder clock."""
+    def open_invite(self, conversation_id: UUID) -> bool:
+        """The candidate opened their invite link: start the reminder clock. True only for the
+        call that opened it, so two people can't both claim one WhatsApp code."""
         with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
             state = self.repo.get(conversation_id)
             if owner is None or state is None:
-                return
+                return False
             result = engine.on_invite_opened(state, self.config, self.ports)
-            if result is not None:
-                self.repo.save_turn(result.state, result.events, [], [], lease_owner=owner)
-                metrics.record_events(result.events)
+            if result is None:
+                return False
+            self.repo.save_turn(result.state, result.events, [], [], lease_owner=owner)
+            metrics.record_events(result.events)
+            return True
 
     def receive(
         self, conversation_id: UUID, text: str, channel_message_id: str | None = None

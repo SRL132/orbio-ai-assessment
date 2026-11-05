@@ -55,7 +55,8 @@
     · This browser has no speech recognition: use Chrome or Edge, type below, or use the <a href="/chat">chat</a>.
   </div>
   <div class="stage">
-    <button id="start" type="button">📞 Empezar llamada · Start call</button>
+    {% if invite_only %}<p>Esta página no está disponible: usa el enlace que te envió el equipo de selección. · Not available here: use the link the hiring team sent you.</p>{% endif %}
+    <button id="start" type="button"{% if invite_only %} disabled{% endif %}>📞 Empezar llamada · Start call</button>
     <button id="mic" type="button" hidden disabled>Hablar</button>
     <div id="state"></div>
     <div id="caption" aria-live="polite"></div>

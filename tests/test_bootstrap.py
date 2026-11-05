@@ -164,6 +164,19 @@ def test_public_base_url_makes_the_privacy_link_absolute() -> None:
     assert with_public_links(config, Settings(_env_file=None)).privacy_url == "/privacy"
 
 
+def test_whatsapp_invites_need_a_secret_to_sign_codes(tmp_path: Path) -> None:
+    channel = {
+        "whatsapp_access_token": "t",
+        "whatsapp_phone_number_id": "1",
+        "whatsapp_verify_token": "v",
+        "whatsapp_app_secret": "s",
+        "whatsapp_invite_number": "15551868329",
+    }
+    database = f"sqlite:///{tmp_path / 'i.db'}"
+    with pytest.raises(ValueError, match="WHATSAPP_INVITE_NUMBER needs SESSION_SECRET"):
+        build(Settings(_env_file=None, database_url=database, **channel))
+
+
 def test_openai_provider_needs_a_key() -> None:
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):
         make_llm(Settings(_env_file=None, llm_provider="openai"))

@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     whatsapp_app_secret: SecretStr | None = None
     whatsapp_api_version: str = "v26.0"
     whatsapp_reminder_template: str = ""  # approved template for messages after 24 h (paid)
+    # Set it once replies really reach phones: invites then become WhatsApp links with a code,
+    # instead of web chat links. Needs SESSION_SECRET, which signs the code.
+    whatsapp_invite_number: str = ""
     whatsapp_dispatch_seconds: float = 1.0
     # Conversations the outbox sends to at once (each conversation's messages stay in order).
     # Meta's default throughput is ~80 messages/s per number: far above what this needs.
@@ -79,6 +82,9 @@ class Settings(BaseSettings):
 
     # Demo mode: the clock can be fast-forwarded from the chat page to show reminders.
     demo_mode: bool = True
+    # Only a signed link or code starts a conversation, so nobody else can run up LLM or
+    # WhatsApp costs. Set it on anything public. It also turns off the clock fast-forward.
+    invite_only: bool = False
     # Where the app is reachable from outside, e.g. https://jobs.example.com. Relative links in
     # messages (the privacy notice) are made absolute with it, which WhatsApp needs.
     public_base_url: str = ""

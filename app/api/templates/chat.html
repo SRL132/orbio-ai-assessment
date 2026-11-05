@@ -79,7 +79,19 @@ async function api(path, options = {}) {
 }
 
 async function newConversation() {
-  const { id } = await api("/api/conversations", { method: "POST" });
+  let id;
+  try {
+    ({ id } = await api("/api/conversations", { method: "POST" }));
+  } catch (e) {
+    if (String(e.message) !== "403") throw e;
+    // Invite-only site, and this browser has no conversation: nothing can start without a link.
+    conversationId = null;
+    localStorage.removeItem("conversationId");
+    log.innerHTML = "";
+    bubble("out", "Para empezar necesitas el enlace que te envió el equipo de selección. · You need the link the hiring team sent you to start.");
+    document.querySelectorAll("form, #new").forEach(el => { el.hidden = true; });
+    return;
+  }
   conversationId = id;
   localStorage.setItem("conversationId", id);
   lastSeq = 0;
@@ -193,8 +205,9 @@ document.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click
 
 (async () => {
   if (!conversationId) await newConversation();
+  if (!conversationId) return;
   await poll();
-  listen();
+  if (conversationId) listen();
 })();
 </script>
 </body>
