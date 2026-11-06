@@ -300,6 +300,30 @@ class TestUnderage:
         ]
         assert "minimum age" in chat.state.summary
 
+    def test_years_of_experience_are_not_an_age(self, chat: Chat) -> None:
+        """The model read "tengo 15 años de experiencia" as an age in a live run."""
+        chat.say(ex(yes_no=True))
+        misread = ex(experience_years=15)
+        misread.says_underage = True
+        chat.say(misread, text="15 tengo 15 años de experiencia")
+        assert chat.state.status == Status.IN_PROGRESS
+        assert chat.state.review_reasons == []
+        assert chat.state.candidate.experience_years == 15
+
+    def test_an_answer_to_the_experience_question_is_not_an_age(self, chat: Chat) -> None:
+        chat.say(ex(yes_no=True))
+        chat.result.state.stage = Stage.COLLECTING
+        chat.result.state.awaiting = FieldName.EXPERIENCE
+        chat.say(ExtractionResult(says_underage=True), text="tengo 15 años")
+        assert chat.state.status == Status.IN_PROGRESS
+        assert chat.state.review_reasons == []
+
+    def test_at_any_other_question_it_still_counts(self, chat: Chat) -> None:
+        chat.to_license()
+        chat.say(ExtractionResult(says_underage=True), text="tengo 15 años")
+        assert chat.state.status == Status.NEEDS_REVIEW
+        assert ReviewReason(reason=Reason.UNDERAGE) in chat.state.review_reasons
+
     def test_after_a_knockout_nothing_changes(self, chat: Chat) -> None:
         chat.to_license()
         chat.say(no_license("No tengo"), text="No tengo")

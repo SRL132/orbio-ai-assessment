@@ -202,7 +202,7 @@ def turn(
 
     if extraction.intent == "data_request":
         _on_data_request(t)
-    elif extraction.says_underage and t.state.status != Status.DISQUALIFIED:
+    elif _says_underage(t, extraction):
         _send_to_review(t, Reason.UNDERAGE)
         t.actions.append(HandOff(reason="review"))
     elif extraction.intent == "abuse":
@@ -269,6 +269,18 @@ def on_delivery_failed(
     if _waits_for_candidate(t.state):
         _send_to_review(t, Reason.UNREACHABLE)
     return _finish(t, schedule_reminder=False)
+
+
+def _says_underage(t: _Turn, extraction: ExtractionResult) -> bool:
+    """Code has the last word: "tengo 15 años de experiencia" can read as an age, and it would end
+    the screening of an experienced driver. Years given as experience, or in reply to our question
+    about it, aren't an age. A real minor who says it there is still checked at the interview."""
+    if not extraction.says_underage or t.state.status == Status.DISQUALIFIED:
+        return False
+    about_experience = (
+        t.state.awaiting == FieldName.EXPERIENCE or extraction.fields.experience_years is not None
+    )
+    return not about_experience
 
 
 def _gives_a_value(extraction: ExtractionResult) -> bool:
