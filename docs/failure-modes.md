@@ -1,6 +1,8 @@
 # Failure modes: audit
 
-> Known ways agents like this fail, checked against this code on 2026-11-06 at commit `c430230` (928 tests pass, 8 skipped; offline evals 67/67). All 18 gaps have since been worked on, with tests. Gaps 10, 16 and 17 still need decisions from other people, listed below, and no live evals have been run on any of it. Design: [`process-design.md`](process-design.md). Pilot: [`pilot-plan.md`](pilot-plan.md).
+> Known ways agents like this fail, checked against this code on 2026-11-06 at commit `c430230` (928 tests pass, 8 skipped; offline evals 67/67). All 18 gaps have since been worked on, with tests. Gaps 10, 16 and 17 still need decisions from other people, listed below.
+
+**Live result:** on 2026-11-06 at `cab06c4`, GPT-5.6 Terra passed 96 of 97 scripted scenarios ($1.58), and the changes were merged at that score. All the new scenarios passed. The one failure was `ambiguous_4_vague_start_date`, where the date came back as today, most likely "el lunes" said on a Monday (no transcript was saved). Extractor v12 adds a rule for this, not yet measured live. That run is one sample per scenario and doesn't show how often the reply ban fires. Design: [`process-design.md`](process-design.md). Pilot: [`pilot-plan.md`](pilot-plan.md).
 
 No list can prove every edge case is covered. Synthetic scenarios only find the failures someone imagined ([`real-data-evals.md`](real-data-evals.md) says the same), so this one lowers the risk and the pilot's knockout review remains the real test.
 
@@ -18,7 +20,7 @@ Hard decisions are well protected: the model can't qualify or reject anyone by i
 
 ### Before any real candidate
 
-Each row marked Fixed or Partly fixed shows what happened before the fix in its Evidence column. Live evals haven't been re-run on them, and gaps 8–10 changed the extractor prompt (v11), so how a real model reads those messages is unmeasured. Two limits remain: the `shared_name` flags are set by hand, and someone in Mexico who gives a date before their location is read on the default timezone ([appendix E](process-design-appendix.md#e-conversation-rules-in-detail)).
+Each row marked Fixed or Partly fixed shows what happened before the fix in its Evidence column. Gaps 8–10 changed the extractor prompt (v11), and the live result above is the only measurement of how a real model reads those messages. Two limits remain: the `shared_name` flags are set by hand, and someone in Mexico who gives a date before their location is read on the default timezone ([appendix E](process-design-appendix.md#e-conversation-rules-in-detail)).
 
 | # | Failure | Evidence | Fix |
 | --- | --- | --- | --- |

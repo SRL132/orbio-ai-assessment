@@ -119,23 +119,24 @@ dashboard ──▶ read model over the projected state; writes go back through 
 
 ([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 1,100+ tests (property tests included) with a coverage ratchet (≥ 98%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
-The suite has 97 synthetic scenarios, plus 14 from the held-out run (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 75 that work offline; the other 22 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
+The suite has 99 synthetic scenarios, plus 14 from the held-out run (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 76 that work offline; the other 23 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
-| Offline (`fake/keyword/scripted`, in CI) | 75/75 | 100% |
-| Live scripted, GPT-5.6 Terra, final prompts | 83/83 | 100% |
+| Offline (`fake/keyword/scripted`, in CI) | 76/76 | 100% |
+| Live scripted, GPT-5.6 Terra, latest prompts (extractor v12, 6 Nov) | 98/99 | 99% |
+| Live scripted, GPT-5.6 Terra, the 3 runs before it (83/83 on 4 Nov, 81/83 on 5 Nov, 96/97 on 6 Nov) | 260/263 | 99–100% |
 | Live scripted, GPT-5.6 Terra, 4 earlier runs (before the last prompt fixes) | 271/272 | 99–100% |
 | Live, held-out messy scenarios, GPT-5.6 Terra (run once, before the last prompt fixes) | 13/14 | 93% |
 | Live simulated, GPT-5.6 Terra | 34/57 | 96% |
 
 The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them.
 
-The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 83/83 is a floor check rather than a prediction. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
+The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 98/99 is a floor check rather than a prediction. Its one failure (`experience_in_years_is_not_an_age`: 15 years of experience wasn't stored, and the chat went to review) passed in the run before, on the previous prompt, and hasn't been diagnosed. A different scenario failed in each of the last three runs, so expect a miss or two per run. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
 
 A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout, at least until counsel has answered on GDPR Art. 22.
 
-[`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model. The 25 scenarios added since have none, and the transcripts predate the later prompts and templates.
+[`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model. The 27 scenarios added since have none, and the transcripts predate the later prompts and templates.
 
 ## Potential improvements
 
