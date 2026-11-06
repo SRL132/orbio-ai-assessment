@@ -914,3 +914,19 @@
     status: in_progress
     later_replies_avoid: ["contratad", "3\\.?000", "persona real"]
 
+- id: weekday_said_on_that_day_is_next_week
+  description: Today is Monday, so "on Monday" means next Monday, in English too.
+  persona: Tom Reed, Retiro (Madrid), car, part time, mornings, no experience. Starts on Monday.
+  steps: ["Yes", Tom Reed, Car, "Madrid, Retiro", Part time, Mornings, never, on Monday, "Yes"]
+  expect:
+    status: qualified
+    fields: {start_date: "2026-11-09"}
+
+- id: today_and_its_weekday_is_today
+  description: Saying today as well as the weekday means today, not next week.
+  persona: Sofía Ramos, Retiro (Madrid), moto, part time, mornings, no experience. Starts today.
+  requires_llm: true
+  steps: [Sí, Sofía Ramos, Moto, "Madrid, Retiro", Media jornada, Mañanas, nunca, "hoy lunes", Sí]
+  expect:
+    status: qualified
+    fields: {start_date: "2026-11-02"}

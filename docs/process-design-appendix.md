@@ -85,7 +85,7 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **"I can't talk now."** "Estoy conduciendo, luego te digo" gets a short reply and costs no attempt, however often it's said. Reminders count from that message. An answer in the same message still counts.
 
-**Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. It's never a knockout, and the app doesn't ask for or store a date of birth.
+**Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. Years given as experience, or in reply to the experience question, are never read as an age, even if the model does (checked in code), so someone who is underage and says so only at that question is left to the interview check. It's never a knockout, and the app doesn't ask for or store a date of birth.
 
 **Limits.** A conversation gets `max_turns` turns (40; a normal one takes about 12). After that a person takes over (`turn_limit`), with no more LLM calls or replies. Later messages are stored but not read by anything, so a stop request sent then waits for whoever opens the conversation. On WhatsApp, a number sending more than 20 messages a minute has the excess dropped, and each conversation gets at most one "I only read text" notice an hour. Reactions are ignored.
 
@@ -101,7 +101,7 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Keeps refusing the recap.** After 3 replies in a row that neither confirm nor change it (`max_recap_rounds`), hand off to a recruiter (`recap_unconfirmed`) instead of repeating it.
 
-**Dates are the candidate's.** "Today" is the date in their location's timezone, or `default_timezone` from the client config until that's known: an evening in Mexico is already tomorrow in UTC. So someone in Mexico who gives a date before saying where they live is read on the default timezone, which can be a day off. The start date is normally asked after the location, so this only affects answers given early. A start date that has passed by the time they confirm the recap is asked again and doesn't count as a failed attempt.
+**Dates are the candidate's.** "Today" is the date in their location's timezone, or `default_timezone` from the client config until that's known: an evening in Mexico is already tomorrow in UTC. So someone in Mexico who gives a date before saying where they live is read on the default timezone, which can be a day off. The start date is normally asked after the location, so this only affects answers given early. "El lunes" said on a Monday means next Monday, unless they also say today ("hoy lunes"): the recap shows the date, so they can correct it. A start date that has passed by the time they confirm the recap is asked again and doesn't count as a failed attempt.
 
 **Interview slots.** A slot that has passed is never booked: the candidate is told and gets new ones, or a recruiter's message if none are left. A qualified candidate who hasn't picked a slot gets the usual two reminders, worded for the slot. With still no reply, they go to the review queue (`no_slot_picked`) with no further message, since WhatsApp's 24-hour window has usually closed by then. They aren't marked abandoned, because they did qualify.
 
