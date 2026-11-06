@@ -24,7 +24,7 @@
 ## Human oversight
 
 - **Weeks 1 and 2:** a recruiter reads every knockout and every "asked for a human" case within one working day, and overturns wrong ones with the override, which requires a reason. This is the pilot's most important safety net, and it produces the number below.
-- **Weeks 3 and 4:** continue if that error rate is above target; otherwise sample 1 in 5.
+- **Weeks 3 and 4:** continue reading all of them. Sample 1 in 5 only if counsel has confirmed that's acceptable under GDPR Art. 22 ([T12](failure-modes.md#trade-offs)) and the error rate is at or below target.
 
 ## What we measure
 

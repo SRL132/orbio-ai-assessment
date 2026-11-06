@@ -133,7 +133,7 @@ The offline result shows the engine and policy behave as designed. It says littl
 
 The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 83/83 is a floor check rather than a prediction. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
 
-A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout for the first two weeks.
+A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout, at least until counsel has answered on GDPR Art. 22.
 
 [`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model. The 25 scenarios added since have none, and the transcripts predate the later prompts and templates.
 

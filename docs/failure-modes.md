@@ -74,7 +74,7 @@ These have no clearly right answer. Each has a recommendation, for you or the cl
 | T9 | Stop requests with no "are you sure?" | **Keep it.** It's a rights request, a person sees it, and a misread is recoverable | Asking again burdens people exercising a right. Test the "no puedo seguir ahora" misread from gap 8 |
 | T10 | Everything unclear goes to review | **Keep it, and add a limit:** the pilot plan has no target for review share. Propose one to the client, measured from week 1 | Review is the safe default, but enough of it recreates the workload the product exists to remove |
 | T11 | Fallback model, or hold until the primary returns | **Keep the fallback**, plus gap 18 | Holding makes candidates wait through an outage of unknown length, and some won't come back. Gap 18 limits the accuracy cost to where it matters |
-| T12 | Human sign-off on every knockout (GDPR Art. 22) | **Keep reading all of them in weeks 1–2 as planned, and don't reduce to sampling in Spain until counsel answers** | Already flagged as open in [appendix C](process-design-appendix.md#c-regulatory-and-platform-context). Sampling after two weeks is a legal call, not only an error-rate one |
+| T12 | Human sign-off on every knockout (GDPR Art. 22) | **Read all of them, and don't reduce to sampling in Spain until counsel answers.** The [pilot plan](pilot-plan.md#human-oversight) follows this | Already flagged as open in [appendix C](process-design-appendix.md#c-regulatory-and-platform-context). Sampling after two weeks is a legal call, not only an error-rate one |
 | T13 | Interview reminders and no-show handling | **Leave for after the pilot** | It's outside the screening brief and affects hiring results, not decisions. Measure no-shows first |
 
 ## Already covered
