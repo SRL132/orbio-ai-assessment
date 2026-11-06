@@ -83,6 +83,11 @@ _NAME_PARTICLES = frozenset({"de", "del", "la", "las", "los", "y", "da", "van", 
 _NAME_TOKEN = re.compile(r"[^\W\d_]+(?:[-'][^\W\d_]+)*", re.UNICODE)
 
 
+def has_sensitive_pattern(text: str, config: ClientConfig) -> bool:
+    """An ID-like number, in case the model doesn't flag it: code has the last word on this."""
+    return any(re.search(p, text, re.IGNORECASE) for p in config.sensitive_patterns)
+
+
 def validate_full_name(full_name: str | None) -> Outcome:
     if not full_name or not full_name.strip():
         return Outcome.invalid("missing")

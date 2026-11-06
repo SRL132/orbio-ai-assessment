@@ -39,6 +39,13 @@
 
     <h2>Actions</h2>
     <div class="card">
+      {% if state.tell_candidate %}
+      <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/told" style="margin-bottom:12px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <p style="margin:0 0 8px"><b>The candidate hasn't been told about the override.</b> Nothing is sent automatically.</p>
+        <button class="secondary" type="submit">I've told them</button>
+      </form>
+      {% endif %}
       <form method="post" action="/dashboard/candidates/{{ state.conversation_id }}/override" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap">
         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <label>Change status to <select name="status" required>

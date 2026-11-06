@@ -214,3 +214,17 @@ def test_a_read_timeout_is_not_retried(config: ClientConfig, state: Conversation
         llm.compose(ASK, state, config)
     assert len(calls) == 1
     assert sleeps == []
+
+
+def test_a_reading_from_the_fallback_says_so(
+    config: ClientConfig, state: ConversationState
+) -> None:
+    llm = ResilientLLM(Stub("primary", httpx.ConnectError("down")), Stub("fallback"))
+    assert llm.extract(state, "hola", config, TODAY).on_fallback
+
+
+def test_a_reading_from_the_primary_does_not(
+    config: ClientConfig, state: ConversationState
+) -> None:
+    llm = ResilientLLM(Stub("primary"), Stub("fallback"))
+    assert not llm.extract(state, "hola", config, TODAY).on_fallback

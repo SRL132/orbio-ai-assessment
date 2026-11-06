@@ -207,6 +207,13 @@ def _changes_another_answer(name: FieldName, draft: Candidate, state: Conversati
     )
 
 
+def _tapped_no_license(message: str, state: ConversationState, config: ClientConfig) -> bool:
+    """Exactly the question's own option leaves nothing to misread, except on a call, where
+    speech recognition wrote it."""
+    said = normalize(message.strip(" \t\r\n.,;:!¡"))
+    return state.channel != "voice" and said in {normalize(o) for o in config.license_no_options}
+
+
 def _why_confirm(
     name: FieldName,
     outcome: Outcome,
@@ -214,6 +221,7 @@ def _why_confirm(
     state: ConversationState,
     config: ClientConfig,
     draft: Candidate,
+    message: str,
 ) -> str | None:
     """Why to confirm with the candidate before this counts, or None if it counts now: the place
     came from the geocoder (so they see which place we understood), the channel always confirms
@@ -224,6 +232,12 @@ def _why_confirm(
         return outcome.note
     if name == FieldName.LOCATION and outcome.kind == "knockout":
         return "before_rejecting"  # a misread place mustn't turn anyone away unchecked
+    if (
+        name == FieldName.LICENSE
+        and outcome.kind == "knockout"
+        and not _tapped_no_license(message, state, config)
+    ):
+        return "before_rejecting"  # nor a misread or misheard "no"
     if must_confirm(name, state, config):
         return "channel"
     if confidence < config.confirm_below_confidence:
@@ -383,7 +397,13 @@ def apply_extraction(
 
         why = (
             _why_confirm(
-                name, outcome, confidence, state, config, draft.model_copy(update=outcome.updates)
+                name,
+                outcome,
+                confidence,
+                state,
+                config,
+                draft.model_copy(update=outcome.updates),
+                message,
             )
             if outcome.kind != "invalid"
             else None

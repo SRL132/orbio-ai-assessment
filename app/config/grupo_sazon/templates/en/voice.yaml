@@ -3,7 +3,7 @@
 greeting_consent: >-
   Hi, I'm {persona}, {company}'s virtual assistant. I'll ask you seven quick questions about the
   delivery driver job, about three minutes. We transcribe what you say only for this process and
-  don't keep the audio. Shall we start?
+  don't keep the audio. You need to be {minimum_age} or over. Shall we start?
 consent_reask: To continue I need your OK to use your answers for this process. Shall we start?
 ask_license: Do you have a driving license? Tell me if it's for a moto, a car, both, or if you don't have one.
 ask_location: Which city and neighbourhood do you live in? Your postal code works too.

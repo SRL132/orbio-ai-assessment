@@ -200,13 +200,9 @@ def test_a_rejected_answer_does_not_stop_the_others(config: ClientConfig) -> Non
 
 def test_knockout_event_and_value(config: ClientConfig) -> None:
     state = ConversationState(client_id=config.client_id)
-    result = apply_extraction(
-        state,
-        ex(has_license=False).fields,
-        config,
-        TODAY,
-        message=said(ex(has_license=False).fields),
-    )
+    fields = ex(has_license=False).fields
+    fields.has_license.quote = "No tengo"  # the question's own option: no read-back
+    result = apply_extraction(state, fields, config, TODAY, message="No tengo")
     assert result.knockout == Reason.NO_LICENSE
     assert result.events[-1].data == {"field": "license", "reason": "no_license"}
     assert state.candidate.has_license is False  # the answer is kept, for the record

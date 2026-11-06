@@ -177,6 +177,7 @@ def candidate_list(
         search=params.get("q") or None,
         start_before=_date(params.get("start_before")),
         asked_for_human=params.get("human") == "1",
+        knockout_on_fallback=params.get("fallback") == "1",
     )
     today = datetime.combine(c.clock.now().date(), time.min, tzinfo=c.clock.now().tzinfo)
     page = c.queries.candidates(filters, page=_page_number(params.get("page")))
@@ -384,6 +385,23 @@ async def override(
         ) from None
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+    return RedirectResponse(
+        f"/dashboard/candidates/{conversation_id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.post("/dashboard/candidates/{conversation_id}/told")
+async def candidate_told(
+    conversation_id: UUID, c: App, user: Recruiter, _: Csrf
+) -> RedirectResponse:
+    try:
+        await asyncio.to_thread(c.service.candidate_told, conversation_id, user)
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND) from None
+    except ConversationBusy:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "The agent is answering this candidate; try again."
+        ) from None
     return RedirectResponse(
         f"/dashboard/candidates/{conversation_id}", status_code=status.HTTP_303_SEE_OTHER
     )

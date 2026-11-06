@@ -60,6 +60,7 @@ async def receive(request: Request) -> dict[str, str]:
             )
         else:
             logger.info("whatsapp_delivery status=%s", report.status)
+    await asyncio.to_thread(channel.handle_delivery_failures, payload)
     conversations = await asyncio.to_thread(channel.handle, payload)
     if c.settings.role == "all":  # "web": a worker process picks them up after the debounce
         for conversation_id in conversations:

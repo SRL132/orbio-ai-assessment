@@ -66,6 +66,7 @@ def test_asking_to_change_the_interview_reaches_a_recruiter(chat: Chat) -> None:
 def test_asking_to_change_an_interview_after_a_knockout_changes_nothing(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(yes_no=False))
     chat.say(ex(intent="interview_change"), text="quiero cambiar la entrevista")
     assert chat.state.status == Status.DISQUALIFIED
@@ -83,6 +84,7 @@ def test_asking_for_a_person_after_qualifying_reaches_a_recruiter(chat: Chat) ->
 def test_asking_for_a_person_after_a_closed_knockout_keeps_the_knockout(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(yes_no=False))
     chat.say(ex(intent="human_request"), text="quiero hablar con una persona")
     assert chat.state.status == Status.DISQUALIFIED

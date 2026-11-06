@@ -88,6 +88,7 @@ def extractor_system(config: ClientConfig) -> str:
     faq = "\n".join(f"- {entry.id}: {entry.question}" for entry in config.faq)
     return _read("extractor_system.md").format(
         company=config.persona.company,
+        minimum_age=config.minimum_age,
         cities=", ".join(cities),
         nearby=", ".join(nearby) or "(none)",
         platforms=", ".join(config.known_platforms),

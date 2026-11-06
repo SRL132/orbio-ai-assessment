@@ -86,6 +86,13 @@ _DATA_REQUEST = re.compile(
     r"\bno quiero (seguir|continuar)\b|\bretiro mi candidatura\b|"
     r"\b(withdraw|stop) my application\b|\bi (want|would like) to (stop|withdraw)\b"
 )
+_DEFERRAL = re.compile(
+    r"\bahora no puedo\b|\bno puedo ahora\b|\bestoy (conduciendo|repartiendo)\b|"
+    r"\bluego te (digo|escribo|respondo)\b|\bte escribo (luego|despues|mas tarde)\b|"
+    r"\b(can't|cannot) talk\b|\bi'm driving\b|\b(talk|write|reply) later\b"
+)
+_STATED_AGE = re.compile(r"\b(?:tengo|i am|i'm) (\d{1,2})(?: anos| years old)\b(?! de experiencia)")
+_MINOR = re.compile(r"\bsoy menor\b|\bmenor de edad\b|\bi'm a minor\b|\bi am a minor\b")
 _SENSITIVE = re.compile(
     r"\b\d{8}[a-z]\b|\b[xyz]\d{7}[a-z]\b|\bdni\b|\bnie\b|\bpasaporte\b|"
     r"\bpassport\b|\bcurp\b|\biban\b"
@@ -222,6 +229,11 @@ def guess_language(words: list[str], current: Language) -> Language:
     return current
 
 
+def _says_underage(text: str, config: ClientConfig) -> bool:
+    age = _STATED_AGE.search(text)
+    return bool(_MINOR.search(text)) or (age is not None and int(age.group(1)) < config.minimum_age)
+
+
 class KeywordExtractor:
     def __init__(self, confidence: float = 0.6) -> None:
         self._confidence = confidence
@@ -241,6 +253,8 @@ class KeywordExtractor:
         confused = not words  # "?" or "..." alone: they didn't understand the question
         if confused:
             intent = "other"
+        elif _DEFERRAL.search(t):
+            intent = "deferral"
         elif _DATA_REQUEST.search(t):
             intent = "data_request"
         elif _has(t, *_ABUSE):
@@ -299,6 +313,7 @@ class KeywordExtractor:
             confused=confused,
             yes_no=yes_no,
             sensitive_data=bool(_SENSITIVE.search(t)),
+            says_underage=_says_underage(t, config),
             question=text.strip() if intent == "question" else None,
             faq_id=match_faq(text, config) if intent == "question" else None,
             sentiment="frustrated"

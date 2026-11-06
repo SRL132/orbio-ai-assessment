@@ -46,7 +46,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | Field | Valid when | If invalid or unclear |
 | --- | --- | --- |
 | Full name | First name and surname | Ask for the surname; first name alone after 2 tries is accepted and flagged |
-| Driver's license and vehicle | Has one for the vehicle they'd use: *Moto · Coche · Ambos · No tengo* | "Getting it soon" = no, with a note. Unsure if it covers the vehicle → review. **No license = knockout** |
+| Driver's license and vehicle | Has one for the vehicle they'd use: *Moto · Coche · Ambos · No tengo* | "Getting it soon" = no, with a note. Unsure if it covers the vehicle → review. **No license = knockout**, read back first unless they tapped "No tengo" |
 | City / zone | Matches the service areas in config | Vague → ask neighbourhood or postal code. Just outside or unlisted zone → review. **Clearly outside = knockout** |
 | Availability | One or more of full time, part time, weekends | "Whenever" → full time, confirmed back |
 | Preferred schedule | One or more of morning, afternoon, evening, flexible | Clock times map to a slot ("from 7pm" = evening) |
@@ -65,6 +65,8 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | **Job questions** | Send the approved FAQ answer word for word, otherwise say a recruiter will confirm. Then return to the current question |
 | **Rude or nonsense input** | One calm reply; if it continues, end politely and flag for review |
 | **Shares sensitive data** (ID number, health) | Don't store it; explain it isn't needed |
+| **Can't answer right now** ("estoy conduciendo") | A short "no problem", no attempt counted, and the usual reminders |
+| **Says they're under the minimum age** | Stop asking and send it to the review queue. Never a knockout |
 | **Asks for a human** | Hand off right away. After a knockout the rejection stands, or anyone could skip it, but the request gets its own dashboard filter and they're told a person will review it |
 | **Asks to stop or to delete their data** (at any point, even after the chat has closed) | Stop asking and send it to the review queue with its own reason. The candidate is told a recruiter will reply within 2 working days, and given the privacy address. If no LLM can read the message, it's kept and retried, as in an open conversation. After a knockout the reason stays on record |
 | **Changes an earlier answer** | Take the latest value, re-validate, log the change. A valid new answer clears the review flag on that field. A corrected knockout reopens the screening |
@@ -79,7 +81,7 @@ Every conversation ends in one status, set by code, with a summary for the recru
 | --- | --- | --- | --- |
 | **Qualified** | All fields valid, no knockout | A recap, then interview slots to book in the chat (a callback would bring back the 60% no-answer problem) | Top of the dashboard, with summary and transcript |
 | **Disqualified** | No license, or clearly outside the area | A warm, honest reason and an offer to keep their details | Filtered list, kept for audit |
-| **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour, or qualified but no interview slot picked after the reminders | A recruiter will contact them, with a timeframe | Review queue with the reason |
+| **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour, qualified but no interview slot picked after the reminders, said they're under age, reached the message limit, or our messages can't be delivered | A recruiter will contact them, with a timeframe | Review queue with the reason |
 | **Abandoned** | No reply after the last reminder, or consent declined | Nothing more, or a short acknowledgement if they declined | Drop-off stage, for analytics |
 
 ## Message tone and length

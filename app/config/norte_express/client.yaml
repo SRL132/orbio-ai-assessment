@@ -56,6 +56,32 @@ known_platforms:
 # lat/lon: city centre. Places not listed here are geocoded (GEOCODER) and decided by their
 # distance to the nearest city centre: within geo_review_radius_km, review; farther, outside.
 geo_review_radius_km: 30
+# Reminders wait for the morning where the candidate is, within the channel's reply window.
+quiet_hours: {start: "22:00", end: "09:00"}
+reply_window_hours: {whatsapp: 24}
+# Turns one conversation may use before a person takes over (a normal screening takes about 12).
+max_turns: 40
+# Working default, for the client and counsel to confirm per country. Goes to review, never a knockout.
+minimum_age: 18
+license_no_options: ["No tengo", "None"]
+# An LLM-written reply matching any of these gets the template instead (case-insensitive).
+forbidden_reply_patterns:
+  - '\d[\d.,]*\s*(€|\$|(euros?|pesos?|usd|mxn)\b)'
+  - '(€|\$)\s*\d'
+  - 'contratad[oa]s?\b|te contratamos|est[aá]s dentro|seleccionad[oa]s?\b|cumples (con )?los requisitos|no cumples|rechazad[oa]|descartad[oa]'
+  - '\bhired\b|you(''re| are) in\b|you (qualify|meet the requirements)|\bqualified\b|\brejected\b|not eligible'
+  - 'soy (una )?persona|soy human|no soy (un |una )?(bot|robot|asistente|ia)\b'
+  - '\bi(''m| am) (a )?(real )?(person|human)\b|\bnot a (bot|robot)\b'
+  - 'nacionalidad|extranjer[oa]|inmigrante|\bpapeles\b|religi[oó]n|embarazad|nationality|foreigner|immigrant|pregnan|religion'
+# A message matching any of these is redacted even if the model doesn't flag it: DNI, NIE, CURP, IBAN.
+sensitive_patterns:
+  - '\b\d{8}[- ]?[a-z]\b'
+  - '\b[xyz][- ]?\d{7}[- ]?[a-z]\b'
+  - '\b[a-z]{4}\d{6}[hm][a-z]{5}[a-z0-9]\d\b'
+  - '\b[a-z]{2}\d{2}(?:[ -]?[a-z0-9]{4}){4,7}\b'
+# Retention for qualified, needs-review and on-file candidates: kept until counsel sets the periods.
+# retention_days_by_status: {qualified: 365, needs_review: 365}
+# retention_days_on_file: 365
 # Values the model is less sure of than this are confirmed with the candidate (yes/no) first.
 confirm_below_confidence: 0.5
 # On a call, speech recognition mishears names and towns ("Gostivar" -> "Ghost") and the model
@@ -115,6 +141,18 @@ privacy_notice:
 # Sent word for word: the LLM only picks the entry (faq_id). Demo content: the brief attached no
 # FAQ, so these need the client's confirmation (docs/process-design-appendix.md, D). No pay figures.
 faq:
+  - id: age
+    question: Is there a minimum age? How old do I need to be?
+    keywords: [edad, anos, menor, age, old, minor, young]
+    answer:
+      es: Hay que tener 18 años o más. Si tienes dudas, una persona del equipo te lo confirma.
+      en: You need to be 18 or over. If you're not sure, someone from the team can confirm it.
+  - id: accessibility
+    question: I have a disability or need another way of doing this. Can you help?
+    keywords: [discapacidad, sordo, sorda, ciego, ciega, adaptacion, disability, deaf, blind, accessibility, adjustment]
+    answer:
+      es: Claro. Dime que quieres hablar con una persona y el equipo buscará contigo la mejor forma de hacerlo.
+      en: Of course. Tell me you'd like to talk to a person and the team will find the best way with you.
   - id: bot
     question: Am I talking to a person or a bot?
     keywords: [bot, robot, persona, humano, person, human, ia, ai, automatico, automated, real]

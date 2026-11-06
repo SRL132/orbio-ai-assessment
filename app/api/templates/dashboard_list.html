@@ -8,6 +8,7 @@
   <div class="counter"><b>{{ counters.needs_review }}</b><span><a href="/dashboard/review">Waiting for review</a></span></div>
   <div class="counter"><b>{{ counters.in_progress }}</b><span>In progress</span></div>
   <div class="counter"><b>{{ counters.asked_for_human }}</b><span><a href="/dashboard?human=1">Rejected, asked for a human</a></span></div>
+  <div class="counter"><b>{{ counters.knockout_on_fallback }}</b><span><a href="/dashboard?fallback=1">Rejected on the backup model</a></span></div>
 </div>
 <form class="filters" method="get">
   <label>Name <input name="q" value="{{ filters.get('q', '') }}" placeholder="Search"></label>

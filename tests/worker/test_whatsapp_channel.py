@@ -16,6 +16,7 @@ from app.adapters.channels.whatsapp_invites import WhatsAppInvites
 from app.adapters.clock.clocks import FakeClock
 from app.adapters.llm.fake import TemplateResponder
 from app.adapters.llm.keyword import KeywordExtractor
+from app.adapters.storage.rate_limit import SqlRateLimiter
 from app.adapters.storage.sql import SqlRepository, make_engine
 from app.domain.config import ClientConfig
 from app.domain.models import Channel, Stage, Status
@@ -492,3 +493,148 @@ def test_invite_only_gives_a_finished_candidate_no_new_conversation(invited) -> 
     service.repo.save_turn(state, [], [], [], lease_owner=None)
     assert channel.handle(incoming("hola")) == []
     assert service.repo.conversation_for("whatsapp", PHONE) == cid
+
+
+# --- docs/failure-modes.md, gaps 11, 12, 14 and 15 ------------------------------------------------
+
+
+def _typed(kind: str, phone: str = PHONE) -> dict:
+    payload = incoming(None, phone)
+    payload["entry"][0]["changes"][0]["value"]["messages"][0]["type"] = kind
+    return payload
+
+
+def _status(status: str, phone: str = PHONE, code: int = 131026) -> dict:
+    report = {"status": status, "recipient_id": phone, "errors": [{"code": code, "title": "x"}]}
+    return {"entry": [{"changes": [{"value": {"statuses": [report]}}]}]}
+
+
+def test_a_reaction_is_not_a_message(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.handle(incoming("hola"))
+    channel.dispatch_once()
+    sent = len(fake.sent)
+    assert channel.handle(_typed("reaction")) == []
+    channel.dispatch_once()
+    assert len(fake.sent) == sent
+    cid = service.repo.conversation_for("whatsapp", PHONE)
+    assert all(e.type != "non_text_message" for e in service.repo.events(cid))
+
+
+def test_a_reaction_opens_no_conversation(setup) -> None:
+    service, channel, _fake, _ = setup
+    channel.handle(_typed("reaction"))
+    assert service.repo.conversation_for("whatsapp", PHONE) is None
+
+
+def test_a_burst_of_photos_gets_one_paid_notice_an_hour(setup) -> None:
+    service, channel, fake, clock = setup
+    channel.handle(incoming("hola"))
+    channel.dispatch_once()
+    sent = len(fake.sent)
+    for _ in range(3):
+        channel.handle(incoming(None))
+    channel.dispatch_once()
+    assert len(fake.sent) == sent + 1
+    cid = service.repo.conversation_for("whatsapp", PHONE)
+    noticed = [e for e in service.repo.events(cid) if e.type == "non_text_message"]
+    assert len(noticed) == 3  # still counted, for the voice-note decision
+
+    clock.advance(minutes=59)
+    channel.handle(incoming(None))
+    channel.dispatch_once()
+    assert len(fake.sent) == sent + 1
+    clock.advance(minutes=1)
+    channel.handle(incoming(None))
+    channel.dispatch_once()
+    assert len(fake.sent) == sent + 2
+
+
+def test_a_failed_delivery_sends_the_candidate_to_review(setup) -> None:
+    service, channel, _fake, _ = setup
+    channel.handle(incoming("hola"))
+    channel.handle_delivery_failures(_status("failed"))
+    state = service.repo.get(service.repo.conversation_for("whatsapp", PHONE))
+    assert state.status == Status.NEEDS_REVIEW
+    assert [r.reason for r in state.review_reasons] == ["unreachable"]
+    assert not state.went_silent
+    failed = next(
+        e for e in service.repo.events(state.conversation_id) if e.type == "delivery_failed"
+    )
+    assert failed.data == {"code": 131026}
+
+
+def test_other_delivery_reports_change_nothing(setup) -> None:
+    service, channel, _fake, _ = setup
+    channel.handle(incoming("hola"))
+    channel.handle_delivery_failures(_status("delivered"))
+    channel.handle_delivery_failures(_status("failed", phone="34999999999"))  # nobody we know
+    state = service.repo.get(service.repo.conversation_for("whatsapp", PHONE))
+    assert state.status == Status.IN_PROGRESS
+
+
+def test_a_send_we_give_up_on_sends_the_candidate_to_review(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.handle(incoming("hola"))
+    fake.fail_with = 400  # not retryable
+    channel.dispatch_once()
+    state = service.repo.get(service.repo.conversation_for("whatsapp", PHONE))
+    assert state.status == Status.NEEDS_REVIEW
+    assert [r.reason for r in state.review_reasons] == ["unreachable"]
+
+
+def test_a_send_that_will_be_retried_changes_nothing(setup) -> None:
+    service, channel, fake, _ = setup
+    channel.handle(incoming("hola"))
+    fake.fail_with = 503
+    channel.dispatch_once()
+    state = service.repo.get(service.repo.conversation_for("whatsapp", PHONE))
+    assert state.status == Status.IN_PROGRESS
+
+
+def _finished_with_interview(service, channel, at) -> UUID:
+    channel.handle(incoming("hola"))
+    cid = service.repo.conversation_for("whatsapp", PHONE)
+    state = service.repo.get(cid)
+    state.status, state.stage, state.interview_at = Status.QUALIFIED, Stage.CLOSED, at
+    service.repo.save_turn(state, [], [], [])
+    return cid
+
+
+def test_hello_before_a_booked_interview_keeps_the_conversation(setup) -> None:
+    service, channel, _fake, clock = setup
+    cid = _finished_with_interview(service, channel, clock.now() + timedelta(days=2))
+    channel.handle(incoming("hola"))
+    assert service.repo.conversation_for("whatsapp", PHONE) == cid
+
+
+def test_hello_after_the_interview_has_passed_starts_again(setup) -> None:
+    service, channel, _fake, clock = setup
+    cid = _finished_with_interview(service, channel, clock.now() - timedelta(days=2))
+    channel.handle(incoming("hola"))
+    assert service.repo.conversation_for("whatsapp", PHONE) != cid
+
+
+def test_a_flood_from_one_number_is_cut_off(config: ClientConfig, clock: FakeClock) -> None:
+    engine = make_engine("sqlite:///:memory:")
+    ports = Ports(KeywordExtractor(), TemplateResponder(), clock)
+    service = ScreeningService(SqlRepository(engine, clock, config.client_id), config, ports)
+    limiter = SqlRateLimiter(engine, clock, config.client_id)
+    channel = WhatsAppChannel(
+        service,
+        FakeWhatsApp(),  # type: ignore[arg-type]
+        limiter=limiter,
+        messages_per_minute=2,
+    )
+    before = REGISTRY.get_sample_value("sazon_rate_limited_total", {"endpoint": "whatsapp"}) or 0
+    channel.handle(incoming("hola"))
+    assert channel.handle(incoming("sí"))
+    assert channel.handle(incoming("otro")) == []
+    assert channel.handle(incoming("uno", phone="34600999888")) == []  # another number: its first
+    assert service.repo.conversation_for("whatsapp", "34600999888") is not None
+    assert REGISTRY.get_sample_value("sazon_rate_limited_total", {"endpoint": "whatsapp"}) == (
+        before + 1
+    )
+    clock.advance(minutes=1, seconds=1)
+    assert channel.handle(incoming("ya")) != []
+    engine.dispose()

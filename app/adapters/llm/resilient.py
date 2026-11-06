@@ -101,7 +101,13 @@ class ResilientLLM:
     def extract(
         self, state: ConversationState, text: str, config: ClientConfig, today: date
     ) -> ExtractionResult:
-        return self._call("extract", lambda llm: llm.extract(state, text, config, today))
+        def read(llm: LLM) -> ExtractionResult:
+            result = llm.extract(state, text, config, today)
+            return (
+                result.model_copy(update={"on_fallback": True}) if llm is self._fallback else result
+            )
+
+        return self._call("extract", read)
 
     def compose(
         self,

@@ -3,7 +3,7 @@
 greeting_consent: >-
   Hi! I'm {persona}, {company}'s virtual assistant 👋 I'll ask you 7 quick questions about the
   delivery driver job (about 3 minutes). We only use your answers for this process
-  (privacy notice: {privacy_url}). Shall we start?
+  (privacy notice: {privacy_url}). You need to be {minimum_age} or over. Shall we start?
 consent_reask: To continue I need your OK to use your answers for this process. Shall we start? (yes / no)
 consent_declined: Understood, we won't keep anything. If you change your mind, just write to us.
 
@@ -50,6 +50,8 @@ offer_slots: |-
   Reply with the number. If none works, say "none".
 interview_booked: Done! Your interview is on {when}. We'll send you the restaurant's address. See you soon!
 slot_taken: Oops, that time was just taken. Here are some others.
+deferral_ack: No problem, I'll be here. Write when you can.
+turn_limit_reached: Let's leave it here for now. A recruiter will review your application and write to you within 2 working days.
 slots_expired: Those times have passed. Here are some new ones.
 start_date_passed: The start date you gave me has passed.
 no_slot_fits: No problem. Which days and times would suit you? I'll pass it on to the recruiter.

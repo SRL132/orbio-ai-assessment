@@ -80,7 +80,7 @@ A **modular monolith with a lightweight hexagonal core**. Full detail: [`docs/ar
 - **LLM choice.** Decided by evals: GPT-5.6 Terra, with Claude Haiku 5.5 as the fallback. Still to confirm: the direct SDK path and OpenAI's EU data terms. See [where the choice stands](docs/architecture.md#where-the-choice-stands).
 - **Service areas.** The brief doesn't list the 45 locations, so we invent a plausible set in config.
 - **License rules.** One question in the conversation; detailed per-country rules in config ([appendix A](docs/process-design-appendix.md#a-license-rules-config-not-conversation)).
-- **FAQ knowledge base.** The RAG bonus mentions a "provided FAQ", but none was attached. We wrote 10 demo entries, sent word for word; the client must approve them.
+- **FAQ knowledge base.** The RAG bonus mentions a "provided FAQ", but none was attached. We wrote 14 demo entries, sent word for word; the client must approve them.
 - **Regulatory claims.** Checked on 2026-11-03, each marked primary or secondary, and GDPR Art. 22 needs counsel ([appendix C](docs/process-design-appendix.md#c-regulatory-and-platform-context)).
 
 ## Deliverables checklist

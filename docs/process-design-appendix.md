@@ -21,8 +21,8 @@ The conversation asks one question: does the candidate have a license, and for w
 The agent collects only what screening needs, and every decision can be traced.
 
 - **Consent:** the privacy notice comes in the first message, before any data is collected (GDPR in Spain; LFPDPPP in Mexico). Until the candidate says yes, only a bare yes or no is stored as written: anything else they send is kept as `[redacted]`. To understand it, the message still goes to the LLM provider once. Keeping a candidate on file for future roles is a separate yes/no, because it is a different purpose.
-- **Minimal data:** only the 7 screening fields. No ID numbers, health details or nationality.
-- **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file. Built: an hourly job erases them 183 days (`retention_days` in the client config) after their last activity: state, messages, events including recruiter notes, interview bookings and the WhatsApp contact, in one transaction. An `erasures` row with nothing of the candidate's records each one as proof. A recruiter can also erase one candidate on request from the dashboard, after checking who is asking (a chat message doesn't prove it); that row also names the recruiter. Backups and exports aren't covered. Until then, an answer the candidate corrected stays in the event log, which is append-only.
+- **Minimal data:** only the 7 screening fields. No ID numbers, health details or nationality. A message holding an ID-like number (DNI, NIE, CURP, IBAN: `sensitive_patterns` in the client config) is redacted by code even if the model doesn't flag it. The model also flags immigration status, ethnicity, religion and criminal records, so those depend on it.
+- **Retention:** disqualified and abandoned records are deleted after 6 months unless the candidate agreed to stay on file. Built: an hourly job erases them 183 days (`retention_days` in the client config) after their last activity: state, messages, events including recruiter notes, interview bookings and the WhatsApp contact, in one transaction. An `erasures` row with nothing of the candidate's records each one as proof. A recruiter can also erase one candidate on request from the dashboard, after checking who is asking (a chat message doesn't prove it); that row also names the recruiter. Qualified, needs-review and on-file candidates aren't erased automatically until counsel sets `retention_days_by_status` and `retention_days_on_file` in the client config, which are empty on purpose. Backups and exports aren't covered. Until then, an answer the candidate corrected stays in the event log, which is append-only.
 - **Access:** the recruiter dashboard is behind a login with one account per recruiter. No default or shared passwords. Secrets live in environment variables.
 - **IDs:** random UUIDs, never sequential numbers, so one record can't be guessed from another.
 - **Web chat access:** a conversation id isn't a password (it appears in logs and URLs). The browser that starts a conversation gets a signed, HttpOnly cookie naming it, and the chat API serves only the conversations that cookie names; anyone else gets a 404. The cookie keeps a browser's 5 latest conversations, so a second tab (a chat and a voice call, say) doesn't lock the first one out.
@@ -57,7 +57,7 @@ The brief leaves these open. Each has a working default in config, so it can cha
 | Channel | WhatsApp in production, web chat for the demo | Decides reminder rules and message templates |
 | Data retention | 6 months for disqualified and abandoned, unless the candidate opts in | GDPR / LFPDPPP |
 | Hand-off | Qualified candidates book an interview slot in the chat, from each location's calendar (mocked for the demo) | We need each location's interview calendar |
-| FAQ | The brief's RAG bonus mentions a "provided FAQ", but none was attached, so `client.yaml` has 10 entries written for the demo. Hours, areas and data use follow the brief and the privacy notice. Pay, vehicle and contract only say a recruiter will confirm, with no invented figures | Answers are sent word for word, so the client must approve each one and supply the real pay, vehicle and contract facts |
+| FAQ | The brief's RAG bonus mentions a "provided FAQ", but none was attached, so `client.yaml` has 14 entries written for the demo. Hours, areas and data use follow the brief and the privacy notice. Pay, vehicle and contract only say a recruiter will confirm, with no invented figures | Answers are sent word for word, so the client must approve each one and supply the real pay, vehicle and contract facts |
 
 ## E. Conversation rules in detail
 
@@ -81,6 +81,18 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Language.** A message that is only place names, platforms, the candidate's name or numbers ("madrid tetuan") keeps the current language (checked in code).
 
+**License "no".** Read back before it rejects anyone ("Solo para confirmar: sin carnet, ¿correcto?"), since one misread or misheard word would otherwise end the screening. The exception is tapping exactly the question's own option (`license_no_options`: "No tengo", "None"), and on a call even that is read back. Only one value waits at a time, so a "no license" given while another value is being confirmed is asked for afterwards.
+
+**"I can't talk now."** "Estoy conduciendo, luego te digo" gets a short reply and costs no attempt, however often it's said. Reminders count from that message. An answer in the same message still counts.
+
+**Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. It's never a knockout, and the app doesn't ask for or store a date of birth.
+
+**Limits.** A conversation gets `max_turns` turns (40; a normal one takes about 12). After that a person takes over (`turn_limit`), with no more LLM calls or replies. Later messages are stored but not read by anything, so a stop request sent then waits for whoever opens the conversation. On WhatsApp, a number sending more than 20 messages a minute has the excess dropped, and each conversation gets at most one "I only read text" notice an hour. Reactions are ignored.
+
+**Reminders at night.** Reminders wait for the morning where the candidate is (`quiet_hours`, 22:00 to 09:00). If that would miss WhatsApp's 24-hour window, the reminder goes just before the quiet hours start. `DEMO_MODE` turns this off so the demo's fast-forward always shows a reminder, so it must be off in production, as the Dockerfile sets it. docker-compose defaults it to on.
+
+**A message that never arrives.** A WhatsApp `failed` report, or a send we give up on, sends an open screening to review (`unreachable`), so it doesn't look like a candidate who went silent. A finished one only records it.
+
 **Rude or nonsense input.** Numbers and symbols alone ("000") never count as "no license". After two unclear answers to the keep-on-file question, nothing is kept and the conversation closes.
 
 **Changing an earlier answer.** A value that wouldn't pass by itself never replaces an accepted one: "soy Ana" doesn't undo "Ana López". A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
@@ -95,7 +107,9 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Writes after the outcome.** Asking to move the interview or to talk to a person reaches the review queue, and any booking stands until a recruiter acts. After a knockout the rejection stands. Anything else gets the closing message.
 
-**LLM outages.** Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate.
+**LLM-written replies.** A reply mentioning pay, a hiring or rejection decision, being human or a protected trait (`forbidden_reply_patterns`) is replaced by the template and logged as `reply_rejected`. It's a word list, so it misses paraphrases and can reject harmless text; watch the fallback rate. Approved templates and FAQ answers aren't checked by it.
+
+**LLM outages.** Try the fallback provider. If neither answers, keep the message and say once "give me a moment"; retry after 20 s, 1, 3 and 10 min (anything sent meanwhile joins the retry). Then say there's a technical problem and ask them to write again; reminders follow as usual. Never counted against the candidate. A turn read by the fallback records `extracted_on_fallback`, and a knockout from one is flagged for recruiters, because that model is less accurate.
 
 **Voice.** The questions, rules and outcomes are the same. Options are said as a sentence, there's no emoji, dates are said as words, and the greeting adds that the audio is transcribed and not kept. One rule differs: the model only sees the transcript, so it can be sure of a name or town that speech recognition got wrong ("Gostivar" heard as "ghost", "Zdravkovic" as "Lazkoz"). So the name and location are always read back before they count, whatever the model's confidence (`always_confirm`), including a location that would knock them out. If they say no, they're asked to type it in the text box below the call (still one attempt).
 

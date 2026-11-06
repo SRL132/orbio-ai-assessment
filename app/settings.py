@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     login_attempts_per_ip_per_15_min: int = 20
     login_failures_per_email_per_15_min: int = 5  # only failures, so nobody can lock you out
     chat_starts_per_ip_per_hour: int = 30
+    whatsapp_messages_per_contact_per_minute: int = 20  # every reply there is paid for
     chat_messages_per_conversation_per_minute: int = 20  # caps LLM spend per conversation
 
     @field_validator(

@@ -48,6 +48,7 @@ class Filters:
     search: str | None = None
     start_before: date | None = None
     asked_for_human: bool = False
+    knockout_on_fallback: bool = False
 
 
 PER_PAGE = 50
@@ -95,6 +96,12 @@ _ASKED_FOR_HUMAN = ConversationRow.human_after_knockout.is_(True) & (
 )
 
 
+# Rejected on the backup model's reading, which is less accurate: worth a person's look.
+_KNOCKOUT_ON_FALLBACK = ConversationRow.knockout_on_fallback.is_(True) & (
+    ConversationRow.status == Status.DISQUALIFIED.value
+)
+
+
 @dataclass(frozen=True)
 class UnfinishedInvite:
     conversation_id: UUID
@@ -118,6 +125,8 @@ class DashboardQueries:
         )
         if filters.asked_for_human:
             query = query.where(_ASKED_FOR_HUMAN)
+        if filters.knockout_on_fallback:
+            query = query.where(_KNOCKOUT_ON_FALLBACK)
         if filters.status:
             query = query.where(ConversationRow.status == filters.status)
         if filters.location_id:
@@ -362,17 +371,19 @@ class DashboardQueries:
             func.count().filter(ConversationRow.status == "needs_review"),
             func.count().filter(ConversationRow.status == "in_progress"),
             func.count().filter(_ASKED_FOR_HUMAN),
+            func.count().filter(_KNOCKOUT_ON_FALLBACK),
         ).where(
             ConversationRow.client_id == self._client_id, ConversationRow.invite_pending.is_(False)
         )
         with Session(self._engine) as session:
-            new, qualified, review, in_progress, asked = session.execute(query).one()
+            new, qualified, review, in_progress, asked, on_fallback = session.execute(query).one()
         return {
             "new_today": new,
             "qualified": qualified,
             "needs_review": review,
             "in_progress": in_progress,
             "asked_for_human": asked,
+            "knockout_on_fallback": on_fallback,
         }
 
 

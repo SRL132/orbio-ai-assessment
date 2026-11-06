@@ -198,6 +198,7 @@ def test_a_strict_answer_with_nulls_is_a_valid_extraction() -> None:
         "confused": False,
         "yes_no": None,
         "sensitive_data": False,
+        "says_underage": False,
         "faq_id": None,
         "question": None,
         "slot_choice": None,

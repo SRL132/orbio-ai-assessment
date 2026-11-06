@@ -194,7 +194,7 @@ def build(settings: Settings | None = None) -> Container:
     tracing.configure_logging()
     tracing.configure_tracing(f"sazon-{settings.role}")
     clock: Clock = OffsetClock() if settings.demo_mode else SystemClock()
-    config = with_public_links(load_client_config(settings.client_id), settings)
+    config = _client_config(settings)
     llm = make_resilient_llm(settings)
     db = make_engine(settings.database_url)
     calendar = SqlCalendar(db, config, clock)
@@ -228,12 +228,12 @@ def build(settings: Settings | None = None) -> Container:
     runner.add_periodic("process_waiting", pool.fill, settings.worker_poll_seconds)
     runner.add_periodic("release_orphan_bookings", calendar.release_orphans, 300)
     runner.add_periodic("retention", SqlRetention(db, config, clock).erase_expired, 3600)
-    whatsapp = make_whatsapp(settings, service)
+    limiter = SqlRateLimiter(db, clock, config.client_id)
+    whatsapp = make_whatsapp(settings, service, limiter)
     if whatsapp is not None:
         runner.add_periodic(
             "whatsapp_outbox", whatsapp.dispatch_once, settings.whatsapp_dispatch_seconds
         )
-    limiter = SqlRateLimiter(db, clock, config.client_id)
     return Container(
         settings, config, clock, service, runner, queries, db, limiter, pool, tts, whatsapp
     )
@@ -242,7 +242,7 @@ def build(settings: Settings | None = None) -> Container:
 def build_offline_service(settings: Settings, db: Engine, clock: Clock) -> ScreeningService:
     """A service on the keyword extractor and a fixed list of towns, whatever `settings` name:
     it can't reach a paid provider or the network. For seeding demo data."""
-    config = with_public_links(load_client_config(settings.client_id), settings)
+    config = _client_config(settings)
     extractor, responder = make_llm(settings, provider="fake")
     ports = Ports(
         extractor=FastPathExtractor(extractor),
@@ -256,7 +256,16 @@ def build_offline_service(settings: Settings, db: Engine, clock: Clock) -> Scree
     return ScreeningService(repo, config, ports, agent_version=version)
 
 
-def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChannel | None:
+def _client_config(settings: Settings) -> ClientConfig:
+    config = with_public_links(load_client_config(settings.client_id), settings)
+    if settings.demo_mode:  # "+2 h" must show a reminder in a demo, whatever the hour
+        return config.model_copy(update={"quiet_hours": None})
+    return config
+
+
+def make_whatsapp(
+    settings: Settings, service: ScreeningService, limiter: SqlRateLimiter | None = None
+) -> WhatsAppChannel | None:
     if settings.whatsapp_access_token is None:
         return None
     if settings.whatsapp_verify_token is None or settings.whatsapp_app_secret is None:
@@ -280,4 +289,6 @@ def make_whatsapp(settings: Settings, service: ScreeningService) -> WhatsAppChan
         invites=invites,
         invite_only=settings.invite_only or invites is not None,
         concurrency=settings.whatsapp_dispatch_concurrency,
+        limiter=limiter,
+        messages_per_minute=settings.whatsapp_messages_per_contact_per_minute,
     )

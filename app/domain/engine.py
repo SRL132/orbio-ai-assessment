@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.domain.config import ClientConfig
@@ -71,6 +71,7 @@ from app.domain.validators import (
     COUNTRY_READBACK,
     ZONE_READBACK,
     final_review_reasons,
+    has_sensitive_pattern,
     is_known_place,
     nearest_location,
     normalize,
@@ -104,6 +105,7 @@ class _Turn:
     events: list[DomainEvent] = field(default_factory=list)
     redact: bool = False
     message: str = ""  # the candidate's words this turn: extracted values must quote them
+    on_fallback: bool = False  # the backup model read this turn's message
 
     @classmethod
     def begin(cls, state: ConversationState, config: ClientConfig, ports: Ports) -> _Turn:
@@ -113,10 +115,13 @@ class _Turn:
     def today(self) -> date:
         """The date where the candidate is, not in UTC: an evening in Mexico is already tomorrow
         there. Until their location is known, the client's default timezone."""
+        return self.now.astimezone(self.zone).date()
+
+    @property
+    def zone(self) -> ZoneInfo:
         location_id = self.state.candidate.location_id
         location = self.config.location(location_id) if location_id else None
-        zone = location.timezone if location else self.config.default_timezone
-        return self.now.astimezone(ZoneInfo(zone)).date()
+        return ZoneInfo(location.timezone if location else self.config.default_timezone)
 
     def say(self, template: SayTemplate) -> None:
         self.actions.append(Say(template=template))
@@ -157,6 +162,8 @@ def turn(
 ) -> TurnResult:
     t = _Turn.begin(state, config, ports)
     t.event(EventType.MESSAGE_RECEIVED, stage=t.state.stage.value)
+    if t.state.turns >= config.max_turns:
+        return _over_turn_limit(t)
     if t.state.status == Status.ABANDONED and (
         t.state.went_silent or t.state.dropped_at == Stage.CONSENT.value
     ):
@@ -179,19 +186,25 @@ def turn(
         t.say("technical_retry")
         return _finish(t)
     t.state.llm_failures, t.state.retry_turn_at = 0, None
+    if extraction.on_fallback:
+        t.event(EventType.EXTRACTED_ON_FALLBACK)
+    t.on_fallback = extraction.on_fallback
 
     own_name = (t.state.candidate.full_name or "").split()
     if not says_no_language(message.text, config, own_name):  # "madrid tetuan" keeps the language
         t.state.language = extraction.language
     if t.redact and _is_plain_consent_answer(extraction, message.text):
         t.redact = False
-    if extraction.sensitive_data:
+    if extraction.sensitive_data or has_sensitive_pattern(message.text, config):
         t.redact = True
         t.say("sensitive_data")
         t.event(EventType.SENSITIVE_DATA_REDACTED)
 
     if extraction.intent == "data_request":
         _on_data_request(t)
+    elif extraction.says_underage and t.state.status != Status.DISQUALIFIED:
+        _send_to_review(t, Reason.UNDERAGE)
+        t.actions.append(HandOff(reason="review"))
     elif extraction.intent == "abuse":
         _on_abuse(t)
     elif extraction.intent == "human_request" and t.state.status == Status.DISQUALIFIED:
@@ -200,6 +213,9 @@ def turn(
         add_review_reason(t.state, Reason.HUMAN_REQUESTED)
         _close(t, Status.NEEDS_REVIEW)
         t.actions.append(HandOff(reason="human_requested"))
+    elif extraction.intent == "deferral" and not _gives_a_value(extraction):
+        t.event(EventType.DEFERRED, stage=t.state.stage.value)  # no attempt counted against them
+        t.say("deferral_ack")
     else:
         _STAGE_HANDLERS[t.state.stage](t, extraction)
     return _finish(t)
@@ -223,7 +239,7 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
         t.actions.append(Remind(number=number))
         t.event(EventType.REMINDER_SENT, number=number)
         if number < len(hours):
-            t.state.next_reminder_at = base + timedelta(hours=hours[number])
+            t.state.next_reminder_at = _reminder_time(t, base, hours[number])
         else:
             t.state.next_reminder_at = base + timedelta(
                 hours=hours[-1] + config.abandon_after_hours
@@ -241,6 +257,41 @@ def on_silence(state: ConversationState, config: ClientConfig, ports: Ports) -> 
         t.event(EventType.ABANDONED, drop_off=drop)
         _close(t, Status.ABANDONED)
     return _finish(t, schedule_reminder=False)
+
+
+def on_delivery_failed(
+    state: ConversationState, config: ClientConfig, ports: Ports, code: int | None
+) -> TurnResult:
+    """The channel says a message never arrived. Someone we can't reach hasn't gone silent, so they
+    don't count as a drop-off: a person finds another way to reach them."""
+    t = _Turn.begin(state, config, ports)
+    t.event(EventType.DELIVERY_FAILED, code=code)
+    if _waits_for_candidate(t.state):
+        _send_to_review(t, Reason.UNREACHABLE)
+    return _finish(t, schedule_reminder=False)
+
+
+def _gives_a_value(extraction: ExtractionResult) -> bool:
+    fields = extraction.fields
+    return any(getattr(fields, name) is not None for name in type(fields).model_fields)
+
+
+def _over_turn_limit(t: _Turn) -> TurnResult:
+    """No more LLM calls or paid replies on this conversation. Its messages are still stored, so
+    a person can read them. Hand it over once; a closed one just stays quiet."""
+    t.redact = t.state.stage == Stage.CONSENT
+    if t.state.stage == Stage.CLOSED:
+        t.event(EventType.TURN_LIMIT_REACHED, closed=True)
+        return _finish(t)
+    t.event(EventType.TURN_LIMIT_REACHED, closed=False)
+    t.state.confirming = None
+    if t.state.status == Status.DISQUALIFIED:
+        t.state.stage = Stage.CLOSED  # the keep-on-file question: nothing is kept without a yes
+        t.say("closed_disqualified")
+        return _finish(t)
+    _send_to_review(t, Reason.TURN_LIMIT)
+    t.say("turn_limit_reached")
+    return _finish(t)
 
 
 def _resume(t: _Turn) -> None:
@@ -317,7 +368,7 @@ def _on_closed(t: _Turn, message: InboundMessage) -> TurnResult:
         t.say("technical_retry")
         return _finish(t)
     t.state.llm_failures, t.state.retry_turn_at = 0, None
-    t.redact = extraction.sensitive_data
+    t.redact = extraction.sensitive_data or has_sensitive_pattern(message.text, t.config)
     status = t.state.status
     if extraction.intent == "data_request":
         t.state.language = extraction.language
@@ -773,6 +824,7 @@ def _close(t: _Turn, status: Status, stage: Stage = Stage.CLOSED) -> None:
 
 def _disqualify(t: _Turn, reason: Reason) -> None:
     t.state.disqualify_reason = reason
+    t.state.knockout_on_fallback = t.on_fallback
     # One last question before closing: keep their details for future roles.
     _close(t, Status.DISQUALIFIED, stage=Stage.KEEP_ON_FILE)
     t.actions.append(Disqualify(reason=reason))
@@ -884,6 +936,29 @@ def _waits_for_candidate(state: ConversationState) -> bool:
     return state.status == Status.IN_PROGRESS or state.stage == Stage.SCHEDULING
 
 
+def _reminder_time(t: _Turn, base: datetime, hours: float) -> datetime:
+    """`hours` after their last message, moved out of the night where they are: to the morning, or
+    to the evening before if the morning would miss the channel's reply window."""
+    at = base + timedelta(hours=hours)
+    quiet = t.config.quiet_hours
+    if quiet is None:
+        return at
+    local = at.astimezone(t.zone)
+    is_evening = local.time() >= quiet.start
+    if not is_evening and local.time() >= quiet.end:
+        return at
+    day = local.date()
+    morning_day = day + timedelta(days=1) if is_evening else day
+    morning = datetime.combine(morning_day, quiet.end, tzinfo=t.zone).astimezone(UTC)
+    window = t.config.reply_window_hours.get(t.state.channel)
+    if window is None or morning < base + timedelta(hours=window):
+        return morning
+    evening_day = day if is_evening else day - timedelta(days=1)
+    evening = datetime.combine(evening_day, quiet.start, tzinfo=t.zone).astimezone(UTC)
+    evening -= timedelta(minutes=1)
+    return evening if evening > t.now else at
+
+
 def _schedule_reminder(t: _Turn) -> None:
     """While we wait for the candidate, the next reminder counts from their last message."""
     if not _waits_for_candidate(t.state):
@@ -893,11 +968,19 @@ def _schedule_reminder(t: _Turn) -> None:
     base = t.state.last_inbound_at or t.state.started_at
     if not hours or base is None:
         return
-    t.state.next_reminder_at = base + timedelta(hours=hours[0])
+    t.state.next_reminder_at = _reminder_time(t, base, hours[0])
     t.actions.append(ScheduleReminder(at=t.state.next_reminder_at))
 
 
 # --- Recruiter actions ----------------------------------------------------------------------------
+
+
+def candidate_told(state: ConversationState, actor: str) -> tuple[ConversationState, DomainEvent]:
+    """A recruiter has told the candidate about their override."""
+    state = state.model_copy(deep=True)
+    state.tell_candidate = False
+    return state, DomainEvent(type=EventType.CANDIDATE_TOLD, data={"actor": actor})
+
 
 OVERRIDABLE = frozenset({Status.QUALIFIED, Status.DISQUALIFIED, Status.NEEDS_REVIEW})
 
@@ -919,6 +1002,7 @@ def override_status(
     previous = _end(state, status)
     state.ended_at = state.ended_at or ports.clock.now()
     state.summary = build_summary(state, config)
+    state.tell_candidate = True  # nothing is sent to them: a recruiter has to
     event = DomainEvent(
         type=EventType.OVERRIDE,
         data={"from": previous.value, "to": status.value, "reason": reason.strip(), "actor": actor},

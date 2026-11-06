@@ -35,6 +35,9 @@ REASON_TEXT: dict[str, str] = {
     Reason.INTERVIEW_CHANGE: "asked to change the interview",
     Reason.RECAP_UNCONFIRMED: "did not confirm the recap after several tries",
     Reason.NO_SLOT_PICKED: "qualified, but did not pick an interview slot after the reminders",
+    Reason.UNDERAGE: "said they are under the minimum age: check before going further",
+    Reason.TURN_LIMIT: "the conversation reached its message limit without finishing",
+    Reason.UNREACHABLE: "our messages can't be delivered: find another way to reach them",
 }
 
 
@@ -96,6 +99,8 @@ def build_summary(state: ConversationState, config: ClientConfig) -> str:
     if state.no_slot_fits:
         prefers = f' (prefers: "{state.preferred_times}")' if state.preferred_times else ""
         flags.append(f"no offered interview slot fits: contact to schedule{prefers}")
+    if state.knockout_on_fallback:
+        flags.append("knockout read by the backup model: check the answer")
     if state.human_after_knockout:
         flags.append("asked to talk to a person after the knockout")
     if c.meta[FieldName.FULL_NAME].note == "surname_missing":

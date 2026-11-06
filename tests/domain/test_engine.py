@@ -129,6 +129,7 @@ def test_no_license_is_disqualified_kindly(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Marta Ruiz"))
     chat.say(ex(has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     assert chat.state.status == Status.DISQUALIFIED
     assert chat.state.disqualify_reason == "no_license"
     assert chat.state.stage == Stage.KEEP_ON_FILE
@@ -270,6 +271,7 @@ def test_a_data_request_after_a_knockout_reaches_a_person_and_keeps_the_reason(
 ) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(intent="data_request"), text="pues borrad mis datos")
     assert chat.state.status == Status.NEEDS_REVIEW
     assert chat.state.stage == Stage.CLOSED
@@ -400,6 +402,7 @@ def test_closed_conversation_gets_closing_message(chat: Chat) -> None:
 def test_closed_after_a_knockout_does_not_promise_a_recruiter(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(yes_no=False))  # don't keep my details
     chat.say(ex(intent="other"), text="vale")
     assert chat.result.replies == [chat.config.template("es", "closed_disqualified")]
@@ -439,6 +442,7 @@ def test_a_correction_that_is_still_outside_knocks_out_again(chat: Chat) -> None
 def test_the_same_answer_after_a_knockout_is_not_a_correction(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(yes_no=True, has_license=False))  # "sí, guardadlos; no tengo carnet"
     assert chat.state.status == Status.DISQUALIFIED
     assert chat.state.keep_on_file is True
@@ -586,6 +590,7 @@ def test_extractor_failure_asks_again_without_penalty(
 def test_asking_for_a_person_after_a_knockout_keeps_the_knockout(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     chat.say(ex(intent="human_request"))
     assert chat.state.status == Status.DISQUALIFIED
     assert chat.state.stage == Stage.KEEP_ON_FILE  # the keep-on-file question is asked again
@@ -633,12 +638,14 @@ def test_place_names_alone_keep_the_language(chat: Chat) -> None:
 def test_knockout_before_the_name_reads_well(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     assert chat.result.replies[-1].startswith("Gracias. Para este puesto")
 
 
 def test_keep_on_file_is_not_asked_forever(chat: Chat) -> None:
     chat.say(ex(yes_no=True))
     chat.say(ex(full_name="Ana López", has_license=False))
+    chat.say(ex(yes_no=True), text="sí")  # the license read-back
     for _ in range(chat.config.max_attempts):
         chat.say(ex(), text="...")
         assert chat.state.stage == Stage.KEEP_ON_FILE

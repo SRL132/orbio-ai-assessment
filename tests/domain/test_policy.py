@@ -77,8 +77,10 @@ def test_invalid_value_is_not_stored(state: ConversationState, config: ClientCon
 
 
 def test_knockout_stops_processing(state: ConversationState, config: ClientConfig) -> None:
-    fields = ex(full_name="Ana López", has_license=False, availability=["weekends"]).fields
-    result = apply_extraction(state, fields, config, TODAY, message=said(fields))
+    fields = ex(has_license=False, availability=["weekends"]).fields
+    fields.has_license.quote = "No tengo"  # the question's own option: no read-back
+    fields.availability.quote = "No tengo"
+    result = apply_extraction(state, fields, config, TODAY, message="No tengo")
     assert result.knockout == "no_license"
     assert state.candidate.availability == []
 

@@ -33,6 +33,7 @@ from app.domain.ports import Ports, Repository
 logger = logging.getLogger("app.service")
 
 MAX_MESSAGE_CHARS = 2000
+TEXT_ONLY_NOTICE_EVERY = timedelta(hours=1)
 # Longer than any turn can take: two LLM calls, each up to a timeout and a retry on the primary
 # plus a timeout on the fallback (2 x 60 s with the default 20 s timeout). A worker that dies
 # holding a lease blocks its conversation for at most this long.
@@ -269,9 +270,41 @@ class ScreeningService:
             state = self.repo.get(conversation_id)
             if owner is None or state is None:
                 return  # busy for 10 s: skip the notice rather than block the webhook
-            text = self.config.template(state.language, "text_only", state.channel)
             event = DomainEvent(type=EventType.NON_TEXT_MESSAGE)
-            self.repo.save_turn(state, [event], [text], [], lease_owner=owner)
+            now = self.ports.clock.now()
+            last = state.text_only_notice_at
+            replies = []
+            if last is None or now - last >= TEXT_ONLY_NOTICE_EVERY:  # each reply is paid for
+                state.text_only_notice_at = now
+                replies = [self.config.template(state.language, "text_only", state.channel)]
+            self.repo.save_turn(state, [event], replies, [], lease_owner=owner)
+            metrics.record_events([event])
+
+    def delivery_failed(self, conversation_id: UUID, code: int | None) -> None:
+        """A message never arrived. If the conversation is busy for 10 s, its next failed message
+        or the review queue's reminders catch it; the webhook isn't held up for it."""
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            state = self.repo.get(conversation_id)
+            if owner is None or state is None:
+                logger.warning("delivery_failed_skipped id=%s", conversation_id)
+                return
+            result = engine.on_delivery_failed(state, self.config, self.ports, code)
+            self.repo.save_turn(result.state, result.events, [], [], lease_owner=owner)
+            metrics.record_events(result.events)
+            metrics.record_finished(state, result.state)
+
+    def candidate_told(self, conversation_id: UUID, actor: str) -> None:
+        """A recruiter has told the candidate about their override. Raises like `override`."""
+        if self.repo.get(conversation_id) is None:
+            raise KeyError(conversation_id)
+        with self._leased(conversation_id, self.recruiter_wait_seconds) as owner:
+            if owner is None:
+                raise ConversationBusy(conversation_id)
+            state = self.repo.get(conversation_id)
+            if state is None:
+                raise KeyError(conversation_id)
+            new_state, event = engine.candidate_told(state, actor)
+            self.repo.save_turn(new_state, [event], [], [], lease_owner=owner)
             metrics.record_events([event])
 
     # --- Recruiter actions (writes go through the domain, never straight to the database) -----
