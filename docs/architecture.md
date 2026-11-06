@@ -64,7 +64,7 @@ candidate message
   → Responder (LLM) writes the message in the persona and candidate's language
       — consent, disqualification and recap use fixed templates
       — a job question gets the approved FAQ text for `faq_id`, word for word, or "a recruiter will confirm"
-  → output check (one question, length) → else fallback template
+  → output check (one question, length, forbidden content) → else fallback template
 ```
 
 The flow is **slot-filling**, not a rigid state machine: the next question is the highest-priority field still missing, so answers can arrive in any order.
@@ -196,7 +196,7 @@ Explicitly **not** now: microservices, Kafka, Kubernetes, a separate vector data
 
 ## Adding a client
 
-A client is a directory in `app/config/` and `CLIENT_ID` to select it. [`norte_express`](../app/config/norte_express/client.yaml) is an invented second client, a courier in northern Spain, with its own name, assistant, service areas, FAQ and privacy notice: 41 lines differ from `grupo_sazon`, and no Python does. `tests/test_second_client.py` screens a candidate with it and checks that nothing of the first client reaches them. Building it found one leak, the brand hard-coded in the dashboard, now read from the config.
+A client is a directory in `app/config/` and `CLIENT_ID` to select it. [`norte_express`](../app/config/norte_express/client.yaml) is an invented second client, a courier in northern Spain, with its own name, assistant, service areas, FAQ and privacy notice: 37 config lines of its own (31 in `client.yaml`, 6 in templates) and a shorter location list than `grupo_sazon`, and no Python. `tests/test_second_client.py` screens a candidate with it and checks that nothing of the first client reaches them. Building it found one leak, the brand hard-coded in the dashboard, now read from the config.
 
 Not shown: one deployment serves one client (`CLIENT_ID` is a setting), the seven screening fields are fixed in code, and no one outside this project has onboarded a client. Tables carry `client_id`, so several deployments can share a database.
 
@@ -273,7 +273,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 
 The production channel, built on the WhatsApp Cloud API (Meta). It uses the same engine; only the edges differ.
 
-- **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one.
+- **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one, unless an interview is still to come.
 - **Outbound, through an outbox:** agent replies on external channels are stored as undelivered messages, and a dispatcher sends them in order every second. Only one process dispatches at a time (a renewable job lease in `job_leases`; another process takes over 30 s after the holder stops renewing), so nothing is sent twice. Up to 3 options become reply buttons, longer lists a list message. Errors are retried (429 and 5xx) and given up after 5 attempts. Because reminders are just outbound messages, re-engagement now reaches the candidate's phone.
 - **The 24-hour rule:** free-form messages are only allowed within 24 h of the candidate's last message. The client config schedules WhatsApp reminders at 2 h and 23 h; later messages need an approved (paid) template or are skipped and logged.
 - **Cost:** since 1 October 2026 Meta charges per delivered service message, so replies inside the 24-hour window are no longer free, and it stops delivering them without a payment method. Add this to the LLM costs below.
@@ -321,7 +321,7 @@ Grok and DeepSeek are ruled out for production on **data-protection and reputati
 
 ### Cost at 10K conversations/week
 
-**Measured, not estimated:** GPT-5.6 Terra at $0.0153 a conversation is about **$153 a week** at 10K through OpenRouter, Haiku about $27. Closed answers skip the LLM, which is part of why these are below the estimates in the table.
+**Measured, not estimated:** GPT-5.6 Terra at $0.0155 a conversation in the latest run is about **$155 a week** at 10K through OpenRouter. Haiku is about $27, from the 2026-11-04 comparison. Closed answers skip the LLM, which is part of why these are below the estimates in the table.
 
 Assumptions (estimates, to replace with measured `usage`): 10 turns per conversation, ~3K input and ~400 output tokens per turn (reasoning counts as output), 80% of input cached. That is 60M fresh input, 240M cached input and 40M output tokens a week.
 
@@ -372,7 +372,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 **Why Terra.** It ties Gemini 3.8 Flash on accuracy, with half the p95 and a slightly lower cost, and voice needs that p95. Haiku fails about 5% of scripted scenarios against Terra's 0.5%. Haiku would save about $125 a week at 10K conversations, small next to what a wrong screening costs in recruiter time, so accuracy wins.
 
-**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite had 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. After the hostile browser pass (extractor v10, responder v6) it has 83: 83/83 at 1.65 / 3.46 s and $0.0160. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
+**After the choice,** a fourth Terra run scored 68/68. Then a live end-to-end test found two bugs the suite had passed, the prompt was fixed (extractor v9), and it found three more: a neighbourhood lost when the city came next (the holdout's one failure), a full name overwritten by a shorter one, and a gendered job title. With those fixed (responder v5), the suite had 72 scenarios: 72/72 at 1.64 / 3.15 s and $0.0155. After the hostile browser pass (extractor v10, responder v6) it has 83: 83/83 at 1.65 / 3.46 s and $0.0160. On 2026-11-05 the same suite scored 81/83, from a neighbourhood read as a city, since fixed, and a scenario script too short to finish. After the failure-mode work (extractor v11) it has 97: 96/97 at 1.63 / 3.50 s and $0.0163. With the weekday fix (extractor v12) it has 99: 98/99 at 1.61 / 3.33 s and $0.0164, where "15 años de experiencia" was read as an age. With a code rule for that, and the same prompts, 99/99 at 1.58 / 3.34 s and $0.0155. The held-out scenarios scored 13/14 before those changes and weren't re-run, so that score doesn't cover them. Only Terra was re-run.
 
 **How to read these numbers:**
 

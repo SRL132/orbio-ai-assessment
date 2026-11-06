@@ -24,7 +24,7 @@
 ## Human oversight
 
 - **Weeks 1 and 2:** a recruiter reads every knockout and every "asked for a human" case within one working day, and overturns wrong ones with the override, which requires a reason. This is the pilot's most important safety net, and it produces the number below.
-- **Weeks 3 and 4:** continue if that error rate is above target; otherwise sample 1 in 5.
+- **Weeks 3 and 4:** continue reading all of them. Sample 1 in 5 only if counsel has confirmed that's acceptable under GDPR Art. 22 ([T12](failure-modes.md#trade-offs)) and the error rate is at or below target.
 
 ## What we measure
 
@@ -44,7 +44,7 @@ These are planning figures for the client to correct, not results. From the brie
 - **Reach:** about 390 screened a week today. Meeting the 60% target above would be 600, about 54% more.
 - **Recruiter time (assumes a 40-hour week):** 520 hours a week, of which about 416 go to unqualified candidates. If the agent removes half of that, about 208 hours a week are free, or 16 per recruiter.
 - **Value (assumes EUR 20 an hour, for the client to replace):** about EUR 4,160 a week.
-- **LLM cost:** about $15 a week at 1,000 conversations ($0.0153 each, [measured on the scripted suite](architecture.md#where-the-choice-stands)). Hosting, WhatsApp fees and the recruiters' review time come on top.
+- **LLM cost:** about $15 a week at 1,000 conversations ($0.0155 each, [measured on the scripted suite](architecture.md#where-the-choice-stands)). Hosting, WhatsApp fees and the recruiters' review time come on top.
 
 The pilot replaces the assumed half with a measurement: recruiter hours per hire against the control group.
 
