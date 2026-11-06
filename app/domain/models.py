@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 
 class FieldName(StrEnum):
@@ -89,6 +90,9 @@ class Reason(StrEnum):
     INTERVIEW_CHANGE = "interview_change"
     RECAP_UNCONFIRMED = "recap_unconfirmed"
     NO_SLOT_PICKED = "no_slot_picked"
+    UNDERAGE = "underage"
+    TURN_LIMIT = "turn_limit"
+    UNREACHABLE = "unreachable"
 
 
 # Knockouts end the screening; each needs a `disqualified_<reason>` template.
@@ -242,6 +246,11 @@ class ConversationState(BaseModel):
     no_slot_fits: bool = False
     preferred_times: str | None = None  # their words, after no offered slot fit
     human_after_knockout: bool = False  # asked for a person after a knockout (status stands)
+    knockout_on_fallback: bool = False  # the backup model read the answer that knocked them out
+    tell_candidate: bool = False  # a recruiter changed the outcome and hasn't said they told them
+    text_only_notice_at: datetime | None = (
+        None  # last "I only read text": once in a while, it's paid
+    )
     invite_pending: bool = Field(
         default=False,
         description="Invited by link and not opened yet: no reminders (nobody is there to read "
@@ -307,6 +316,7 @@ Intent = Literal[
     "human_request",
     "data_request",
     "interview_change",
+    "deferral",
     "off_topic",
     "abuse",
     "other",
@@ -342,6 +352,9 @@ class ExtractionResult(BaseModel):
     sensitive_data: bool = Field(
         default=False, description="The message contains an ID number, health data or similar."
     )
+    says_underage: bool = Field(
+        default=False, description="The candidate says they are younger than the minimum age."
+    )
     faq_id: str | None = Field(
         default=None, description="The approved FAQ entry that answers the question, if any."
     )
@@ -349,6 +362,8 @@ class ExtractionResult(BaseModel):
     slot_choice: int | None = Field(
         default=None, description="Number of the interview slot the candidate picked (1-based)."
     )
+    # Set by the resilient adapter, never by the model, so it stays out of the schema it sees.
+    on_fallback: SkipJsonSchema[bool] = False
 
 
 # --- Engine output ------------------------------------------------------------------------------
@@ -422,6 +437,8 @@ SayTemplate = Literal[
     "slot_taken",
     "slots_expired",
     "start_date_passed",
+    "deferral_ack",
+    "turn_limit_reached",
     "no_slot_fits",
     "retype_hint",
     "slot_unclear",
@@ -524,6 +541,11 @@ class EventType(StrEnum):
     SLOTS_OFFERED = "slots_offered"
     SLOT_TAKEN = "slot_taken"
     SLOTS_EXPIRED = "slots_expired"
+    DEFERRED = "deferred"
+    TURN_LIMIT_REACHED = "turn_limit_reached"
+    DELIVERY_FAILED = "delivery_failed"
+    EXTRACTED_ON_FALLBACK = "extracted_on_fallback"
+    CANDIDATE_TOLD = "candidate_told"
     NO_SLOT_PICKED = "no_slot_picked"
     START_DATE_EXPIRED = "start_date_expired"
     NO_SLOT_FITS = "no_slot_fits"

@@ -31,7 +31,7 @@ A recruiter opens the dashboard in the morning and knows within a minute who to 
 ### 2. Review queue
 
 - The `needs_review` candidates, oldest first, so nobody waits too long.
-- Each item shows its **reason**: `human_requested`, `no_slot_picked` (qualified, but picked no interview slot after the reminders), `borderline_zone`, `field_failed_twice:<field>`, `ungrounded_answer:<field>` (the extracted value isn't in the candidate's words), `location_unverified:location` (the place lookup failed), `license_unclear`, `flagged_behaviour`, `data_request` (stop or delete their data), `interview_change` (a booked interview stays until you act), `recap_unconfirmed` (kept refusing the recap).
+- Each item shows its **reason**: `human_requested`, `no_slot_picked` (qualified, but picked no interview slot after the reminders), `underage`, `turn_limit`, `unreachable` (our messages can't be delivered), `borderline_zone`, `field_failed_twice:<field>`, `ungrounded_answer:<field>` (the extracted value isn't in the candidate's words), `location_unverified:location` (the place lookup failed), `license_unclear`, `flagged_behaviour`, `data_request` (stop or delete their data), `interview_change` (a booked interview stays until you act), `recap_unconfirmed` (kept refusing the recap).
 - Actions: mark qualified or mark disqualified (reason required). To contact the candidate, the detail page shows how (below).
 
 ### 3. Candidate detail
@@ -79,4 +79,4 @@ An invited conversation has no reminders until the link is opened, and it stays 
 
 ## Rejected candidates who ask for a human
 
-A knockout stands when the candidate asks for a person, so asking can't skip it. The list has a "Rejected, asked for a human" counter and an "Asked for a human" filter (rejected candidates only), and a recruiter can overturn the rejection with the usual override and a required reason.
+An override sends the candidate nothing, so the detail page shows it as open until a recruiter presses "I've told them". A knockout read by the backup model is flagged and counted under "Rejected on the backup model", because that model is less accurate. A knockout stands when the candidate asks for a person, so asking can't skip it. The list has a "Rejected, asked for a human" counter and an "Asked for a human" filter (rejected candidates only), and a recruiter can overturn the rejection with the usual override and a required reason.

@@ -863,3 +863,44 @@ def test_a_file_that_already_has_whatsapp_links_is_refused(logged_in: TestClient
     response = upload(logged_in, body)
     assert response.status_code == 400
     assert "whatsapp_url column" in response.text
+
+
+def test_an_override_stays_open_until_someone_tells_the_candidate(
+    logged_in: TestClient, container: Container
+) -> None:
+    cid = chat(container, "sí", "Eva Ruiz", "quiero hablar con una persona")
+    url = f"/dashboard/candidates/{cid}"
+    assert "hasn't been told" not in logged_in.get(url).text
+
+    submit(logged_in, f"{url}/override", {"status": "qualified", "reason": "Called her"})
+    assert "hasn't been told" in logged_in.get(url).text
+
+    assert submit(logged_in, f"{url}/told", {}).status_code == 200
+    assert "hasn't been told" not in logged_in.get(url).text
+    told = next(
+        e
+        for e in logged_in.get(f"{url}/export.json").json()["events"]
+        if e["type"] == "candidate_told"
+    )
+    assert told["data"]["actor"] == "rec@sazon.test"
+
+
+def test_telling_about_an_unknown_candidate_is_a_404(logged_in: TestClient) -> None:
+    unknown = "00000000-0000-0000-0000-000000000000"
+    assert submit(logged_in, f"/dashboard/candidates/{unknown}/told", {}).status_code == 404
+
+
+def test_knockouts_on_the_backup_model_can_be_found(
+    logged_in: TestClient, container: Container
+) -> None:
+    on_main = chat(container, "sí", "Luis Pérez", "no tengo")
+    on_backup = chat(container, "sí", "Marta Gil", "no tengo")
+    state = container.service.get(on_backup)
+    state.knockout_on_fallback = True
+    container.service.repo.save_turn(state, [], [], [])
+
+    assert container.queries.counters(since=START_OF_TIME)["knockout_on_fallback"] == 1
+    page = logged_in.get("/dashboard?fallback=1").text
+    assert "Marta Gil" in page
+    assert "Luis Pérez" not in page
+    assert on_main != on_backup

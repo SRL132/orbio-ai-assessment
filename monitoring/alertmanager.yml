@@ -1,5 +1,6 @@
-# Nothing is sent anywhere yet: alerts only show at http://localhost:9093. Add a receiver (email,
-# Slack, on-call) before relying on this.
+# Nothing is sent anywhere yet: alerts only show at http://localhost:9093. Candidates are promised
+# a reply in 2 working days and this is what would warn us, so add a receiver (email, Slack, on-call)
+# before the pilot. It needs a real destination, so it can't be set here.
 route:
   receiver: nobody
 receivers:

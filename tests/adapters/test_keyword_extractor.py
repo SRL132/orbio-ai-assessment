@@ -204,3 +204,28 @@ def test_options_are_read_by_the_clients_own_labels(config: ClientConfig) -> Non
     result = KeywordExtractor().extract(state, "Sábados y domingos", renamed, date(2026, 11, 2))
     assert result.fields.availability is not None
     assert result.fields.availability.value == [Availability.WEEKENDS]
+
+
+@pytest.mark.parametrize(
+    ("text", "underage"),
+    [
+        ("tengo 16 años", True),
+        ("soy menor de edad", True),
+        ("I'm 17 years old", True),
+        ("tengo 18 años", False),
+        ("tengo 25 años", False),
+        ("tengo 3 años de experiencia", False),
+    ],
+)
+def test_says_underage(config: ClientConfig, text: str, underage: bool) -> None:
+    state = ConversationState(client_id=config.client_id, stage=Stage.COLLECTING)
+    result = KeywordExtractor().extract(state, text, config, date(2026, 11, 2))
+    assert result.says_underage is underage
+
+
+@pytest.mark.parametrize(
+    "text", ["estoy conduciendo", "ahora no puedo", "luego te digo", "i'm driving"]
+)
+def test_a_deferral(config: ClientConfig, text: str) -> None:
+    state = ConversationState(client_id=config.client_id, stage=Stage.COLLECTING)
+    assert KeywordExtractor().extract(state, text, config, date(2026, 11, 2)).intent == "deferral"

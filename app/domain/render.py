@@ -61,6 +61,12 @@ def check_reply(text: str, config: ClientConfig, channel: Channel = "chat") -> b
     return ok and (channel != "voice" or speakable(stripped))
 
 
+def says_what_only_code_may(text: str, config: ClientConfig) -> bool:
+    """LLM-written text that talks about pay, decides who is hired or rejected, claims to be human
+    or brings up protected traits. Templates may say some of these, so this is only for the LLM."""
+    return any(re.search(p, text, re.IGNORECASE) for p in config.forbidden_reply_patterns)
+
+
 def speakable(text: str) -> bool:
     """Can be read aloud as is: no emoji and no "·" option lists."""
     return not _EMOJI.search(text) and "·" not in text
@@ -100,7 +106,11 @@ def render(
                         )
                     )
                     text = None
-                if text is None or not check_reply(text, config, channel):
+                if (
+                    text is None
+                    or not check_reply(text, config, channel)
+                    or says_what_only_code_may(text, config)
+                ):
                     if text is not None:
                         events.append(
                             DomainEvent(type=EventType.REPLY_REJECTED, data={"kind": action.kind})
@@ -280,6 +290,7 @@ def _fill(template: str, state: ConversationState, config: ClientConfig, **extra
         company=config.persona.company,
         missing_count=str(missing_count(state.candidate)),
         privacy_url=config.privacy_url,
+        minimum_age=str(config.minimum_age),
         **extra,
     )
 
@@ -335,7 +346,7 @@ def _fallback_key(action: AskField | ReAsk) -> str:
 
 # --- Config check ---------------------------------------------------------------------------------
 
-_COMMON = frozenset({"name", "persona", "company", "missing_count", "privacy_url"})
+_COMMON = frozenset({"name", "persona", "company", "missing_count", "privacy_url", "minimum_age"})
 _PLACEHOLDERS: dict[str, frozenset[str]] = {
     "recap": _COMMON | {"summary"},
     "confirm_value": _COMMON | {"value"},

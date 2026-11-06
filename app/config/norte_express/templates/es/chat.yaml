@@ -5,7 +5,7 @@
 greeting_consent: >-
   ¡Hola! Soy {persona}, la asistente virtual de {company} 👋 Te hago 7 preguntas rápidas sobre
   el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso
-  (aviso de privacidad: {privacy_url}). ¿Empezamos?
+  (aviso de privacidad: {privacy_url}). Hay que tener {minimum_age} años o más. ¿Empezamos?
 consent_reask: Para seguir necesito tu permiso para usar tus respuestas en este proceso. ¿Empezamos? (sí / no)
 consent_declined: Entendido, no guardaremos nada. Si cambias de opinión, escríbenos cuando quieras.
 
@@ -52,6 +52,8 @@ offer_slots: |-
   Responde con el número. Si no te va ninguno, dime «ninguno».
 interview_booked: ¡Hecho! Tu entrevista es el {when}. Te enviaremos la dirección de la base. ¡Hasta pronto!
 slot_taken: Vaya, ese horario se acaba de ocupar. Te propongo otros.
+deferral_ack: Sin problema, aquí sigo. Escríbeme cuando puedas.
+turn_limit_reached: Lo dejamos aquí por ahora. Un reclutador revisará tu candidatura y te escribirá en 2 días laborables.
 slots_expired: Esos horarios ya han pasado. Te propongo otros.
 start_date_passed: La fecha de inicio que me diste ya ha pasado.
 no_slot_fits: Sin problema. ¿Qué días y horas te irían mejor? Se lo paso al reclutador.

@@ -1,4 +1,6 @@
-"""Retention: erase disqualified and abandoned candidates after the client's retention period.
+"""Retention: erase candidates after the client's retention periods. Disqualified and abandoned
+have one by default. Qualified, needs-review and on-file candidates are kept unless the config sets
+theirs, which counsel decides.
 
 The policy is in docs/process-design-appendix.md ("Retention"). A candidate who agreed to stay
 on file is kept. Erasure removes everything that can hold personal data (state, messages,
@@ -43,18 +45,36 @@ class SqlRetention:
         cutoff = now - timedelta(days=self._config.retention_days)
         conv = ConversationRow
         with Session(self._engine) as session, session.begin():
+            not_on_file = or_(conv.keep_on_file.is_(None), conv.keep_on_file.is_(False))
+            extra = [
+                and_(
+                    conv.status == status.value,
+                    conv.updated_at < now - timedelta(days=days),
+                    not_on_file,
+                )
+                for status, days in self._config.retention_days_by_status.items()
+            ]
+            if (on_file := self._config.retention_days_on_file) is not None:
+                extra.append(
+                    and_(
+                        conv.keep_on_file.is_(True),
+                        conv.updated_at < now - timedelta(days=on_file),
+                    )
+                )
             expired = session.execute(
                 select(conv.id, conv.status, conv.updated_at)
                 .where(
                     conv.client_id == self._config.client_id,
-                    conv.updated_at < cutoff,  # last activity, so a late reply restarts the clock
                     or_(
-                        conv.invite_pending.is_(True),  # the link expired long ago, never opened
                         and_(
-                            conv.status.in_(ERASABLE),
-                            # Staying on file for future roles is a separate consent: kept.
-                            or_(conv.keep_on_file.is_(None), conv.keep_on_file.is_(False)),
+                            conv.updated_at < cutoff,  # last activity: a late reply restarts it
+                            or_(
+                                conv.invite_pending.is_(True),  # expired long ago, never opened
+                                # Staying on file for future roles is a separate consent: kept.
+                                and_(conv.status.in_(ERASABLE), not_on_file),
+                            ),
                         ),
+                        *extra,
                     ),
                 )
                 .limit(_BATCH)

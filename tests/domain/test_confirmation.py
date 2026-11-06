@@ -316,8 +316,13 @@ def test_answering_the_next_question_is_not_a_no_to_the_read_back(voice_chat: Ch
     no_license.fields.has_license.quote = "no tengo carnet"  # type: ignore[union-attr]
     voice_chat.say(no_license, text="no tengo carnet")
     assert Say(template="retype_hint") not in voice_chat.result.actions
-    assert voice_chat.state.status == Status.DISQUALIFIED
-    assert voice_chat.state.disqualify_reason == Reason.NO_LICENSE
+    # The name is still waiting, and only one value waits at a time, so nobody is rejected on an
+    # unconfirmed "no": once the name is settled, the license is asked for.
+    assert voice_chat.state.status == Status.IN_PROGRESS
+    assert voice_chat.state.confirming.field == FieldName.FULL_NAME  # type: ignore[union-attr]
+    voice_chat.say(ex(yes_no=True), text="sí")
+    assert voice_chat.state.candidate.full_name == "Luis Pérez"
+    assert voice_chat.state.awaiting == FieldName.LICENSE
 
 
 def test_voice_never_applies_a_place_unchecked_while_another_is_pending(

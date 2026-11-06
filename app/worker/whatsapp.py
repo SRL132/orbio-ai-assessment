@@ -23,8 +23,14 @@ import httpx
 
 from app import metrics
 from app.adapters.channels.quick_replies import quick_replies
-from app.adapters.channels.whatsapp import WhatsAppClient, WhatsAppInbound, parse_webhook
+from app.adapters.channels.whatsapp import (
+    WhatsAppClient,
+    WhatsAppInbound,
+    failed_recipients,
+    parse_webhook,
+)
 from app.adapters.channels.whatsapp_invites import WhatsAppInvites
+from app.adapters.storage.rate_limit import SqlRateLimiter
 from app.domain.models import TERMINAL_STATUSES, Channel, Outbound, Stage
 from app.worker.service import ScreeningService
 
@@ -68,6 +74,8 @@ class WhatsAppChannel:
         batch: int = 200,
         invites: WhatsAppInvites | None = None,
         invite_only: bool = False,
+        limiter: SqlRateLimiter | None = None,
+        messages_per_minute: int = 20,
     ) -> None:
         self.service = service
         self.client = client
@@ -76,6 +84,8 @@ class WhatsAppChannel:
         self.batch = batch  # messages read from the outbox per run
         self.invites = invites  # None: invites stay web chat links
         self.invite_only = invite_only  # a number with no conversation needs a valid code
+        self.limiter = limiter  # None: no limit on messages per number
+        self.messages_per_minute = messages_per_minute
         self._dispatcher_id = uuid4().hex
 
     # --- Inbound --------------------------------------------------------------------------------
@@ -113,6 +123,12 @@ class WhatsAppChannel:
     def _handle_message(self, message: WhatsAppInbound) -> UUID | None:
         """One new (not retried) message. Returns its conversation if it needs a turn."""
         repo = self.service.repo
+        if self.limiter is not None and not self.limiter.allow(
+            contact_lock_name(message.wa_id), self.messages_per_minute, timedelta(minutes=1)
+        ):
+            metrics.RATE_LIMITED.labels("whatsapp").inc()  # a flood: every reply would be paid for
+            logger.warning("whatsapp_rate_limited")
+            return None
         if self.invites is not None and message.text is not None:
             invited, rest = self.invites.read(message.text)
             if invited is not None and self._claim(invited, message.wa_id):
@@ -166,7 +182,17 @@ class WhatsAppChannel:
             return None
         ended = state.stage == Stage.CLOSED and state.status in TERMINAL_STATUSES
         wants_restart = (message.text or "").strip().lower() in RESTART_WORDS
-        return None if ended and wants_restart else cid
+        # With an interview still to come, "hola" must not lose the way to reach that booking.
+        now = self.service.ports.clock.now()
+        booked = state.interview_at is not None and state.interview_at > now
+        return None if ended and wants_restart and not booked else cid
+
+    def handle_delivery_failures(self, payload: dict[str, Any]) -> None:
+        """Meta says messages never arrived: their conversations are told."""
+        for wa_id, code in failed_recipients(payload):
+            cid = self.service.repo.conversation_for(CHANNEL, wa_id)
+            if cid is not None:
+                self.service.delivery_failed(cid, code)
 
     @contextmanager
     def _contact_lock(self, wa_id: str) -> Iterator[None]:
@@ -243,6 +269,11 @@ class WhatsAppChannel:
                     item.attempts + 1,
                     give_up,
                 )
+                if give_up:
+                    code = (
+                        exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                    )
+                    self.service.delivery_failed(item.conversation_id, code)
                 break  # keep this conversation's order: the rest wait for the retry
             repo.mark_delivery(item.message_id, True)
             metrics.WHATSAPP_SENT.labels("sent").inc()

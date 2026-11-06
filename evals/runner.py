@@ -57,6 +57,7 @@ class Expect(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
     review_reasons_include: list[str] = Field(default_factory=list)
     events_include: list[str] = Field(default_factory=list)
+    events_exclude: list[str] = Field(default_factory=list)
     disqualify_reason: str | None = None
     keep_on_file: bool | None = None
     redacted: bool | None = None
@@ -313,6 +314,8 @@ class Harness:
         event_types = {e.type for e in repo.events(cid)}
         for event in expect.events_include:
             check(event in event_types, f"missing event {event}")
+        for event in expect.events_exclude:
+            check(event not in event_types, f"unexpected event {event}")
 
         matched = 0
         for name, expected in expect.fields.items():

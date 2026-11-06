@@ -4,12 +4,14 @@ Everything client-specific lives in config (see CLAUDE.md, "Rules live in config
 from YAML is an adapter concern; the domain only defines and reads this schema.
 """
 
+import re
+from datetime import time
 from typing import Self
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.domain.models import Channel, FieldName, Language, Vehicle
+from app.domain.models import Channel, FieldName, Language, Status, Vehicle
 
 
 class ServiceLocation(BaseModel):
@@ -56,6 +58,19 @@ class DaysOnlyRule(BaseModel):
     unless: list[str] = Field(
         default_factory=list, description="Words that do say how much: then the answer counts."
     )
+
+
+class QuietHours(BaseModel):
+    """Local hours when no reminder is sent. They run overnight: start is after end."""
+
+    start: time
+    end: time
+
+    @model_validator(mode="after")
+    def _runs_overnight(self) -> Self:
+        if self.start <= self.end:
+            raise ValueError("quiet hours must run overnight: start after end")
+        return self
 
 
 class InterviewConfig(BaseModel):
@@ -126,6 +141,39 @@ class ClientConfig(BaseModel):
         description="Per-channel override, e.g. WhatsApp keeps reminders inside its 24 h window.",
     )
     abandon_after_hours: float = 24.0
+    quiet_hours: QuietHours | None = Field(
+        default=None, description="None sends reminders at any hour."
+    )
+    reply_window_hours: dict[str, float] = Field(
+        default_factory=dict,
+        description="How long after the candidate's last message a channel lets us write freely "
+        "(WhatsApp: 24). A reminder held back for the night never goes past it.",
+    )
+    max_turns: int = Field(
+        default=40,
+        description="Turns one conversation may use. Normal screenings take about 12; past this a "
+        "person takes over and no more LLM calls or replies are spent on it.",
+    )
+    minimum_age: int = Field(
+        default=18,
+        description="Working default, for the client and counsel to confirm per country. Someone "
+        "who says they're younger goes to review, never to a knockout.",
+    )
+    license_no_options: list[str] = Field(
+        default_factory=lambda: ["No tengo", "None"],
+        description='The license question\'s own "no" option: tapping exactly this is the one '
+        "license knockout that needs no read-back, and only outside voice.",
+    )
+    forbidden_reply_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes (case-insensitive) an LLM-written reply must not match: pay, hiring "
+        "or rejection decisions, claims of being human. It gets the template instead.",
+    )
+    sensitive_patterns: list[str] = Field(
+        default_factory=list,
+        description="Regexes (case-insensitive) for ID-like numbers: a message matching one is "
+        "redacted even if the model didn't flag it.",
+    )
     llm_retry_seconds: list[float] = Field(
         default_factory=lambda: [20.0, 60.0, 180.0, 600.0],
         description="When no LLM answers, the candidate's message is held and retried after "
@@ -136,6 +184,15 @@ class ClientConfig(BaseModel):
         default=183,
         description="Disqualified and abandoned candidates are erased this long after their last "
         "activity, unless they agreed to stay on file (docs/process-design-appendix.md).",
+    )
+    retention_days_by_status: dict[Status, int] = Field(
+        default_factory=dict,
+        description="Erase qualified and needs-review candidates this long after their last "
+        "activity. Empty keeps them until counsel sets the periods.",
+    )
+    retention_days_on_file: int | None = Field(
+        default=None,
+        description="Erase candidates who agreed to stay on file after this long. None keeps them.",
     )
     max_reply_chars: int = 250
     screening_target_hours: float = Field(
@@ -174,6 +231,10 @@ class ClientConfig(BaseModel):
         for loc in self.locations:
             if loc.shared_name and loc.country not in self.country_names:
                 raise ValueError(f"{loc.id} has shared_name: country_names needs {loc.country}")
+        for pattern in (*self.forbidden_reply_patterns, *self.sensitive_patterns):
+            re.compile(pattern)
+        if not set(self.retention_days_by_status) <= {Status.QUALIFIED, Status.NEEDS_REVIEW}:
+            raise ValueError("retention_days_by_status only covers qualified and needs_review")
         return self
 
     def faq_answer(self, faq_id: str | None, language: Language) -> str | None:

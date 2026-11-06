@@ -127,3 +127,66 @@ def test_invite_never_opened_is_erased_after_the_retention_period(
     clock.advance(days=2)
     assert retention.erase_expired() == 1
     assert count(engine, MessageRow, str(state.conversation_id)) == 0
+
+
+# --- Periods counsel sets for everyone else (docs/failure-modes.md, gap 16) ----------------------
+
+
+@pytest.mark.parametrize("status", [Status.QUALIFIED, Status.NEEDS_REVIEW])
+def test_kept_until_a_period_is_set(setup, clock: FakeClock, status: Status) -> None:
+    _engine, repo, retention = setup
+    cid = candidate(repo, status)
+    clock.advance(days=4000)
+    assert retention.erase_expired() == 0
+    assert repo.get(UUID(cid)) is not None
+
+
+@pytest.mark.parametrize("status", [Status.QUALIFIED, Status.NEEDS_REVIEW])
+def test_a_period_erases_them_after_it(
+    setup, config: ClientConfig, clock: FakeClock, status: Status
+) -> None:
+    engine, repo, _ = setup
+    periods = {"retention_days_by_status": {status: 10}}
+    retention = SqlRetention(engine, config.model_copy(update=periods), clock)
+    cid = candidate(repo, status)
+    clock.advance(days=9)
+    assert retention.erase_expired() == 0
+    clock.advance(days=2)
+    assert retention.erase_expired() == 1
+    assert repo.get(UUID(cid)) is None
+
+
+def test_a_status_period_leaves_on_file_candidates_alone(
+    setup, config: ClientConfig, clock: FakeClock
+) -> None:
+    engine, repo, _ = setup
+    periods = {"retention_days_by_status": {Status.QUALIFIED: 10}}
+    retention = SqlRetention(engine, config.model_copy(update=periods), clock)
+    cid = candidate(repo, Status.QUALIFIED, keep_on_file=True)
+    clock.advance(days=30)
+    assert retention.erase_expired() == 0
+    assert repo.get(UUID(cid)) is not None
+
+
+def test_an_on_file_period_erases_them_after_it(
+    setup, config: ClientConfig, clock: FakeClock
+) -> None:
+    engine, repo, _ = setup
+    retention = SqlRetention(
+        engine, config.model_copy(update={"retention_days_on_file": 10}), clock
+    )
+    cid = candidate(repo, Status.DISQUALIFIED, keep_on_file=True)
+    other = candidate(repo, Status.QUALIFIED)
+    clock.advance(days=9)
+    assert retention.erase_expired() == 0
+    clock.advance(days=2)
+    assert retention.erase_expired() == 1
+    assert repo.get(UUID(cid)) is None
+    assert repo.get(UUID(other)) is not None
+
+
+def test_open_candidates_cant_be_given_a_period(config: ClientConfig) -> None:
+    data = config.model_dump()
+    data["retention_days_by_status"] = {"in_progress": 10}
+    with pytest.raises(ValueError, match="only covers"):
+        ClientConfig.model_validate(data)

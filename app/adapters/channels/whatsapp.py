@@ -105,6 +105,10 @@ class DeliveryReport:
     error_title: str = ""
 
 
+# A 👍 on an earlier message or a system notice isn't something the candidate is telling us.
+_NOT_MESSAGES = frozenset({"reaction", "system"})
+
+
 def parse_webhook(payload: dict[str, Any]) -> list[WhatsAppInbound]:
     """Incoming candidate messages. Delivery statuses and other events are ignored."""
     found: list[WhatsAppInbound] = []
@@ -114,6 +118,8 @@ def parse_webhook(payload: dict[str, Any]) -> list[WhatsAppInbound]:
             for message in value.get("messages", []):
                 text: str | None = None
                 kind = message.get("type")
+                if kind in _NOT_MESSAGES:
+                    continue
                 if kind == "text":
                     text = message.get("text", {}).get("body")
                 elif kind == "interactive":
@@ -128,6 +134,17 @@ def parse_webhook(payload: dict[str, Any]) -> list[WhatsAppInbound]:
                     )
                 )
     return found
+
+
+def failed_recipients(payload: dict[str, Any]) -> list[tuple[str, int | None]]:
+    """Who a message failed for, and the error code: to act on, never to log."""
+    return [
+        (str(status["recipient_id"]), (status.get("errors") or [{}])[0].get("code"))
+        for entry in payload.get("entry", [])
+        for change in entry.get("changes", [])
+        for status in change.get("value", {}).get("statuses", [])
+        if status.get("status") == "failed" and status.get("recipient_id")
+    ]
 
 
 def delivery_reports(payload: dict[str, Any]) -> list[DeliveryReport]:
