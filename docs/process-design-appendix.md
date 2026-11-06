@@ -85,7 +85,7 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **"I can't talk now."** "Estoy conduciendo, luego te digo" gets a short reply and costs no attempt, however often it's said. Reminders count from that message. An answer in the same message still counts.
 
-**Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. It's never a knockout, and the app doesn't ask for or store a date of birth.
+**Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. Years given as experience, or in reply to the experience question, are never read as an age, even if the model does (checked in code), so someone who is underage and says so only at that question is left to the interview check. It's never a knockout, and the app doesn't ask for or store a date of birth.
 
 **Limits.** A conversation gets `max_turns` turns (40; a normal one takes about 12). After that a person takes over (`turn_limit`), with no more LLM calls or replies. Later messages are stored but not read by anything, so a stop request sent then waits for whoever opens the conversation. On WhatsApp, a number sending more than 20 messages a minute has the excess dropped, and each conversation gets at most one "I only read text" notice an hour. Reactions are ignored.
 
