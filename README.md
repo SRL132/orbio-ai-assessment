@@ -71,7 +71,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `METRICS_PORT` | — | Worker processes: serve metrics on this port, with no token. Keep it on a private network |
 | `LLM_CAPTURE_OUTPUTS` | `false` | Keep the LLM's raw replies to debug extraction, read with `python -m app.cli llm-outputs <id>`. They hold personal data, so synthetic data only for now |
 | `DATABASE_URL` | `sqlite:///./data/sazon.db` | Postgres works with the same code |
-| `DEMO_MODE` | `true` | Enables the clock fast-forward in the chat |
+| `DEMO_MODE` | `true` (Docker image: `false`) | Enables the clock fast-forward in the chat, and turns off reminder quiet hours so the fast-forward always shows a reminder. Keep it off in production |
 | `CLIENT_IP_HEADER` | — | Behind a proxy, the header it always overwrites with the caller's address, used by rate limits (Render: `True-Client-IP`). Leave it empty with no proxy, or callers can fake their address |
 | `INVITE_ONLY` | `false` | Set it on anything public. Only a signed link, a WhatsApp code or the ATS can start a conversation, so `/chat` and `/voice` start nothing on their own, a WhatsApp message from a new number is ignored, and the fast-forward is off |
 | `PUBLIC_BASE_URL` | — | Public address of the app, used by invite links and the privacy link. Leave it empty locally: with `DEMO_MODE=true`, invite links use the address you opened, such as `localhost` |
@@ -79,7 +79,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 
 ## What it does
 
-**Conversation** ([process design](docs/process-design.md)): consent and an automated-assistant disclosure first, then the seven screening questions, one per message, with the two knockouts (license, service area) right after the name. Answers can come in any order and several at once. The agent re-asks invalid or unclear answers with examples, and after two failed tries it moves on and flags the field. It follows Spanish ↔ English switches, answers job questions with approved FAQ text (the LLM picks the entry, code sends the words), offers a human when the candidate seems frustrated, and hands off right away when asked. Sensitive data such as an ID number is redacted. Reminders go out at 2 h and 24 h, then the candidate is marked abandoned. Qualified candidates book an interview slot in the chat. The same flow runs as a **voice call** (`/voice`): push-to-talk speech recognition in the browser, spoken replies (browser voice or ElevenLabs), wording adapted for speech.
+**Conversation** ([process design](docs/process-design.md)): consent and an automated-assistant disclosure first, then the seven screening questions, one per message, with the two knockouts (license, service area) right after the name. Answers can come in any order and several at once. The agent re-asks invalid or unclear answers with examples, and after two failed tries it moves on and flags the field. It follows Spanish ↔ English switches, answers job questions with approved FAQ text (the LLM picks the entry, code sends the words), offers a human when the candidate seems frustrated, and hands off right away when asked. A license "no" in the candidate's own words is read back before it rejects anyone. Sensitive data such as an ID number is redacted. Reminders go out at 2 h and 24 h, waiting for the morning at night, then the candidate is marked abandoned. Qualified candidates book an interview slot in the chat. The same flow runs as a **voice call** (`/voice`): push-to-talk speech recognition in the browser, spoken replies (browser voice or ElevenLabs), wording adapted for speech.
 
 **How a conversation starts:** a recruiter or the ATS sends the candidate a signed link, and the candidate opens it. The agent doesn't message anyone first. With `WHATSAPP_INVITE_NUMBER` set, the link opens WhatsApp with a code ready to send, so the candidate writes first and no paid template is needed to begin.
 
@@ -110,20 +110,20 @@ dashboard ──▶ read model over the projected state; writes go back through 
 - **Slot-filling, not a script.** The next question is the highest-priority field still missing, which is what lets candidates answer in any order.
 - **No LLM call when code can read the answer.** A message that is exactly one of the current question's options ("sí", "Moto", "la segunda") skips extraction, and on voice a plain next question uses its template. Anything else goes to the LLM.
 - **Rules in config, one engine for many clients.** Service areas, license rules, persona, templates and FAQ live in `app/config/grupo_sazon/` (`client.yaml` and per-language templates), and every table carries `client_id`.
-- **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length), or the template is used instead.
+- **Fixed texts for what matters legally:** consent, disqualification, recap and interview confirmation. Every LLM-written message passes an output check (one question, length, and a word list for pay, hiring decisions, being human and protected traits), or the template is used instead.
 - **No callback at the end.** Qualified candidates book the interview in the chat, because a callback would bring back the 60% no-answer problem at the last step.
 - **Built to scale without a rewrite:** webhooks only store and acknowledge, one conversation is processed at a time, reminders live in the database, and the event log is the source of truth. See the "Demo vs production" and "Deployment and monitoring" sections of the architecture doc.
 - **GPT-5.6 Terra, chosen by evals.** It tied for the best accuracy and was faster and cheaper than the model it tied with ([results](docs/architecture.md#where-the-choice-stands)). Claude Haiku 5.5 is the fallback: a different vendor, and about 6x cheaper, though less accurate. Data-protection conditions and one untested step are listed there: the direct OpenAI and Anthropic adapters haven't reached the real APIs yet, because the runs went through OpenRouter. Out of the box `LLM_PROVIDER=fake` needs no key, and the chat says so on screen.
 
 ## Quality and evals
 
-([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 860+ tests (property tests included) with a coverage ratchet (≥ 98%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
+([details](docs/quality.md)) ruff, mypy strict on all of `app/`, import-linter for the architecture boundary, 1,100+ tests (property tests included) with a coverage ratchet (≥ 98%), deptry, pip-audit, gitleaks, pre-commit and CI. Claude Code hooks format every edit and run the checks before a task is considered done.
 
-The suite has 97 synthetic scenarios, plus 14 from the held-out run (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 66 that work offline; the other 17 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
+The suite has 97 synthetic scenarios, plus 14 from the held-out run (`evals/holdout.yaml`): cooperative ES/EN, several answers at once, vague location, both knockouts, borderline zones, human request, abuse, ID number, prompt injection, job and bot questions, interview booking, voice calls with speech-to-text-style input, and graded ladders for the four main edge cases (stops responding, invalid answers, ambiguous answers, switches language). `uv run python -m evals` runs the 75 that work offline; the other 22 need a real model to understand the candidate. Each run is scored on outcome, field accuracy, turns and the output check. The offline run is compared against `evals/baseline.json` in CI.
 
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
-| Offline (`fake/keyword/scripted`, in CI) | 66/66 | 100% |
+| Offline (`fake/keyword/scripted`, in CI) | 75/75 | 100% |
 | Live scripted, GPT-5.6 Terra, final prompts | 83/83 | 100% |
 | Live scripted, GPT-5.6 Terra, 4 earlier runs (before the last prompt fixes) | 271/272 | 99–100% |
 | Live, held-out messy scenarios, GPT-5.6 Terra (run once, before the last prompt fixes) | 13/14 | 93% |
@@ -135,19 +135,19 @@ The live scores have limits. The scripted suite isn't held out from the fixes it
 
 A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout for the first two weeks.
 
-[`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model.
+[`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model. The 25 scenarios added since have none, and the transcripts predate the later prompts and templates.
 
 ## Potential improvements
 
 - **Confirm the model on its own SDK:** run the suite through the direct OpenAI adapter, and Haiku through the Anthropic one, then settle OpenAI's EU data residency and the data processing agreement.
 - **Real user data over more synthetic data:** after the pilot, turn real failures into new synthetic scenarios ([design](docs/real-data-evals.md)), and tune prompts against a held-out set.
-- **WhatsApp in production:** a permanent system-user token, approved reminder templates, a template the ATS can trigger so the agent writes first, a message-status webhook to track delivery and read receipts, and a business-verified number.
+- **WhatsApp in production:** a permanent system-user token, approved reminder templates, a template the ATS can trigger so the agent writes first, delivery and read tracking beyond the failure reports (a failure already sends an open screening to review), and a business-verified number.
 - **Production voice:** server-side speech-to-text (browser recognition only works in Chrome and Edge, and Chrome sends audio to Google), streaming replies for lower latency, and a phone or WhatsApp voice entry point.
-- **Production hardening:** a real queue (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention jobs. Rate limits, CSRF tokens on dashboard forms and per-browser chat access are already in.
+- **Production hardening:** a separate queue only if polling the database becomes the bottleneck (database leases already make several workers safe, and Postgres and migrations are in place), SSO for recruiters, and retention periods for qualified, needs-review and on-file candidates once counsel sets them. Rate limits, CSRF tokens on dashboard forms, per-browser chat access and the retention job for disqualified and abandoned candidates are already in.
 - **Real calendars and ATS:** replace the mock calendar with each location's calendar and build the [ATS integration](docs/ats-integration.md).
-- **Smarter re-engagement:** reminder timing by time of day and channel, and A/B tests on reminder wording, measured with the drop-off analytics.
+- **Smarter re-engagement:** reminder timing tuned beyond the quiet hours, and A/B tests on reminder wording, measured with the drop-off analytics.
 - **An admin area so recruiters can iterate quickly:** an editing layer over the client config, not free-text prompts. Recruiters change structured settings directly (FAQ answers, service areas, reminder timing, tone options), while knockout rules and consent or legal text need extra sign-off. Every change goes draft → automatic eval run → review what changed → publish, with rollback, and each conversation records the config version it ran under.
 
 ## Docs
 
-[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md) · [Pilot plan](docs/pilot-plan.md) · [Real conversations into evals](docs/real-data-evals.md)
+[Vision](VISION.md) · [Brief](docs/requirements.md) · [Process design](docs/process-design.md) ([appendix](docs/process-design-appendix.md)) · [Dashboard spec](docs/recruiter-dashboard.md) · [Architecture](docs/architecture.md) · [Quality](docs/quality.md) · [Failure modes](docs/failure-modes.md) · [ATS integration](docs/ats-integration.md) · [Demo script](docs/demo-script.md) · [Pilot plan](docs/pilot-plan.md) · [Real conversations into evals](docs/real-data-evals.md)

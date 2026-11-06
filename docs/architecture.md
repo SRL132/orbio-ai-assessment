@@ -64,7 +64,7 @@ candidate message
   → Responder (LLM) writes the message in the persona and candidate's language
       — consent, disqualification and recap use fixed templates
       — a job question gets the approved FAQ text for `faq_id`, word for word, or "a recruiter will confirm"
-  → output check (one question, length) → else fallback template
+  → output check (one question, length, forbidden content) → else fallback template
 ```
 
 The flow is **slot-filling**, not a rigid state machine: the next question is the highest-priority field still missing, so answers can arrive in any order.
@@ -196,7 +196,7 @@ Explicitly **not** now: microservices, Kafka, Kubernetes, a separate vector data
 
 ## Adding a client
 
-A client is a directory in `app/config/` and `CLIENT_ID` to select it. [`norte_express`](../app/config/norte_express/client.yaml) is an invented second client, a courier in northern Spain, with its own name, assistant, service areas, FAQ and privacy notice: 41 lines differ from `grupo_sazon`, and no Python does. `tests/test_second_client.py` screens a candidate with it and checks that nothing of the first client reaches them. Building it found one leak, the brand hard-coded in the dashboard, now read from the config.
+A client is a directory in `app/config/` and `CLIENT_ID` to select it. [`norte_express`](../app/config/norte_express/client.yaml) is an invented second client, a courier in northern Spain, with its own name, assistant, service areas, FAQ and privacy notice: 37 config lines of its own (31 in `client.yaml`, 6 in templates) and a shorter location list than `grupo_sazon`, and no Python. `tests/test_second_client.py` screens a candidate with it and checks that nothing of the first client reaches them. Building it found one leak, the brand hard-coded in the dashboard, now read from the config.
 
 Not shown: one deployment serves one client (`CLIENT_ID` is a setting), the seven screening fields are fixed in code, and no one outside this project has onboarded a client. Tables carry `client_id`, so several deployments can share a database.
 
@@ -273,7 +273,7 @@ Logs are structured and contain IDs, never message text or names (already true i
 
 The production channel, built on the WhatsApp Cloud API (Meta). It uses the same engine; only the edges differ.
 
-- **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one.
+- **Inbound:** `GET /webhooks/whatsapp` answers Meta's verification check. `POST /webhooks/whatsapp` checks the `X-Hub-Signature-256` HMAC with the app secret, stores the message (deduplicated by WhatsApp message id, since Meta retries for up to 36 h), acknowledges, and hands the conversation to the normal debounce. A new number starts a conversation; "hola" after a finished one starts a new one, unless an interview is still to come.
 - **Outbound, through an outbox:** agent replies on external channels are stored as undelivered messages, and a dispatcher sends them in order every second. Only one process dispatches at a time (a renewable job lease in `job_leases`; another process takes over 30 s after the holder stops renewing), so nothing is sent twice. Up to 3 options become reply buttons, longer lists a list message. Errors are retried (429 and 5xx) and given up after 5 attempts. Because reminders are just outbound messages, re-engagement now reaches the candidate's phone.
 - **The 24-hour rule:** free-form messages are only allowed within 24 h of the candidate's last message. The client config schedules WhatsApp reminders at 2 h and 23 h; later messages need an approved (paid) template or are skipped and logged.
 - **Cost:** since 1 October 2026 Meta charges per delivered service message, so replies inside the 24-hour window are no longer free, and it stops delivering them without a payment method. Add this to the LLM costs below.

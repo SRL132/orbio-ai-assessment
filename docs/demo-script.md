@@ -16,7 +16,7 @@
 1. **The problem in numbers (1 min).** 1,000 applications a week, 975 calls, 60% unanswered, so ~390 screenings; 80% of recruiter time on unqualified people. If the agent removes half of that waste, about 208 recruiter hours a week for about $15 of LLM cost ([assumptions](pilot-plan.md#the-business-case)).
 2. **Live chat, happy path in Spanish (4 min).** Consent and "virtual assistant" disclosure → name → license (show the buttons) → "Madrid" (it asks for the neighbourhood) → answer two things in one message (it skips ahead) → switch to English → recap → book an interview slot in the chat.
 3. **Edge cases (3 min), each in a new chat:**
-   - "No tengo carnet": a kind knockout in under a minute, plus the keep-on-file question.
+   - "No tengo carnet": it reads the answer back ("Solo para confirmar: sin carnet, ¿correcto?"), so answer "sí". Then a kind knockout, plus the keep-on-file question. Tapping "No tengo" skips the read-back.
    - "Quiero hablar con una persona": immediate hand-off.
    - Go silent, on localhost: press "+2 h", "+24 h", "+24 h". Reminders, then abandoned.
 4. **Recruiter side (5 min).** Invite page (CSV in, signed links out: no ATS needed) → counters and the "asked for a human" filter → review queue (reasons in plain words) → detail page (summary, the candidate's own words next to each value, how to reach them, transcript, timeline) → override with a reason (the original decision stays) → the "unfinished applications" download → analytics funnel and drop-off.
@@ -43,7 +43,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 - **"You built Prometheus and mutation testing before choosing a model. Why that order?"** Have your honest answer ready. It was the wrong order, and it hid a real bug: only Gemini could pass the schema, which nobody saw until the comparison ran on every vendor.
 - **"Why do the commits labelled days 0–5 share a date?"** Have your real answer ready.
 - **"You built a lot. What would you cut, and what are you sure of?"** Pick three stories you can tell without notes, and be ready to walk through any file in `app/domain` and `app/worker`. Candidates: the schema bug that only showed when every vendor ran; the clean-clone crash that all the gates missed, because nothing loaded `.env.example`; and the promise to write back that recruiters couldn't keep until a review caught it. Cuts to name: Prometheus, mutation testing and the geocoder could all have waited for the first client.
-- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 860+ tests, and the eval suite. "I can walk you through any file."
+- **"How do you know the AI-written code is right?"** The quality gates, the hexagonal boundary check, 1,100+ tests, and the eval suite. "I can walk you through any file."
 
 ## 5–10 min video
 
