@@ -4,7 +4,7 @@ Answers everything, goes silent at the recap until abandoned, then confirms it.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,11 +12,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: Raúl Díaz  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: Madrid, Retiro  
 
@@ -34,7 +34,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Lucía**: ¿Qué día podrías empezar?  
 
-**Candidate**: mañana  
+**Candidate**: el lunes  
 
 **Lucía**: Repasemos:  
 • Nombre: Raúl Díaz  
@@ -43,12 +43,12 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 • Disponibilidad: jornada completa  
 • Horario: tarde  
 • Experiencia: sin experiencia  
-• Inicio: 03/11/2026  
+• Inicio: 09/11/2026  
 ¿Es todo correcto?  
 
-**Lucía**: ¡Hola de nuevo! Solo nos faltan 0 preguntas para tu candidatura. ¿Seguimos?  
+**Lucía**: ¡Hola de nuevo! Ya solo falta que confirmes tus datos. ¿Están bien?  
 
-**Lucía**: Te guardamos el sitio un poco más, quedan 0 preguntas. ¿Las terminamos?  
+**Lucía**: Te guardamos el sitio un poco más, solo falta que confirmes tus datos. ¿Están bien?  
 
 **Candidate**: Sí  
 

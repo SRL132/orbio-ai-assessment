@@ -4,7 +4,7 @@ Voice call where speech recognition garbles a foreign name. The name is read bac
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
+**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: empezamos  
 
@@ -32,7 +32,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: vivo en bilbao  
 
-**Lucía**: Solo para confirmar: Bilbao (País Vasco), ¿correcto?  
+**Lucía**: Solo para confirmar: vives en la ciudad de Bilbao (País Vasco), ¿correcto? Si es un barrio, dime de qué ciudad.  
 
 **Candidate**: sí  
 

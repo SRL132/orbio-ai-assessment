@@ -4,7 +4,7 @@ Voice call, cooperative caller who reads out a postal code.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messages
 
-**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
+**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: sí  
 

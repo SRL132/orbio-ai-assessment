@@ -4,7 +4,7 @@ Alternates Spanish and English on every message; each reply follows the latest o
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,11 +12,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: My name is Laura Gómez  
 
-**Lucía**: Do you have a driving license? Moto · Car · Both · None  
+**Lucía**: Do you have a driving licence? Reply: Moto · Car · Both · None  
 
 **Candidate**: Tengo moto  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: I live in Valencia  
 

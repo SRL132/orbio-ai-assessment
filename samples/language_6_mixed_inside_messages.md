@@ -4,7 +4,7 @@ Spanglish inside each message; every value is still stored correctly.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 7 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,7 +12,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 7 candidate message
 
 **Candidate**: Hi! Me llamo Carlos Ruiz and I have coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: vivo en Madrid, barrio Salamanca  
 

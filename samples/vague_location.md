@@ -4,7 +4,7 @@ Says only the city first; the agent must ask for the neighbourhood.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -20,7 +20,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: Madrid  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
+**Lucía**: Gracias, Marta. ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
 
 **Candidate**: Tetuán  
 

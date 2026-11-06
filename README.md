@@ -124,19 +124,19 @@ The suite has 99 synthetic scenarios, plus 14 from the held-out run (`evals/hold
 | Run | Pass rate | Field accuracy |
 | --- | --- | --- |
 | Offline (`fake/keyword/scripted`, in CI) | 76/76 | 100% |
-| Live scripted, GPT-5.6 Terra, latest (extractor v12, 6 Nov) | 99/99 | 100% |
-| Live scripted, GPT-5.6 Terra, the 4 runs before it (83/83 on 4 Nov, 81/83 on 5 Nov, 96/97 and 98/99 on 6 Nov) | 358/362 | 99–100% |
+| Live scripted, GPT-5.6 Terra, latest 2 runs (extractor v12, 6 Nov) | 99/99 both times | 100% |
+| Live scripted, GPT-5.6 Terra, the 4 runs before them (83/83 on 4 Nov, 81/83 on 5 Nov, 96/97 and 98/99 on 6 Nov) | 358/362 | 99–100% |
 | Live scripted, GPT-5.6 Terra, 4 earlier runs (before the last prompt fixes) | 271/272 | 99–100% |
 | Live, held-out messy scenarios, GPT-5.6 Terra (run once, before the last prompt fixes) | 13/14 | 93% |
 | Live simulated, GPT-5.6 Terra | 34/57 | 96% |
 
 The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them.
 
-The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 99/99 is a floor check rather than a prediction, and it's one clean run. The three runs before it each failed something different. The last two failures are fixed: "el lunes" said on a Monday by a prompt rule, and "tengo 15 años de experiencia" read as an age by a code rule. Expect an occasional miss. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
+The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 99/99 is a floor check rather than a prediction, and it's two clean runs in a row on the same prompts. The three runs before them each failed something different. The last two failures are fixed: "el lunes" said on a Monday by a prompt rule, and "tengo 15 años de experiencia" read as an age by a code rule. Expect an occasional miss. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
 
 A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout, at least until counsel has answered on GDPR Art. 22.
 
-[`samples/`](samples/README.md) has one transcript for each scenario in the 72-scenario live run, from the live model. The 27 scenarios added since have none, and the transcripts predate the later prompts and templates.
+[`samples/`](samples/README.md) has one transcript for each of the 99 scenarios, from the latest live run on the current prompts.
 
 ## Potential improvements
 
