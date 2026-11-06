@@ -210,6 +210,11 @@ def _zone_alone(zone: str, config: ClientConfig) -> Outcome:
     return Outcome.invalid("missing", zone=zone)
 
 
+def same_place(one: str, other: str) -> bool:
+    """The same name, with or without the words around it: 'La Condesa' and 'condesa'."""
+    return _zone_key(one) == _zone_key(other)
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance (haversine)."""
     p1, p2 = math.radians(lat1), math.radians(lat2)

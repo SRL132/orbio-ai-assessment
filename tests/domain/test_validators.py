@@ -16,6 +16,7 @@ from app.domain.validators import (
     nearest_location,
     normalize,
     normalize_platforms,
+    same_place,
     says_no_language,
     validate_availability,
     validate_experience,
@@ -366,3 +367,15 @@ def test_a_listed_zone_read_as_a_city_keeps_a_zone_already_given(config: ClientC
 
 def test_a_served_city_named_like_a_zone_is_still_the_city(config: ClientConfig) -> None:
     assert validate_location("Madrid", "Tetuán", None, config).kind == "valid"
+
+
+@pytest.mark.parametrize(
+    ("one", "other", "same"),
+    [
+        ("La Condesa", "condesa", True),
+        ("Tetuán", "tetuan", True),
+        ("Tetuán", "Retiro", False),
+    ],
+)
+def test_same_place_ignores_the_words_around_a_name(one: str, other: str, same: bool) -> None:
+    assert same_place(one, other) is same

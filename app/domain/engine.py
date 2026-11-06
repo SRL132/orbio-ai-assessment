@@ -74,6 +74,7 @@ from app.domain.validators import (
     is_known_place,
     nearest_location,
     normalize,
+    same_place,
     says_no_language,
 )
 
@@ -440,17 +441,16 @@ def _names_the_city_read_back(
     )
 
 
-def _insists_on_the_name(
-    pending: PendingConfirmation, fields: ExtractedFields, message: str
-) -> bool:
-    """They reject our reading, but repeat the name we read: the zone we took it for, or the city
-    whose country we asked about."""
+def _repeats_the_name(pending: PendingConfirmation, fields: ExtractedFields) -> bool:
+    """The answer only repeats the name we read back, the zone we took it for or the city whose
+    country we asked about, however the model labelled it. It adds nothing to check."""
     read_as = {ZONE_READBACK: "zone", COUNTRY_READBACK: "city"}.get(pending.note or "")
+    named = [field.value for field in (fields.city, fields.zone) if field is not None]
     return (
         read_as is not None
-        and fields.city is not None
-        and normalize(fields.city.value) == normalize(str(pending.values[read_as]))
-        and is_grounded(fields, pending.field, message)
+        and bool(named)
+        and fields.postal_code is None
+        and all(same_place(name, str(pending.values[read_as])) for name in named)
     )
 
 
@@ -486,7 +486,14 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
         and has_words(t.message)
         and not _says_otherwise(pending, extraction.fields, t.message)
     )
-    corrected = not said_yes and any(getattr(extraction.fields, attr) is not None for attr in group)
+    repeated = _repeats_the_name(pending, extraction.fields)
+    # "Tetuán" after "Tetuán, barrio de Madrid, ¿correcto?" is neither a yes nor a no: it's no
+    # correction either, or the same question would come back forever without counting an attempt.
+    corrected = (
+        not said_yes
+        and any(getattr(extraction.fields, attr) is not None for attr in group)
+        and not (repeated and extraction.yes_no is None)
+    )
     others = [a for a in type(extraction.fields).model_fields if a not in group]
     if not said_yes and not corrected and any(getattr(extraction.fields, a) for a in others):
         # They answered the next question instead ("no tengo carnet" after "Luis Pérez,
@@ -507,7 +514,7 @@ def _on_confirmation(t: _Turn, extraction: ExtractionResult) -> ExtractedFields 
     if extraction.yes_no is False or corrected:
         t.state.confirming = None
         t.event(EventType.CONFIRMATION_ANSWERED, field=pending.field.value, answer="no")
-        if _insists_on_the_name(pending, extraction.fields, t.message):
+        if repeated:
             # "No, la ciudad de Salamanca" or "no, Guadalajara de España": it isn't what we read,
             # and the config can't tell us more, so a person decides. Asking again would only read
             # the same thing back.
