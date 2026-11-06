@@ -2,9 +2,9 @@
 
 Voice call, no license; spoken knockout and keep-on-file question.
 
-Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 5 candidate messages
+Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate messages
 
-**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
+**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: sí  
 
@@ -19,6 +19,10 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 5 candidate message
 **Lucía**: ¿Tienes carnet o licencia de conducir? Dime si es de moto, de coche, de los dos, o si no tienes.  
 
 **Candidate**: no tengo carnet  
+
+**Lucía**: Solo para confirmar: sin carnet, ¿correcto?  
+
+**Candidate**: sí  
 
 **Lucía**: Gracias, Luis. Para este puesto necesitamos carnet o licencia de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?  
 

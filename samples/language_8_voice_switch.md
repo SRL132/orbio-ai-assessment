@@ -4,7 +4,7 @@ On a voice call, asks to continue in English; every spoken reply follows.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 12 candidate messages
 
-**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. ¿Empezamos?  
+**Lucía**: Hola, soy Lucía, la asistente virtual de Grupo Sazón. Te hago siete preguntas rápidas sobre el puesto de reparto, unos tres minutos. Transcribimos lo que dices solo para este proceso y no guardamos el audio. Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: sí  
 
@@ -20,7 +20,9 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 12 candidate messag
 
 **Candidate**: sorry can we continue in english  
 
-**Lucía**: Sorry, I didn’t catch that. Is your license for a motorbike, a car, both, or neither?  
+**Lucía**: You can write to me in Spanish or English, whichever you prefer.  
+
+**Lucía**: Do you have a driving license? Tell me if it's for a moto, a car, both, or if you don't have one.  
 
 **Candidate**: i have a car  
 

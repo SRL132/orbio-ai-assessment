@@ -4,7 +4,7 @@ Two unusable start dates in a row; the field goes to review and the flow moves o
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -36,7 +36,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 10 candidate messag
 
 **Candidate**: el 1/1/2020  
 
-**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · 1 de marzo.  
 
 **Candidate**: ayer  
 

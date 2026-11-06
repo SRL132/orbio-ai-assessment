@@ -4,7 +4,7 @@
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -28,5 +28,5 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate message
 
 **Candidate**: lo mismo que te dije antes  
 
-**Lucía**: Perdona, ¿prefieres mañana, tarde, noche o flexible? Puedes elegir varias, por ejemplo: mañana y tarde.  
+**Lucía**: ¿Prefieres mañana, tarde, noche o flexible? Puedes elegir varias opciones.  
 

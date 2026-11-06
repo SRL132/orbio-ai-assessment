@@ -13,7 +13,7 @@
 
 ## Product (15 min)
 
-1. **The problem in numbers (1 min).** 1,000 applications a week, 975 calls, 60% unanswered, so ~390 screenings; 80% of recruiter time on unqualified people. If the agent removes half of that waste, about 208 recruiter hours a week for about $15 of LLM cost ([assumptions](pilot-plan.md#the-business-case)).
+1. **The problem in numbers (1 min).** 1,000 applications a week, 975 calls, 60% unanswered, so ~390 screenings; 80% of recruiter time on unqualified people. If the agent removes half of that waste, about 208 recruiter hours a week for about $16 of LLM cost ([assumptions](pilot-plan.md#the-business-case)).
 2. **Live chat, happy path in Spanish (4 min).** Consent and "virtual assistant" disclosure → name → license (show the buttons) → "Madrid" (it asks for the neighbourhood) → answer two things in one message (it skips ahead) → switch to English → recap → book an interview slot in the chat.
 3. **Edge cases (3 min), each in a new chat:**
    - "No tengo carnet": it reads the answer back ("Solo para confirmar: sin carnet, ¿correcto?"), so answer "sí". Then a kind knockout, plus the keep-on-file question. Tapping "No tengo" skips the read-back.
@@ -30,7 +30,7 @@ Why this beats the status quo: no missed calls, recruiters only see qualified ca
 1. **One turn (3 min):** message → extractor (code for an exact closed answer, otherwise LLM with a strict schema) → Python validators and policy (rules from config) → responder (LLM, output check, template fallback). "Code decides, the LLM talks."
 2. **Code tour (5 min):** `app/domain/engine.py` (`turn` and its stage handlers), `render.py`, `policy.py` (slot-filling), `validators.py`, `ports.py`; the import-linter contract that keeps the domain pure; `app/config/grupo_sazon/client.yaml`.
 3. **Edge cases in code (3 min):** debounced bursts, per-conversation lock, reminders stored in the database, redaction, double-booking constraint.
-4. **LLM and stack choices (4 min):** why GPT-5.6 Terra won (the results table), Haiku as fallback, about $155 a week at 10K, and why it's reversible behind a port. The demo reaches Terra through OpenRouter; production calls OpenAI directly. Tell the schema story: only Gemini could pass until it was fixed. Show `uv run python -m evals` and explain the baseline ratchet.
+4. **LLM and stack choices (4 min):** why GPT-5.6 Terra won (the results table), Haiku as fallback, about $164 a week at 10K, and why it's reversible behind a port. The demo reaches Terra through OpenRouter; production calls OpenAI directly. Tell the schema story: only Gemini could pass until it was fixed. Show `uv run python -m evals` and explain the baseline ratchet.
 
 ## Discussion (10 min): be ready for
 

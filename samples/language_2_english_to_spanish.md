@@ -4,7 +4,7 @@ Starts in English and asks to switch to Spanish.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Yes  
 
@@ -12,11 +12,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 9 candidate message
 
 **Candidate**: John Smith  
 
-**Lucía**: Do you have a driving license? Reply: Moto · Car · Both · None  
+**Lucía**: Do you have a driving license? Moto · Car · Both · None  
 
 **Candidate**: Car  
 
-**Lucía**: Which city and neighbourhood do you live in? Or just send me your postal code.  
+**Lucía**: Which city and neighbourhood do you live in? Or just share your postal code.  
 
 **Candidate**: Perdona, ¿podemos seguir en español? Vivo en Sevilla  
 

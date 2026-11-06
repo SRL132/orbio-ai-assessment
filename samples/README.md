@@ -1,10 +1,10 @@
 # Sample conversations
 
-One transcript for each scenario in the 72-scenario live run, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`. The 27 scenarios added since have no transcript until the samples are regenerated, and later template changes (such as the minimum age in the greeting) don't show here.
+One transcript for each of the 99 scenarios in the live run, generated with `uv run python -m evals --provider openrouter --model openai/gpt-5.6-terra --export-samples samples`. The table below lists the main ones.
 
-These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-04, extractor v9 and responder v5). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
+These come from the **live agent** (GPT-5.6 Terra through OpenRouter, 2026-11-06, extractor v12 and responder v6, all 99 passed). The candidate messages are the scripted ones from `evals/scenarios.yaml`, all synthetic. Fixed texts (consent, recap, FAQ answers) are templates, and questions and re-asks are worded by the model.
 
-[`simulated/`](simulated/) has six conversations where another LLM plays the candidate. They read more naturally, and three are marked failed, each on a value that differs from the persona. In `cooperative_es` the simulated candidate strayed from it (it should want evenings and answered "Tarde"), and the agent recorded what was said. `code_switching` and `several_answers_at_once` come from rambling answers, where what the candidate said and what the scenario expected don't match cleanly.
+[`simulated/`](simulated/) has six conversations where another LLM plays the candidate, from 2026-11-04 and not regenerated, so they're on earlier prompts. They read more naturally, and three are marked failed, each on a value that differs from the persona. In `cooperative_es` the simulated candidate strayed from it (it should want evenings and answered "Tarde"), and the agent recorded what was said. `code_switching` and `several_answers_at_once` come from rambling answers, where what the candidate said and what the scenario expected don't match cleanly.
 
 | Scenario | Channel | What it shows |
 | --- | --- | --- |

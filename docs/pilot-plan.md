@@ -44,7 +44,7 @@ These are planning figures for the client to correct, not results. From the brie
 - **Reach:** about 390 screened a week today. Meeting the 60% target above would be 600, about 54% more.
 - **Recruiter time (assumes a 40-hour week):** 520 hours a week, of which about 416 go to unqualified candidates. If the agent removes half of that, about 208 hours a week are free, or 16 per recruiter.
 - **Value (assumes EUR 20 an hour, for the client to replace):** about EUR 4,160 a week.
-- **LLM cost:** about $15 a week at 1,000 conversations ($0.0155 each, [measured on the scripted suite](architecture.md#where-the-choice-stands)). Hosting, WhatsApp fees and the recruiters' review time come on top.
+- **LLM cost:** about $16 a week at 1,000 conversations ($0.0164 each, [measured on the scripted suite](architecture.md#where-the-choice-stands)). Hosting, WhatsApp fees and the recruiters' review time come on top.
 
 The pilot replaces the assumed half with a measurement: recruiter hours per hire against the control group.
 

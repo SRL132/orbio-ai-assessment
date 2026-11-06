@@ -4,7 +4,7 @@ Lives in a city clearly outside the service area.
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -12,7 +12,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate message
 
 **Candidate**: Carmen Vidal  
 
-**Lucía**: ¿Tienes carnet o licencia de conducir? Responde: Moto · Coche · Ambos · No tengo  
+**Lucía**: ¿Tienes carnet o licencia de conducir? Moto · Coche · Ambos · No tengo  
 
 **Candidate**: Coche  
 
@@ -20,7 +20,7 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 6 candidate message
 
 **Candidate**: Bilbao  
 
-**Lucía**: Solo para confirmar: Bilbao (País Vasco), ¿correcto?  
+**Lucía**: Solo para confirmar: vives en la ciudad de Bilbao (País Vasco), ¿correcto? Si es un barrio, dime de qué ciudad.  
 
 **Candidate**: Sí  
 

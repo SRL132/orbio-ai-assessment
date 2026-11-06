@@ -4,7 +4,7 @@ Hedges every answer. Must never be knocked out or guessed into a clean qualifica
 
 Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messages
 
-**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). ¿Empezamos?  
+**Lucía**: ¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?  
 
 **Candidate**: Sí  
 
@@ -16,11 +16,11 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: no sé, creo que el de coche  
 
-**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, puedes decirme tu código postal.  
+**Lucía**: ¿En qué ciudad y barrio vives? Si lo prefieres, dime tu código postal.  
 
 **Candidate**: por el centro  
 
-**Lucía**: ¿Me dices tu ciudad y tu barrio o código postal? Por ejemplo: Madrid, Chamberí.  
+**Lucía**: Solo para confirmar: centro, barrio de Madrid, ¿correcto?  
 
 **Candidate**: Madrid, Centro  
 
@@ -40,14 +40,14 @@ Run: `openrouter/openai/gpt-5.6-terra/scripted` · passed · 11 candidate messag
 
 **Candidate**: pronto  
 
-**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.  
+**Lucía**: No me quedó claro, ¿qué día podrías empezar? Por ejemplo: mañana · el lunes · 1 de marzo.  
 
 **Candidate**: la semana que viene  
 
 **Lucía**: Repasemos:  
 • Nombre: Ana López  
 • Carnet: coche  
-• Zona: Centro, Madrid  
+• Zona: centro, Madrid  
 • Disponibilidad: jornada completa  
 • Horario: flexible  
 • Experiencia: 0.25 años  
