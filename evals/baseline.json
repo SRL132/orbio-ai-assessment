@@ -2,7 +2,7 @@
   "fake/keyword/scripted": {
     "field_accuracy": 1.0,
     "pass_rate": 1.0,
-    "passed": 75,
+    "passed": 76,
     "scenarios": {
       "abusive": {
         "field_accuracy": 1.0,
@@ -453,9 +453,15 @@
         "passed": true,
         "replies_failed": 0,
         "turns": 6
+      },
+      "weekday_said_on_that_day_is_next_week": {
+        "field_accuracy": 1.0,
+        "passed": true,
+        "replies_failed": 0,
+        "turns": 9
       }
     },
-    "total": 75
+    "total": 76
   },
   "openrouter/openai/gpt-5.6-terra/scripted": {
     "field_accuracy": 1.0,
