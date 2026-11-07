@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_NOMINATIM_USER_AGENT = "sazon-screening (https://github.com/SRL132/orbio-ai-assessment)"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -71,11 +73,12 @@ class Settings(BaseSettings):
     worker_concurrency: int = 16  # turns at once per process (they mostly wait for the LLM)
     chat_stream_seconds: float = 300.0  # an SSE stream ends after this; the browser reconnects
 
-    # Places the client config doesn't list: "" = outside the area (as before), "nominatim" =
-    # look them up and decide by distance (only the place name is sent), "fake" = a fixed list.
-    geocoder: Literal["", "nominatim", "fake"] = ""
+    # Places the client config doesn't list: "nominatim" = look them up and decide by distance
+    # (only the place name is sent), "" = outside the area, "fake" = a fixed list.
+    geocoder: Literal["", "nominatim", "fake"] = "nominatim"
     nominatim_url: str = "https://nominatim.openstreetmap.org"
-    nominatim_user_agent: str = ""  # required by Nominatim's usage policy: app name + contact
+    # Nominatim's usage policy asks for app name + contact. Empty: DEFAULT_NOMINATIM_USER_AGENT.
+    nominatim_user_agent: str = ""
 
     database_url: str = "sqlite:///./data/sazon.db"
     client_id: str = "grupo_sazon"

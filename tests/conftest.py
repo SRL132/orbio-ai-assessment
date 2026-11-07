@@ -16,6 +16,9 @@ from app.domain.ports import Ports
 
 START = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)  # a Monday
 
+# The app looks places up on a public server by default: tests never should.
+os.environ["GEOCODER"] = ""
+
 # Under mutmut (`uv run mutmut run`) each test runs once per mutant: fewer examples keep that
 # fast, and mutmut's runner trips a health check meant for class-based tests run normally.
 settings.register_profile(
