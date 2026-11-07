@@ -109,3 +109,10 @@ def test_tracing_is_off_without_an_endpoint(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(tracing.trace, "set_tracer_provider", installed.append)
     assert tracing.configure_tracing("sazon-test") is True
     assert installed[0].resource.attributes["service.name"] == "sazon-test"
+
+
+def test_request_urls_stay_out_of_the_logs() -> None:
+    """httpx logs full URLs at INFO, and the geocoder's holds the place a candidate wrote."""
+    tracing.configure_logging()
+    assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)
+    assert logging.getLogger("httpx").isEnabledFor(logging.WARNING)

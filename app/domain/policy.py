@@ -113,6 +113,30 @@ def _evidence(fields: ExtractedFields, name: FieldName) -> tuple[str | None, flo
 _NOT_WORD = re.compile(r"[^\w]+", re.UNICODE)
 
 
+# Availability is a choice between options, so one of these can't answer it, whatever the model
+# read into it. Same words as the yes and no the fast path reads (adapters/llm/fast_path.py).
+_BARE_YES_NO = frozenset(
+    [
+        "si",
+        "vale",
+        "ok",
+        "okay",
+        "claro",
+        "correcto",
+        "de acuerdo",
+        "yes",
+        "yeah",
+        "yep",
+        "sure",
+        "correct",
+        "no",
+        "nope",
+        "no gracias",
+        "no thanks",
+    ]
+)
+
+
 def _plain(text: str) -> str:
     """Normalized words only, to compare a quote with the message: '¡Sí, claro!' -> 'si claro'."""
     return " ".join(_NOT_WORD.sub(" ", normalize(text)).split())
@@ -126,6 +150,11 @@ def has_words(message: str) -> bool:
 def _has_letters(message: str) -> bool:
     """Numbers and symbols alone ("000", "!!!") can't say whether someone has a license."""
     return any(ch.isalpha() for ch in message)
+
+
+def _bare_yes_or_no(message: str) -> bool:
+    """The whole message is a yes or a no, with nothing that could name an option."""
+    return _plain(message) in _BARE_YES_NO
 
 
 def is_grounded(fields: ExtractedFields, name: FieldName, message: str) -> bool:
@@ -390,6 +419,8 @@ def apply_extraction(
             outcome = Outcome.invalid("out_of_range")
         if outcome.kind == "knockout" and name == FieldName.LICENSE and not _has_letters(message):
             outcome = Outcome.invalid("unclear")  # "000" is junk, not "I have no license"
+        if name == FieldName.AVAILABILITY and outcome.kind == "valid" and _bare_yes_or_no(message):
+            outcome = Outcome.invalid("unclear")  # "sí" to "which of these?" picks none of them
         grounded = is_grounded(fields, name, message)
         if not grounded and outcome.kind in ("knockout", "valid"):
             outcome = Outcome.review(Reason.UNGROUNDED_ANSWER, **outcome.updates)
