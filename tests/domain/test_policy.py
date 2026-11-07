@@ -194,6 +194,31 @@ def test_a_quote_must_match_whole_words(state: ConversationState, config: Client
     assert state.candidate.meta[FieldName.LICENSE].status == FieldStatus.NEEDS_REVIEW
 
 
+@pytest.mark.parametrize("message", ["sí", "Sí.", "no", "No, gracias", "ok", "yes"])
+def test_a_bare_yes_or_no_does_not_choose_an_availability(
+    message: str, state: ConversationState, config: ClientConfig
+) -> None:
+    """Seen live: "sí" to "¿Qué disponibilidad tienes?" came back as full time, quoting "sí"."""
+    fields = ExtractedFields(
+        availability=Extracted(value=[Availability.FULL_TIME], quote=message, confidence=0.78)
+    )
+    result = apply_extraction(state, fields, config, TODAY, message=message)
+    assert state.candidate.availability == []
+    assert result.rejected[FieldName.AVAILABILITY] == "unclear"
+
+
+def test_a_yes_that_also_names_an_availability_still_counts(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    fields = ExtractedFields(
+        availability=Extracted(
+            value=[Availability.FULL_TIME], quote="jornada completa", confidence=0.9
+        )
+    )
+    apply_extraction(state, fields, config, TODAY, message="sí, jornada completa")
+    assert state.candidate.availability == [Availability.FULL_TIME]
+
+
 @pytest.mark.parametrize(
     ("said", "kept"),
     [

@@ -44,6 +44,8 @@ def configure_logging() -> None:
     if not any(isinstance(f, RequestIdFilter) for h in root.handlers for f in h.filters):
         root.addHandler(handler)
     root.setLevel(logging.INFO)
+    # At INFO httpx logs every request's full URL, and a geocoder URL holds what a candidate wrote.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def configure_tracing(service_name: str) -> bool:
