@@ -26,6 +26,7 @@ from app.seed import DEMO_CANDIDATES, SEED_CLIENT, SEED_SPAN, seed_demo
 from app.settings import Settings
 
 MIN_PASSWORD_LENGTH = 12
+MIN_TEST_PASSWORD_LENGTH = 6  # create-user only, which refuses to run outside a demo
 ENV_FILE = Path(".env")
 ENV_EXAMPLE = Path(".env.example")
 DEFAULT_TEST_EMAIL = "tester@sazon.test"
@@ -92,11 +93,11 @@ def create_user(email: str) -> int:
         print(f"Not a usable email: {email!r}", file=sys.stderr)
         return 1
     typed = getpass.getpass(
-        f"Password for {email} (at least {MIN_PASSWORD_LENGTH} characters, "
+        f"Password for {email} (at least {MIN_TEST_PASSWORD_LENGTH} characters, "
         "or Enter to generate one): "
     )
-    if typed and len(typed) < MIN_PASSWORD_LENGTH:
-        print(f"Use at least {MIN_PASSWORD_LENGTH} characters.", file=sys.stderr)
+    if typed and len(typed) < MIN_TEST_PASSWORD_LENGTH:
+        print(f"Use at least {MIN_TEST_PASSWORD_LENGTH} characters.", file=sys.stderr)
         return 1
     password = typed or easy_password()
 
