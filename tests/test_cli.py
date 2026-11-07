@@ -88,8 +88,19 @@ def test_create_user_refuses_a_short_password_and_writes_nothing(
 
     assert cli.main(["cli", "create-user"]) == 1
 
-    assert "at least 12" in capsys.readouterr().err
+    assert "at least 6" in capsys.readouterr().err
     assert not env_dir.exists()
+
+
+def test_create_user_accepts_a_six_character_password(
+    env_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "sazon1")
+
+    assert cli.main(["cli", "create-user"]) == 0
+
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert verify_password("sazon1", users[cli.DEFAULT_TEST_EMAIL])
 
 
 def test_create_user_writes_a_login_the_app_accepts(
