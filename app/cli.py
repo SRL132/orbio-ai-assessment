@@ -1,25 +1,54 @@
 """Small admin CLI.
 
 uv run python -m app.cli hash-password
+uv run python -m app.cli create-user [email]   # set up .env and a local login: asks for a password
 uv run python -m app.cli rebuild-state [--check]    # projections from the event log
 uv run python -m app.cli llm-outputs <conversation id>   # raw LLM replies, if capture was on
 uv run python -m app.cli seed-demo    # invented candidates in an empty local database, free
 """
 
 import getpass
+import re
+import secrets
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
+
+from dotenv import dotenv_values, set_key
 
 from app.adapters.clock.clocks import FakeClock, SystemClock
 from app.adapters.storage.dashboard import DashboardQueries, Filters
 from app.adapters.storage.sql import SqlRepository, make_engine
-from app.api.auth import hash_password
+from app.api.auth import hash_password, parse_users
 from app.bootstrap import build_offline_service
 from app.seed import DEMO_CANDIDATES, SEED_CLIENT, SEED_SPAN, seed_demo
 from app.settings import Settings
 
 MIN_PASSWORD_LENGTH = 12
+ENV_FILE = Path(".env")
+ENV_EXAMPLE = Path(".env.example")
+DEFAULT_TEST_EMAIL = "tester@sazon.test"
+# ":" and ";" separate entries in RECRUITER_USERS, so an email can't contain them.
+EMAIL_PATTERN = re.compile(r"[^\s:;@]+@[^\s:;@]+")
+PASSWORD_WORDS = (
+    "albahaca",
+    "arroz",
+    "canela",
+    "cilantro",
+    "comino",
+    "chile",
+    "frijol",
+    "limon",
+    "mango",
+    "nopal",
+    "oregano",
+    "paella",
+    "pimienta",
+    "salsa",
+    "tomate",
+    "tortilla",
+)
 
 
 def main(argv: list[str]) -> int:
@@ -30,6 +59,10 @@ def main(argv: list[str]) -> int:
             return 1
         print(hash_password(password))
         return 0
+    if argv[1:] == ["create-user"]:
+        return create_user(DEFAULT_TEST_EMAIL)
+    if len(argv) == 3 and argv[1] == "create-user":
+        return create_user(argv[2])
     if argv[1:] in (["rebuild-state"], ["rebuild-state", "--check"]):
         return rebuild_state(check_only=argv[2:] == ["--check"])
     if len(argv) == 3 and argv[1] == "llm-outputs":
@@ -38,6 +71,54 @@ def main(argv: list[str]) -> int:
         return seed_demo_command()
     print(__doc__, file=sys.stderr)
     return 2
+
+
+def easy_password() -> str:
+    """Quick to type and read out, so only fit for testing: create-user refuses outside a demo."""
+    words = [secrets.choice(PASSWORD_WORDS) for _ in range(3)]
+    return f"{'-'.join(words)}-{secrets.randbelow(100):02d}"
+
+
+def create_user(email: str) -> int:
+    """Everything a fresh clone needs to log in: .env, a session secret and one account.
+
+    Asks for the password, or generates one on Enter. Other accounts and settings stay.
+    """
+    if not Settings().demo_mode:
+        print("Refused: test logins need DEMO_MODE=true.", file=sys.stderr)
+        return 1
+    email = email.strip().lower()
+    if not EMAIL_PATTERN.fullmatch(email):
+        print(f"Not a usable email: {email!r}", file=sys.stderr)
+        return 1
+    typed = getpass.getpass(
+        f"Password for {email} (at least {MIN_PASSWORD_LENGTH} characters, "
+        "or Enter to generate one): "
+    )
+    if typed and len(typed) < MIN_PASSWORD_LENGTH:
+        print(f"Use at least {MIN_PASSWORD_LENGTH} characters.", file=sys.stderr)
+        return 1
+    password = typed or easy_password()
+
+    if not ENV_FILE.exists() and ENV_EXAMPLE.exists():
+        ENV_FILE.write_text(ENV_EXAMPLE.read_text())
+    values = dotenv_values(ENV_FILE)
+    if not values.get("SESSION_SECRET"):  # otherwise logins would reset on every restart
+        set_key(ENV_FILE, "SESSION_SECRET", secrets.token_urlsafe(32), quote_mode="never")
+    users = parse_users(values.get("RECRUITER_USERS"))
+    existed = email in users
+    users[email] = hash_password(password)
+    value = ";".join(f"{user}:{hashed}" for user, hashed in users.items())
+    set_key(ENV_FILE, "RECRUITER_USERS", value, quote_mode="never")
+
+    print(f"{'Updated' if existed else 'Created'} a login in {ENV_FILE}:")
+    print(f"  Email:    {email}")
+    if not typed:
+        print(f"  Password: {password}   (save it now, it isn't stored)")
+    print("Start the app, or restart it if it's running:")
+    print("  uv run uvicorn --factory app.api.main:create_app --reload")
+    print("Then log in at http://127.0.0.1:8000/dashboard")
+    return 0
 
 
 def llm_outputs(conversation_id: UUID) -> int:

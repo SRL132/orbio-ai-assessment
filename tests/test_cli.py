@@ -1,11 +1,13 @@
 """The admin CLI that makes password hashes for RECRUITER_USERS."""
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+from dotenv import dotenv_values
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,7 +15,7 @@ from app import cli
 from app.adapters.clock.clocks import SystemClock
 from app.adapters.storage.dashboard import DashboardQueries, Filters
 from app.adapters.storage.sql import ConversationRow, SqlRepository, make_engine
-from app.api.auth import verify_password
+from app.api.auth import parse_users, verify_password
 from app.domain.models import ConversationState, LlmOutput, Status
 from app.seed import DEMO_CANDIDATES, DemoCandidate
 
@@ -32,6 +34,135 @@ def test_short_passwords_are_refused(
     monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "short")
     assert cli.main(["cli", "hash-password"]) == 1
     assert "at least 12" in capsys.readouterr().err
+
+
+@pytest.fixture
+def env_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A working directory of its own, so these tests can never touch the real .env."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "")  # Enter: generate one
+    return tmp_path / ".env"
+
+
+def created_password(output: str) -> str:
+    return re.findall(r"Password: (\S+)", output)[0]
+
+
+def test_create_user_sets_up_a_fresh_clone_with_the_typed_password(
+    env_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env_dir.with_name(".env.example").write_text(
+        "# from the example\nRECRUITER_USERS=\nSESSION_SECRET=\nLLM_PROVIDER=fake\n"
+    )
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "my-own-long-password")
+
+    assert cli.main(["cli", "create-user"]) == 0
+
+    values = dotenv_values(env_dir)
+    users = parse_users(values.get("RECRUITER_USERS"))
+    assert verify_password("my-own-long-password", users[cli.DEFAULT_TEST_EMAIL])
+    assert values["SESSION_SECRET"]
+    assert values["LLM_PROVIDER"] == "fake"
+    assert "# from the example" in env_dir.read_text()
+    assert "my-own-long-password" not in capsys.readouterr().out
+
+
+def test_create_user_keeps_an_existing_env_and_session_secret(env_dir: Path) -> None:
+    env_dir.with_name(".env.example").write_text("FROM_EXAMPLE=1\n")
+    existing = "keep-me"
+    env_dir.write_text(f"SESSION_SECRET={existing}\n")
+
+    assert cli.main(["cli", "create-user"]) == 0
+
+    values = dotenv_values(env_dir)
+    assert values["SESSION_SECRET"] == existing
+    assert "FROM_EXAMPLE" not in values
+
+
+def test_create_user_refuses_a_short_password_and_writes_nothing(
+    env_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env_dir.with_name(".env.example").write_text("RECRUITER_USERS=\n")
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "short")
+
+    assert cli.main(["cli", "create-user"]) == 1
+
+    assert "at least 12" in capsys.readouterr().err
+    assert not env_dir.exists()
+
+
+def test_create_user_writes_a_login_the_app_accepts(
+    env_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["cli", "create-user", "New@Sazon.test"]) == 0
+
+    out = capsys.readouterr().out
+    password = created_password(out)
+    assert len(password) >= cli.MIN_PASSWORD_LENGTH
+    assert "Created" in out
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert verify_password(password, users["new@sazon.test"])
+
+
+def test_create_user_defaults_to_a_test_account(
+    env_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["cli", "create-user"]) == 0
+
+    assert cli.DEFAULT_TEST_EMAIL in capsys.readouterr().out
+    assert cli.DEFAULT_TEST_EMAIL in parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+
+
+def test_create_user_keeps_other_accounts_and_the_rest_of_the_file(env_dir: Path) -> None:
+    before = "# a comment\nOTHER=1\nRECRUITER_USERS=a@sazon.test:hash-a;b@sazon.test:hash-b\nZ=2\n"
+    env_dir.write_text(before)
+
+    assert cli.main(["cli", "create-user", "c@sazon.test"]) == 0
+
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert users["a@sazon.test"] == "hash-a"
+    assert users["b@sazon.test"] == "hash-b"
+    assert "c@sazon.test" in users
+    lines = env_dir.read_text().splitlines()
+    assert [lines[0], lines[1], lines[3]] == ["# a comment", "OTHER=1", "Z=2"]
+
+
+def test_create_user_gives_an_existing_account_a_new_password(
+    env_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env_dir.write_text("RECRUITER_USERS=a@sazon.test:old-hash\n")
+
+    assert cli.main(["cli", "create-user", "a@sazon.test"]) == 0
+
+    out = capsys.readouterr().out
+    assert "Updated" in out
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert list(users) == ["a@sazon.test"]
+    assert verify_password(created_password(out), users["a@sazon.test"])
+
+
+def test_create_user_refuses_outside_demo_mode(
+    env_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("DEMO_MODE", "false")
+
+    assert cli.main(["cli", "create-user"]) == 1
+
+    assert "DEMO_MODE" in capsys.readouterr().err
+    assert not env_dir.exists()
+
+
+@pytest.mark.parametrize(
+    "email", ["not-an-email", "a:b@sazon.test", "a;b@sazon.test", "a b@x.test"]
+)
+def test_create_user_refuses_an_email_that_would_break_the_list(
+    env_dir: Path, capsys: pytest.CaptureFixture[str], email: str
+) -> None:
+    assert cli.main(["cli", "create-user", email]) == 1
+
+    assert "email" in capsys.readouterr().err
+    assert not env_dir.exists()
 
 
 @pytest.fixture

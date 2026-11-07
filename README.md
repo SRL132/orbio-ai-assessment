@@ -25,7 +25,7 @@ That runs without an LLM, on keyword rules, and the chat says so. For the demo w
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
 - WhatsApp: candidates message your WhatsApp number and get the same screening, with reply buttons, and reminders on their phone. Setup below.
-- Recruiter dashboard: http://127.0.0.1:8000/dashboard. Create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
+- Recruiter dashboard: http://127.0.0.1:8000/dashboard. To try it locally, run `uv run python -m app.cli create-user` and type a password, or press Enter to get a generated one: it creates `.env` if needed, sets `SESSION_SECRET` and adds the login `tester@sazon.test` (`DEMO_MODE=true` only), then start or restart the app. For a real account, create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
 
 To see the dashboard with candidates on it, run `uv run python -m app.cli seed-demo` once, with the app stopped. It plays nine invented chats through the real engine: qualified (one with an interview booked), disqualified, needs review, abandoned and in progress. It's free and offline, whatever `LLM_PROVIDER` says, so their replies are the keyword mode's templates. It only fills an empty database, and refuses unless `DEMO_MODE=true` and `INVITE_ONLY=false`.
 
@@ -66,7 +66,7 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | — | Optional: the WhatsApp channel (all four needed) |
 | `WHATSAPP_INVITE_NUMBER` | — | Optional: turns recruiter invites into WhatsApp links with a code. Leave it empty until replies reach phones |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | — | Optional: speak voice replies with ElevenLabs instead of the browser |
-| `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | — | Optional: look up towns the config doesn't list (`nominatim`, free; needs a User-Agent with a contact) and decide by distance instead of rejecting them |
+| `GEOCODER`, `NOMINATIM_USER_AGENT`, `NOMINATIM_URL` | `nominatim` | Look up towns the config doesn't list (free; only the place name is sent) and decide by distance instead of rejecting them. Leave `GEOCODER` empty to turn it off. On a real deployment, set a User-Agent with your own contact |
 | `METRICS_TOKEN` | — | Requires a bearer token on `/metrics` |
 | `METRICS_PORT` | — | Worker processes: serve metrics on this port, with no token. Keep it on a private network |
 | `LLM_CAPTURE_OUTPUTS` | `false` | Keep the LLM's raw replies to debug extraction, read with `python -m app.cli llm-outputs <id>`. They hold personal data, so synthetic data only for now |

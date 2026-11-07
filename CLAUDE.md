@@ -48,6 +48,7 @@ uv run pytest --cov                           # tests + coverage ratchet
 uv run deptry . && uv run pip-audit           # dependency hygiene
 uv run pre-commit install                     # enable the git pre-commit hooks
 uv run python -m app.cli hash-password        # hash for a RECRUITER_USERS entry
+uv run python -m app.cli create-user [email]  # one step: sets up .env and a local login, asks for a password
 uv run python -m app.cli rebuild-state --check   # compare projections with the event log (no --check: repair)
 uv run python -m app.cli seed-demo            # invented candidates in an empty local database (free, app stopped)
 uv run alembic revision --autogenerate -m "…"  # after changing models in app/adapters/storage/sql.py

@@ -13,7 +13,7 @@ from app.adapters.llm.openrouter import OpenRouterLLM
 from app.adapters.llm.resilient import Pair, ResilientLLM
 from app.bootstrap import Container, agent_version, build, make_llm, with_public_links
 from app.domain.validators import validate_location
-from app.settings import Settings
+from app.settings import DEFAULT_NOMINATIM_USER_AGENT, Settings
 
 
 def settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -157,6 +157,34 @@ def test_geocoder_is_chosen_by_settings() -> None:
     assert isinstance(make_geocoder(Settings(_env_file=None, geocoder="fake")), FakeGeocoder)
     nominatim = Settings(_env_file=None, geocoder="nominatim", nominatim_user_agent="x (a@b.c)")
     assert isinstance(make_geocoder(nominatim), NominatimGeocoder)
+
+
+@pytest.mark.parametrize("user_agent", ["", "  "])
+def test_geocoder_is_on_by_default_and_identifies_itself(
+    monkeypatch: pytest.MonkeyPatch, user_agent: str
+) -> None:
+    from app.adapters.geo.nominatim import NominatimGeocoder
+    from app.bootstrap import make_geocoder
+
+    monkeypatch.delenv("GEOCODER")
+    monkeypatch.setenv("NOMINATIM_USER_AGENT", user_agent)
+
+    geocoder = make_geocoder(Settings(_env_file=None))
+
+    assert isinstance(geocoder, NominatimGeocoder)
+    assert geocoder._client.headers["User-Agent"] == DEFAULT_NOMINATIM_USER_AGENT
+
+
+def test_own_nominatim_user_agent_wins_over_the_default() -> None:
+    from app.adapters.geo.nominatim import NominatimGeocoder
+    from app.bootstrap import make_geocoder
+
+    settings = Settings(_env_file=None, geocoder="nominatim", nominatim_user_agent="x (a@b.c)")
+
+    geocoder = make_geocoder(settings)
+
+    assert isinstance(geocoder, NominatimGeocoder)
+    assert geocoder._client.headers["User-Agent"] == "x (a@b.c)"
 
 
 def test_public_base_url_makes_the_privacy_link_absolute() -> None:

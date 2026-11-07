@@ -31,7 +31,7 @@ from app.adapters.storage.sql import SqlRepository, make_engine
 from app.adapters.voice.elevenlabs import ElevenLabsTTS
 from app.domain.config import ClientConfig
 from app.domain.ports import Clock, Extractor, Geocoder, Ports, Responder
-from app.settings import Settings
+from app.settings import DEFAULT_NOMINATIM_USER_AGENT, Settings
 from app.worker.pool import TurnPool
 from app.worker.runner import Runner
 from app.worker.service import ScreeningService
@@ -62,7 +62,8 @@ class Container:
 def make_geocoder(settings: Settings) -> Geocoder | None:
     match settings.geocoder:
         case "nominatim":
-            return NominatimGeocoder(settings.nominatim_user_agent, base_url=settings.nominatim_url)
+            user_agent = settings.nominatim_user_agent.strip() or DEFAULT_NOMINATIM_USER_AGENT
+            return NominatimGeocoder(user_agent, base_url=settings.nominatim_url)
         case "fake":
             return FakeGeocoder()
         case _:
