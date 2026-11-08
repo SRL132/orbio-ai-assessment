@@ -21,6 +21,8 @@ uv run python -m app.cli demo
 
 The first time, it asks for a dashboard password (Enter generates one), so run it in a real terminal. It then copies `.env.example` to `.env`, adds the login `tester@sazon.test`, puts nine invented candidates on the dashboard and starts the app, printing the links. Run it again to start the app again: steps already done are skipped. `demo --reset` moves the database aside (to `data/sazon-backup-<time>.db`, nothing is deleted) and starts empty, which also clears old chats, reminders and login lockouts; add `--no-seed` for a dashboard with no invented candidates. Stop the app with Ctrl+C.
 
+With [Claude Code](https://claude.com/claude-code), type `/start` in the project instead: it checks `uv`, installs the dependencies and runs `demo --no-prompt` in the background, which generates the password and saves it to `data/demo-login.txt` (git-ignored) instead of asking for one.
+
 It runs without auto-reload, because `--reload` waits for open chat tabs to close and hangs. When changing code, use `uv run uvicorn --factory app.api.main:create_app --reload --timeout-graceful-shutdown 2` instead.
 
 That runs without an LLM, on keyword rules, and the chat says so. For the demo with a real LLM, set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` in `.env`: it runs on GPT-5.6 Terra, for synthetic data only. If OpenRouter can't be reached, the chat doesn't get stuck: after 8 s (`LLM_TIMEOUT_SECONDS`) and one retry, the keyword mode answers (`LLM_FALLBACK_PROVIDER=fake`). Production uses the same model through OpenAI's own API, with Claude Haiku 5.5 as the fallback: those are the Docker image's defaults, and it won't start without `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.

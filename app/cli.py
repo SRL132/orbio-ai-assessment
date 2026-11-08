@@ -1,6 +1,6 @@
 """Small admin CLI.
 
-uv run python -m app.cli demo [--reset] [--no-seed]   # one step: login, candidates, app running
+uv run python -m app.cli demo [--reset] [--no-seed] [--no-prompt]   # login, candidates, app running
 uv run python -m app.cli hash-password
 uv run python -m app.cli create-user [email]   # set up .env and a local login: asks for a password
 uv run python -m app.cli rebuild-state [--check]    # projections from the event log
@@ -35,7 +35,9 @@ ENV_EXAMPLE = Path(".env.example")
 DEFAULT_TEST_EMAIL = "tester@sazon.test"
 DEMO_HOST = "127.0.0.1"
 DEMO_PORT = 8000
-DEMO_FLAGS = {"--reset", "--no-seed"}
+DEMO_FLAGS = {"--reset", "--no-seed", "--no-prompt"}
+# Where `demo --no-prompt` keeps the password it generates: git-ignored, owner-only.
+DEMO_LOGIN_FILE = Path("data/demo-login.txt")
 # ":" and ";" separate entries in RECRUITER_USERS, so an email can't contain them.
 EMAIL_PATTERN = re.compile(r"[^\s:;@]+@[^\s:;@]+")
 PASSWORD_WORDS = (
@@ -60,7 +62,9 @@ PASSWORD_WORDS = (
 
 def main(argv: list[str]) -> int:
     if argv[1:2] == ["demo"] and set(argv[2:]) <= DEMO_FLAGS:
-        return demo(reset="--reset" in argv, seed="--no-seed" not in argv)
+        return demo(
+            reset="--reset" in argv, seed="--no-seed" not in argv, prompt="--no-prompt" not in argv
+        )
     if argv[1:] == ["hash-password"]:
         password = getpass.getpass("Password: ")
         if len(password) < MIN_PASSWORD_LENGTH:
@@ -88,10 +92,11 @@ def easy_password() -> str:
     return f"{'-'.join(words)}-{secrets.randbelow(100):02d}"
 
 
-def create_user(email: str, *, show_start: bool = True) -> int:
+def create_user(email: str, *, show_start: bool = True, save_to: Path | None = None) -> int:
     """Everything a fresh clone needs to log in: .env, a session secret and one account.
 
     Asks for the password, or generates one on Enter. Other accounts and settings stay.
+    With `save_to`, nothing is asked: the generated password goes to that file, not the screen.
     """
     if not Settings().demo_mode:
         print("Refused: test logins need DEMO_MODE=true.", file=sys.stderr)
@@ -101,9 +106,13 @@ def create_user(email: str, *, show_start: bool = True) -> int:
         print(f"Not a usable email: {email!r}", file=sys.stderr)
         return 1
     try:
-        typed = getpass.getpass(
-            f"Password for {email} (at least {MIN_TEST_PASSWORD_LENGTH} characters, "
-            "or Enter to generate one): "
+        typed = (
+            ""
+            if save_to
+            else getpass.getpass(
+                f"Password for {email} (at least {MIN_TEST_PASSWORD_LENGTH} characters, "
+                "or Enter to generate one): "
+            )
         )
     except EOFError:  # no terminal to type in, e.g. a `!` command inside Claude Code
         print(
@@ -128,7 +137,12 @@ def create_user(email: str, *, show_start: bool = True) -> int:
 
     print(f"{'Updated' if existed else 'Created'} a login in {ENV_FILE}:")
     print(f"  Email:    {email}")
-    if not typed:
+    if save_to:
+        save_to.parent.mkdir(parents=True, exist_ok=True)
+        save_to.touch(mode=0o600)
+        save_to.write_text(f"{email}\n{password}\n")
+        print(f"  Password: in {save_to}")
+    elif not typed:
         print(f"  Password: {password}   (save it now, it isn't stored)")
     if show_start:
         print("Start the app, or restart it if it's running:")
@@ -142,10 +156,12 @@ def copy_env_example() -> None:
         ENV_FILE.write_text(ENV_EXAMPLE.read_text())
 
 
-def demo(*, reset: bool, seed: bool) -> int:
+def demo(*, reset: bool, seed: bool, prompt: bool = True) -> int:
     """One command for a reviewer: .env, a login, candidates on the dashboard, the app running.
 
     Each step is skipped when it's already done, so running it again just starts the app.
+    Without `prompt` (no terminal, e.g. Claude Code's /start) the password is generated and
+    saved to DEMO_LOGIN_FILE.
     """
     copy_env_example()
     settings = Settings()
@@ -163,7 +179,8 @@ def demo(*, reset: bool, seed: bool) -> int:
         return code
     users = parse_users(dotenv_values(ENV_FILE).get("RECRUITER_USERS"))
     if not users:
-        if code := create_user(DEFAULT_TEST_EMAIL, show_start=False):
+        save_to = None if prompt else DEMO_LOGIN_FILE
+        if code := create_user(DEFAULT_TEST_EMAIL, show_start=False, save_to=save_to):
             return code
         users = parse_users(dotenv_values(ENV_FILE).get("RECRUITER_USERS"))
     if seed and database_is_empty(Settings()):
@@ -176,6 +193,8 @@ def demo(*, reset: bool, seed: bool) -> int:
     print(f"Recruiter dashboard: http://{DEMO_HOST}:{DEMO_PORT}/dashboard")
     if users:
         print(f"  Log in as: {', '.join(users)}   (another: uv run python -m app.cli create-user)")
+    if DEMO_LOGIN_FILE.exists():
+        print(f"  Password of the generated login: in {DEMO_LOGIN_FILE}")
     print("Stop with Ctrl+C. Fresh start: uv run python -m app.cli demo --reset")
     print()
     # No --reload: it waits for open chat streams to close before restarting, and hangs.

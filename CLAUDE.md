@@ -38,7 +38,7 @@ When code and design disagree, don't let them drift silently: update the relevan
 
 ```bash
 uv sync                                       # install (Python 3.13, pinned in .python-version)
-uv run python -m app.cli demo [--reset] [--no-seed]   # reviewer start: .env, login, candidates, app (no reload)
+uv run python -m app.cli demo [--reset] [--no-seed] [--no-prompt]   # reviewer start: .env, login, candidates, app (no reload); /start runs it
 cp .env.example .env                          # LLM_PROVIDER=fake needs no API key
 uv run uvicorn --factory app.api.main:create_app --reload --timeout-graceful-shutdown 2   # /chat, /voice (Chrome/Edge), /dashboard
 uv run python -m app.worker                   # a worker process (pair with ROLE=web web processes)
