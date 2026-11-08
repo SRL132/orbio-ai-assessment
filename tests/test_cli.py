@@ -489,3 +489,40 @@ def test_port_in_use_sees_a_listening_socket() -> None:
 def test_demo_with_an_unknown_flag_shows_usage(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["cli", "demo", "--fast"]) == 2
     assert "demo [--reset]" in capsys.readouterr().err
+
+
+def test_demo_no_prompt_saves_the_generated_password_instead_of_showing_it(
+    demo_env: dict[str, object],
+    env_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """For Claude Code's /start: there's no terminal, and the password stays out of the chat."""
+
+    def no_terminal(_prompt: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr(cli.getpass, "getpass", no_terminal)
+
+    assert cli.main(["cli", "demo", "--no-prompt", "--no-seed"]) == 0
+
+    saved = env_dir.with_name("data") / "demo-login.txt"
+    email, password = saved.read_text().split()
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert email == "tester@sazon.test"
+    assert verify_password(password, users[email])
+    assert saved.stat().st_mode & 0o777 == 0o600
+    out = capsys.readouterr().out
+    assert password not in out
+    assert "data/demo-login.txt" in out
+    assert demo_env["port"] == 8000
+
+
+def test_demo_no_prompt_keeps_an_existing_login(demo_env: dict[str, object], env_dir: Path) -> None:
+    assert cli.main(["cli", "demo", "--no-seed"]) == 0
+    before = env_dir.read_text()
+
+    assert cli.main(["cli", "demo", "--no-prompt", "--no-seed"]) == 0
+
+    assert env_dir.read_text() == before
+    assert not (env_dir.with_name("data") / "demo-login.txt").exists()
