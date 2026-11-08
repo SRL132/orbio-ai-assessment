@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- [ ] `.env` with `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), `LLM_FALLBACK_PROVIDER=openrouter`, `LLM_FALLBACK_MODEL=anthropic/claude-haiku-5.5`, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database (`rm data/sazon.db`).
+- [ ] `.env` with `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL=openai/gpt-5.6-terra` (synthetic data, as the demo is), `LLM_FALLBACK_PROVIDER=openrouter`, `LLM_FALLBACK_MODEL=anthropic/claude-haiku-5.5`, `RECRUITER_USERS`, `SESSION_SECRET`. Start from a fresh database: `uv run python -m app.cli demo --reset` (the old one is kept as a backup).
 - [ ] WhatsApp isn't demoed: Meta has locked the new business account, so replies don't reach phones (error 131031). Save a screenshot of a `whatsapp_delivery_failed` line from the deployed app's logs, in case they ask for proof.
 - [ ] Two browser windows: the candidate chat on a phone-sized window, the dashboard on the other (`/dashboard`). The deployed site is invite-only, so make one link per chat at `/dashboard/invite` and open each in a private window.
 - [ ] Seed a few candidates for the dashboard: run 4–5 chats beforehand (one qualified with an interview, one disqualified, one borderline zone, one who asked for a human, one abandoned with "+24 h" twice). The time buttons only exist locally, so the abandoned one can't be seeded on the deployed site.
