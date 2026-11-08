@@ -87,13 +87,13 @@ The [process design](process-design.md) is the two-page overview. These are the 
 
 **Minimum age.** The greeting states it (`minimum_age` in the client config, 18 as a working default for the client and counsel to confirm per country). Anyone who says they're younger goes to review (`underage`) with no more questions. Years given as experience, or in reply to the experience question, are never read as an age, even if the model does (checked in code), so someone who is underage and says so only at that question is left to the interview check. It's never a knockout, and the app doesn't ask for or store a date of birth.
 
-**Limits.** A conversation gets `max_turns` turns (40; a normal one takes about 12). After that a person takes over (`turn_limit`), with no more LLM calls or replies. Later messages are stored but not read by anything, so a stop request sent then waits for whoever opens the conversation. On WhatsApp, a number sending more than 20 messages a minute has the excess dropped, and each conversation gets at most one "I only read text" notice an hour. Reactions are ignored.
+**Limits.** A conversation gets `max_turns` turns (40; a normal one takes about 12). After that a person takes over (`turn_limit`): one fixed closing message goes out, then no more LLM calls or replies. Later messages are stored but not read by anything, so a stop request sent then waits for whoever opens the conversation. On WhatsApp, a number sending more than 20 messages a minute has the excess dropped, and each conversation gets at most one "I only read text" notice an hour. Reactions are ignored.
 
 **Reminders at night.** Reminders wait for the morning where the candidate is (`quiet_hours`, 22:00 to 09:00). If that would miss WhatsApp's 24-hour window, the reminder goes just before the quiet hours start. `DEMO_MODE` turns this off so the demo's fast-forward always shows a reminder, so it must be off in production, as the Dockerfile sets it. docker-compose defaults it to on.
 
 **A message that never arrives.** A WhatsApp `failed` report, or a send we give up on, sends an open screening to review (`unreachable`), so it doesn't look like a candidate who went silent. A finished one only records it.
 
-**Rude or nonsense input.** Numbers and symbols alone ("000") never count as "no license". After two unclear answers to the keep-on-file question, nothing is kept and the conversation closes.
+**Rude or nonsense input.** Numbers and symbols alone ("000") never count as "no license". If the keep-on-file answer is still unclear after two re-asks (the third unclear reply), nothing is kept and the conversation closes.
 
 **Changing an earlier answer.** A value that wouldn't pass by itself never replaces an accepted one: "soy Ana" doesn't undo "Ana López". A new value for a field already answered, given in reply to a different question ("Mai", Catalan for "never", read as a name), is confirmed with a yes/no first. This includes the answer that knocked them out ("sorry, I meant Madrid" right after the rejection): the screening reopens and the new answer goes through the same checks.
 

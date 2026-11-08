@@ -11,7 +11,7 @@ Today 13 recruiters make about 975 calls a week for about 1,000 applications. Wi
 3. **Code decides, the LLM talks.** Python owns every pass/fail rule. The LLM extracts answers and words questions; job answers are approved text.
 4. **A person can step in.** Unclear cases go to a review queue. A rejected candidate who asks for a human is flagged for a recruiter, who can overturn the rejection.
 
-The candidate makes the first move: they open a signed link, or send a WhatsApp code, from a recruiter or the ATS. The agent doesn't message anyone first.
+The candidate makes the first move: they open a signed link, or send a WhatsApp code, from a recruiter or the ATS. The agent doesn't message anyone first. (Locally, with `INVITE_ONLY=false`, the open `/chat` link starts a screening too.)
 
 ## Conversation stages
 
@@ -32,7 +32,7 @@ flowchart TD
     R --> Q[Qualified: pick interview slot]
 
     ANY((Any stage)) -. borderline / failed twice / asks for a human .-> NR[Needs review]
-    ANY -. no reply after reminders at 2 h and 24 h .-> AB[Abandoned]
+    ANY -. no reply after reminders at 2 h and 24 h, then 24 h more .-> AB[Abandoned]
 ```
 
 ## Agent personality
@@ -57,7 +57,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 
 | Case | What the agent does |
 | --- | --- |
-| **Stops responding** | Reminders at 2 h and 24 h (23 h on WhatsApp, inside its 24 h window), then `abandoned` with the stage reached. A later reply resumes at the missing fields |
+| **Stops responding** | Reminders at 2 h and 24 h (23 h on WhatsApp, inside its 24 h window), then `abandoned` with the stage reached, 24 h after the last reminder (48 h after their last message; 47 h on WhatsApp). A later reply resumes at the missing fields |
 | **Invalid answer** | Acknowledge, rephrase with examples. Two tries, then `needs_review` |
 | **Ambiguous answer** ("evenings, maybe weekends") | Store what's certain, ask or confirm the rest |
 | **Several answers at once** | Fill every field found; never ask for something already given |
@@ -69,7 +69,7 @@ The LLM proposes a value with the quote it came from and a confidence score. Pyt
 | **Says they're under the minimum age** | Stop asking and send it to the review queue. Never a knockout |
 | **Asks for a human** | Hand off right away. After a knockout the rejection stands, or anyone could skip it, but the request gets its own dashboard filter and they're told a person will review it |
 | **Asks to stop or to delete their data** (at any point, even after the chat has closed) | Stop asking and send it to the review queue with its own reason. The candidate is told a recruiter will reply within 2 working days, and given the privacy address. If no LLM can read the message, it's kept and retried, as in an open conversation. After a knockout the reason stays on record |
-| **Changes an earlier answer** | Take the latest value, re-validate, log the change. A valid new answer clears the review flag on that field. A corrected knockout reopens the screening |
+| **Changes an earlier answer** | Take the latest value, re-validate, log the change. A valid new answer clears the review flag on that field. A knockout corrected while the keep-on-file question is still open reopens the screening |
 
 Rarer cases (refusing the recap, writing after the outcome, the AI provider being down): [appendix E](process-design-appendix.md#e-conversation-rules-in-detail).
 
@@ -81,7 +81,7 @@ Every conversation ends in one status, set by code, with a summary for the recru
 | --- | --- | --- | --- |
 | **Qualified** | All fields valid, no knockout | A recap, then interview slots to book in the chat (a callback would bring back the 60% no-answer problem) | Top of the dashboard, with summary and transcript |
 | **Disqualified** | No license, or clearly outside the area | A warm, honest reason and an offer to keep their details | Filtered list, kept for audit |
-| **Needs review** | Borderline answer, field failed twice, asked for a human, flagged behaviour, qualified but no interview slot picked after the reminders, said they're under age, reached the message limit, or our messages can't be delivered | A recruiter will contact them, with a timeframe | Review queue with the reason |
+| **Needs review** | Borderline answer, field failed twice, an answer not found in the candidate's words, asked for a human, asked to stop or delete their data, flagged behaviour, kept refusing the recap, asked to change a booked interview, qualified but no interview slot picked after the reminders, said they're under age, reached the message limit, or our messages can't be delivered | A recruiter will contact them, with a timeframe | Review queue with the reason |
 | **Abandoned** | No reply after the last reminder, or consent declined | Nothing more, or a short acknowledgement if they declined | Drop-off stage, for analytics |
 
 ## Message tone and length
@@ -97,6 +97,6 @@ Examples:
 
 - Opening: *¡Hola! Soy Lucía, la asistente virtual de Grupo Sazón 👋 Te hago 7 preguntas rápidas sobre el puesto de reparto (unos 3 minutos). Usamos tus respuestas solo para este proceso (aviso de privacidad: /privacy). Hay que tener 18 años o más. ¿Empezamos?*
 - Re-ask: *No me quedó claro — ¿qué día podrías empezar? Por ejemplo: mañana, el lunes o el 1 de marzo.*
-- Disqualified: *Gracias, Marta. Para este puesto necesitamos carnet de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?*
+- Disqualified: *Gracias, Marta. Para este puesto necesitamos carnet o licencia de conducir, así que ahora no podemos seguir. ¿Quieres que guardemos tus datos para futuras ofertas?*
 
 The same flow runs on a voice call, with options said aloud and names and towns always read back ([appendix E](process-design-appendix.md#e-conversation-rules-in-detail)).

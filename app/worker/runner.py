@@ -1,7 +1,7 @@
 """Async background work for the one-process demo: debounced turns and the reminder loop.
 
-In production the same service methods run behind a real queue and N workers
-(docs/architecture.md, "Demo vs production").
+In production the same service methods run in N worker processes that poll the database
+(`python -m app.worker`; docs/architecture.md, "Demo vs production").
 """
 
 from __future__ import annotations

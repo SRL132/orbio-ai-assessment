@@ -18,7 +18,7 @@
 | Secrets | **gitleaks** | pre-commit and CI |
 | Dependencies | **pip-audit**, **deptry** | Known vulnerabilities; unused or missing dependencies |
 | Hooks | **pre-commit** | ruff, mypy, import-linter, gitleaks |
-| CI | GitHub Actions | Same commands as locally, nothing CI-only |
+| CI | GitHub Actions | Every local check, plus mutation testing, the Docker build and the alert-rule tests |
 
 ## Ratchets: the bar only goes up
 
@@ -69,7 +69,7 @@ uv run python -m evals.gate                       # free: have these prompts bee
 uv run python -m evals.gate --run --budget-usd 2  # costs money, only if they haven't
 ```
 
-Scores per scenario: outcome correct, field accuracy against the expected record, number of turns, and the output check on every agent message. `evals/baseline.json` holds one entry per provider/model/mode. The offline entry passing says the engine and policy are right; it says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. Live runs are the real measure. `evals/baseline.json` also has a GPT-5.6 Terra entry, but CI has no API key, so no check fails if live results drop. Measured results: [architecture → where the choice stands](architecture.md#where-the-choice-stands).
+Scores per scenario: outcome correct, field accuracy against the expected record, number of turns, and the output check on every agent message. `evals/baseline.json` holds one entry per provider/model/mode. The offline entry passing says the engine and policy are right; it says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them. Live runs are the real measure. `evals/baseline.json` also has an older GPT-5.6 Terra entry (83/83, 4 Nov); every live run since is in `evals/history.jsonl`. CI has no API key, so no check fails if live results drop. Measured results: [architecture → where the choice stands](architecture.md#where-the-choice-stands).
 
 ## Claude Code hooks
 
@@ -87,6 +87,7 @@ line-length = 100
 select = ["E","F","I","B","UP","SIM","RUF","PT","S","ANN","TID"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101","ANN"]
+"evals/**" = ["S101"]
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
@@ -100,14 +101,13 @@ root_package = "app"
 name = "Domain is pure"
 type = "forbidden"
 source_modules = ["app.domain"]
-forbidden_modules = ["app.adapters","app.api","app.worker","sqlalchemy","fastapi","httpx","anthropic"]
+forbidden_modules = ["app.adapters","app.api","app.worker","app.bootstrap","sqlalchemy","fastapi","httpx","anthropic","openai"]
 
 [tool.coverage.report]
 fail_under = 98.1   # ratchet: raise with every change, never lower
 precision = 2       # compare with decimals: rounded to 98, the total would fail 98.1
 ```
 
-The `anthropic` entry assumes that SDK; replace it with whichever LLM SDK is chosen.
 
 ## Deliberately skipped
 

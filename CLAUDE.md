@@ -53,7 +53,7 @@ uv run python -m app.cli create-user [email]  # one step: sets up .env and a loc
 uv run python -m app.cli rebuild-state --check   # compare projections with the event log (no --check: repair)
 uv run python -m app.cli seed-demo            # invented candidates in an empty local database (free, app stopped)
 uv run alembic revision --autogenerate -m "…"  # after changing models in app/adapters/storage/sql.py
-docker compose up --build                     # app + Postgres, like production
+docker compose up --build                     # web + worker + Postgres, like production
 uv run python -m evals --check                # offline evals vs evals/baseline.json (free)
 uv run python -m evals --provider openrouter --model <slug> --budget-usd 1   # live (costs money)
 uv run python -m evals.gate                   # free: have these prompts been measured live?
