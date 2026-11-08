@@ -61,7 +61,8 @@ The image is multi-stage, runs as a non-root user with a health check, and appli
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `LLM_PROVIDER` | `fake` (Docker image: `openai`) | `fake` (offline keyword rules + templates), `openai` (the production choice), `anthropic`, or `openrouter` (demo and evals, synthetic data only) |
-| `LLM_FALLBACK_PROVIDER`, `LLM_FALLBACK_MODEL` | none (Docker image: `anthropic`, `claude-haiku-5-5`) | Used when the primary is down |
+| `LLM_FALLBACK_PROVIDER`, `LLM_FALLBACK_MODEL` | none (`.env.example`: `fake`; Docker image: `anthropic`, `claude-haiku-5-5`) | Used when the primary is down |
+| `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES` | `20` (`.env.example`: `8`), `1` | Seconds per LLM call before it counts as failed, and retries per call before the fallback |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT` | —, `openai/gpt-5.6-terra`, `low` | The demo and model comparison (synthetic data only); reasoning per call (`none`, `minimal`, `low`…), less is faster |
 | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-5.6-terra`, `low` | The production choice |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | —, `claude-haiku-5-5` | The fallback, with `LLM_FALLBACK_PROVIDER=anthropic` |
@@ -129,13 +130,13 @@ The suite has 99 synthetic scenarios, plus 14 from the held-out run (`evals/hold
 | Offline (`fake/keyword/scripted`, in CI) | 76/76 | 100% |
 | Live scripted, GPT-5.6 Terra, latest 2 runs (extractor v12, 6 Nov) | 99/99 both times | 100% |
 | Live scripted, GPT-5.6 Terra, the 4 runs before them (83/83 on 4 Nov, 81/83 on 5 Nov, 96/97 and 98/99 on 6 Nov) | 358/362 | 99–100% |
-| Live scripted, GPT-5.6 Terra, 4 earlier runs (before the last prompt fixes) | 271/272 | 99–100% |
+| Live scripted, GPT-5.6 Terra, 3 earlier runs on smaller suites (68, 69 and 72 scenarios, 4 Nov) | 209/209 | 100% |
 | Live, held-out messy scenarios, GPT-5.6 Terra (run once, before the last prompt fixes) | 13/14 | 93% |
-| Live simulated, GPT-5.6 Terra | 34/57 | 96% |
+| Live simulated, GPT-5.6 Terra (the model comparison, 4 Nov, on earlier prompts and 57 scenarios) | 34/57 | 96% |
 
 The offline result shows the engine and policy behave as designed. It says little about extraction quality, because the scripted messages were written so simple keyword rules can parse them.
 
-The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 99/99 is a floor check rather than a prediction, and it's two clean runs in a row on the same prompts. The three runs before them each failed something different. The last two failures are fixed: "el lunes" said on a Monday by a prompt rule, and "tengo 15 años de experiencia" read as an age by a code rule. Expect an occasional miss. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. Live scores are in the baseline, but only the offline run fails CI, because live runs cost money and vary.
+The live scores have limits. The scripted suite isn't held out from the fixes it prompted, so 99/99 is a floor check rather than a prediction, and it's two clean runs in a row on the same prompts. The three runs before them each failed something different. The last two failures are fixed: "el lunes" said on a Monday by a prompt rule, and "tengo 15 años de experiencia" read as an age by a code rule. Expect an occasional miss. The holdout is the fairer number. Its one failure (a neighbourhood lost when the city came next) has since been fixed, so measuring again needs new held-out scenarios. Most simulated failures are the scenario, not the agent: many check a mid-conversation state, and a simulated candidate just carries on to the end. `evals/baseline.json` keeps an older live entry (83/83, 4 Nov) for reference; the history of every run is in `evals/history.jsonl`. Only the offline run fails CI, because live runs cost money and vary.
 
 A live end-to-end run still found two bugs the scripted suite had passed (an invented schedule from "lo mismo que te dije", and a nearby FAQ entry sent for an uncovered question). Both are fixed and now have scenarios, but expect more of this kind with real candidates. That's why the [pilot plan](docs/pilot-plan.md) has a recruiter read every knockout, at least until counsel has answered on GDPR Art. 22.
 

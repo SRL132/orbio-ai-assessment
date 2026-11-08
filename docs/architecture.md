@@ -45,7 +45,7 @@ A **modular monolith with a hexagonal core**. A pure conversation engine holds a
 ```python
 def turn(
     state: ConversationState, msg: InboundMessage, config: ClientConfig, ports: Ports
-) -> tuple[ConversationState, list[Action]]: ...
+) -> TurnResult: ...  # the new state, actions, replies and events
 ```
 
 Actions are data: `AskField("start_date")`, `Disqualify("no_license")`, `ScheduleReminder(at=...)`, `HandOff("human_requested")`, `OfferSlots(...)`. The engine performs no database or network calls of its own; the LLM is reached only through the `Extractor` and `Responder` ports.
@@ -123,7 +123,7 @@ Fewer calls first. `FastPathExtractor` (`app/adapters/llm/fast_path.py`) sits in
 
 Prompt caching for the system prompt and config; token usage and cost logged per call and added up per conversation. A smaller model can take over extraction if the evals show it's accurate enough. For a provider that is slow, rate-limited or down (`app/adapters/llm/resilient.py`, wired in `bootstrap.make_resilient_llm`):
 
-- **Retry with backoff.** Each call is retried `LLM_MAX_RETRIES` times on rate limits, server errors and failed connections, with full-jitter exponential backoff (so workers that failed together don't retry together) and the provider's `Retry-After` when it sends one. A read timeout isn't retried on the same provider: it already cost the whole timeout.
+- **Retry with backoff.** Each call is retried `LLM_MAX_RETRIES` times on rate limits, server errors and failed connections, with full-jitter exponential backoff (so workers that failed together don't retry together) and the provider's `Retry-After` when it sends one. On OpenRouter a read timeout isn't retried on the same provider: it already cost the whole timeout. The OpenAI and Anthropic SDK adapters leave timeouts to the SDK's own retry (`LLM_MAX_RETRIES`).
 - **Fallback provider behind the same interface.** `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL` (e.g. Claude Haiku 5.5 behind GPT-5.6 Terra). When the primary fails, the same call goes to the fallback, and a circuit breaker sends calls straight to the fallback for 30 s before trying the primary again. The engine sees one `Extractor` and one `Responder` either way. Only synthetic data has been evaluated on a fallback model; pick one that passes the same evals. The chosen fallback is Claude Haiku 5.5: a different vendor from Terra, so one outage doesn't take out both, and fast enough for the 5 s rule. Results: [where the choice stands](#where-the-choice-stands).
 - **Concurrency cap.** At most `LLM_MAX_CONCURRENCY` calls in flight per process, so a peak queues in our process instead of turning into a burst of 429s. Fleet-wide the cap is replicas × that number: size it to the provider's rate limit. A call that can't get a slot in time counts as unavailable.
 - **Hold, don't drop.** If no provider answers, the adapter raises `LLMUnavailable` and the engine keeps the candidate's message instead of consuming it: one holding message ("give me a moment…", template `technical_hold`), then retries after 20 s, 1, 3 and 10 minutes (`llm_retry_seconds` in the client config). Messages the candidate sends meanwhile join the retry. When the retries run out, the candidate is told there's a technical problem and asked to write again (`technical_unavailable`), and the usual reminders follow, so a conversation is never dropped silently. Every attempt is an `extractor_failed` event with its attempt number.
@@ -136,7 +136,7 @@ Prompt caching for the system prompt and config; token usage and cost logged per
 | `Extractor`, `Responder` | LLM → fake for tests, cheaper model |
 | `Repository` (includes the event log) | SQLite → Postgres; used by the service, never by the engine |
 | `CalendarProvider` | mock slots → Google Calendar |
-| `Geocoder` | fixed list (fake) → Nominatim (OpenStreetMap) → self-hosted Nominatim |
+| `Geocoder` | Nominatim (OpenStreetMap, on by default), fake for tests and the seed → self-hosted Nominatim |
 | `Clock` | system → fake |
 
 Channels and the FAQ aren't ports, by the rule below: each has one implementation. Web chat, voice and WhatsApp are routes that call the service, and their flows differ too much to share an interface yet. The FAQ is a list in the client config, and the LLM picks an id from it. Each gets a port when it gets a second implementation.
@@ -161,7 +161,7 @@ app/
                      #   event types and reasons (enums, not free strings)
     policy.py        # next action, knockouts, outcomes
     validators.py    # field rules, read from config
-    engine.py        # turn(state, msg, config, ports) -> (state, actions): one handler per stage
+    engine.py        # turn(state, msg, config, ports) -> TurnResult: one handler per stage
     render.py        # actions -> replies (templates + responder); checks a config's templates
     summary.py       # recruiter summary
     ports.py         # Protocols: Extractor, Responder, Repository,
@@ -169,14 +169,24 @@ app/
   adapters/
     llm/             # extractor + responder (real, fake); prompts/ as versioned files
     channels/        # WhatsApp client, quick replies
-    storage/         # SQLAlchemy repository, event log, projections
+    storage/         # SQLAlchemy repository, event log, projections, dashboard queries,
+                     #   rate limits, retention, migrations runner
+    config/          # loads app/config/<client>/ into ClientConfig
+    voice/           # ElevenLabs text-to-speech (optional)
     calendar/ geo/ kb/ clock/
-  api/               # FastAPI: webhooks, chat endpoint, dashboard routes
+  api/               # FastAPI: webhooks, chat and voice endpoints, dashboard routes, templates
   worker/            # turn processor, reminder scheduler
   config/            # one directory per client: client.yaml, templates/<lang>/<channel>.yaml
   bootstrap.py       # wires adapters to ports
-tests/               # unit, contract, recorded, smoke
-evals/               # scenarios, simulated candidates, baseline.json
+  settings.py        # environment settings
+  cli.py             # demo, create-user, seed-demo, rebuild-state…
+  seed.py            # invented demo candidates
+  metrics.py tracing.py capture.py   # Prometheus metrics, OpenTelemetry, raw LLM output capture
+tests/               # domain/, adapters/ (contract tests against the fakes), worker/, API and smoke
+evals/               # scenarios, holdout, simulated candidates, baseline.json, history.jsonl
+migrations/          # Alembic
+monitoring/          # Prometheus alert rules and their tests
+samples/             # transcripts from the latest live eval run
 ```
 
 ## Demo vs production
@@ -202,7 +212,7 @@ Not shown: one deployment serves one client (`CLIENT_ID` is a setting), the seve
 
 ## Deployment and monitoring
 
-Design only; the demo runs as one process.
+Partly built: the Docker image, the web and worker roles, `/metrics`, the alert rules and tracing exist (marked "Built" below); the rest is design. Locally the demo runs as one process.
 
 **Deploy**
 
@@ -221,10 +231,10 @@ Design only; the demo runs as one process.
 | LLM errors, refusals, fallback-template rate | The template fallback hides failures from candidates, so it must be visible to us | fallback rate > 5 % |
 | Queue depth and age | Messages waiting to be processed | oldest message > 60 s |
 | Completion rate, drop-off by stage | The product's core bet (see VISION) | completion drops > 20 % week on week |
-| Review-queue size and age | Recruiters falling behind | oldest item > 2 working days |
+| Review-queue size and age | Recruiters falling behind | oldest item > 48 h |
 | Cost per conversation (tokens × price) | Budget at 10K/week | > 2× the baseline |
 | Provider outage: fallback calls, held turns | The primary is down or rate-limited; candidates are waiting on a retry | any `held` for 5 min, or any `gave_up` |
-| Outbox backlog | ATS sync stuck | undelivered > 1 h |
+| Outbox backlog | WhatsApp messages not going out (later also ATS sync) | undelivered > 1 h |
 
 Built: `GET /metrics` (Prometheus; set `METRICS_TOKEN` to require a bearer token) on web processes. Worker processes, where turns and LLM calls happen, serve theirs on `METRICS_PORT`, with no token, so keep that port on a private network. `docker compose --profile monitoring up --build` runs Prometheus (`:9090`) and Alertmanager (`:9093`) locally with the rules in `monitoring/alerts.yml`. Alertmanager has no receiver yet, so alerts only show on those pages, and nothing notifies anyone. CI tests each rule against simulated metrics with `promtool`, in `monitoring/alerts_test.yml`. Only `NoWorkers` has fired on the running stack. Each signal above maps to a metric:
 
@@ -248,7 +258,7 @@ Tracing (OpenTelemetry): FastAPI's request spans, tagged with a `request.id`, co
 
 Raw LLM replies, for debugging extraction: set `LLM_CAPTURE_OUTPUTS` and read them with `python -m app.cli llm-outputs <id>`. Off by default, because they hold personal data ([limits](process-design-appendix.md)).
 
-Logs are structured and contain IDs, never message text or names (already true in the code). Traces follow one turn across API → queue → worker → LLM. A nightly job runs the live eval suite against production config and posts the scores.
+Logs are structured and contain IDs, never message text or names (already true in the code). Traces follow one turn from the API through the worker to each LLM call. Planned, not built: a nightly job that runs the live eval suite against production config and posts the scores.
 
 **10K candidates a week:** ~12 turns each is 120K turns a week, ~0.2 a second on average and ~2 a second at a 10× peak. A turn is mostly waiting for two LLM calls (~4–6 s), so by Little's law the peak needs ~10–12 turns in flight. Each worker process runs up to `WORKER_CONCURRENCY` turns at once in a thread pool (`app/worker/pool.py`, default 16; the conversation lease keeps them apart), so two worker replicas cover the peak with room for one to fail; scale on `sazon_pending_messages_oldest_seconds`. At peak that's ~4 LLM requests a second, which most provider tiers allow; input tokens per minute matter more than requests, so prompt caching matters. Postgres load is trivial. The real limits are the provider's rate limits and cost, and WhatsApp's rules: business-initiated (template) messages are capped per day by the number's messaging tier, which starts low and rises with volume and quality, so warm up the number and keep reminders inside the 24 h window where possible (free-form, no template). Check Meta's current limits before launch.
 
@@ -360,7 +370,7 @@ Sources: Anthropic model table (Claude API reference bundled with Claude Code, c
 
 ### Where the choice stands
 
-**Primary: GPT-5.6 Terra. Fallback: Claude Haiku 5.5**, a different vendor that meets the 5 s rule. These are the Docker image's defaults. The demo runs the same two models through OpenRouter (synthetic data only). As of 2026-11-04, on the 68-scenario suite:
+**Primary: GPT-5.6 Terra. Fallback: Claude Haiku 5.5**, a different vendor that meets the 5 s rule. These are the Docker image's defaults. The demo runs Terra through OpenRouter (synthetic data only), with Haiku through OpenRouter as an optional fallback (`LLM_FALLBACK_PROVIDER=openrouter`); `.env.example` falls back to the keyword mode instead. As of 2026-11-04, on the 68-scenario suite:
 
 | Model | Scripted | Simulated field accuracy | p50 / p95 s per turn | $ per conversation |
 | --- | --- | --- | --- | --- |
