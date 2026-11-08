@@ -139,6 +139,19 @@ def test_first_name_alone_is_accepted_after_retries(
     assert state.review_reasons == []
 
 
+def test_a_first_name_the_candidate_never_wrote_is_not_kept(
+    state: ConversationState, config: ClientConfig
+) -> None:
+    """Found by the property test: an invented first name was kept as a partial answer, then
+    accepted as "first name alone" once the attempts ran out."""
+    apply_extraction(state, ex(full_name="Ana").fields, config, TODAY, message="…")
+    assert state.candidate.full_name is None
+    register_failed_attempt(state, FieldName.FULL_NAME, config)
+    register_failed_attempt(state, FieldName.FULL_NAME, config)
+    meta = state.candidate.meta[FieldName.FULL_NAME]
+    assert (meta.status, meta.note) == (FieldStatus.NEEDS_REVIEW, "failed_twice")
+
+
 def test_a_value_the_candidate_never_wrote_goes_to_review(
     state: ConversationState, config: ClientConfig
 ) -> None:
