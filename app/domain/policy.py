@@ -468,9 +468,10 @@ def apply_extraction(
             return result
 
         if outcome.kind == "invalid":
-            # Keep only the partial value the validator vouches for (e.g. a first name), and
-            # never over an accepted answer: "soy Ana" doesn't undo "Ana López".
-            if candidate.meta[name].status == FieldStatus.MISSING:
+            # Keep only the partial value the validator vouches for (e.g. a first name), only if
+            # the candidate wrote it (an invented "Ana" would be accepted once attempts run
+            # out), and never over an accepted answer: "soy Ana" doesn't undo "Ana López".
+            if candidate.meta[name].status == FieldStatus.MISSING and grounded:
                 for attr, value in outcome.updates.items():
                     setattr(candidate, attr, value)
             result.rejected[name] = outcome.problem
