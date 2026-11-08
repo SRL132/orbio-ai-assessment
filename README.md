@@ -16,18 +16,21 @@ It's invite-only, so a chat or voice call needs a signed link made on the recrui
 
 ```bash
 uv sync
-cp .env.example .env                                     # LLM_PROVIDER=fake: no API key needed
-uv run uvicorn --factory app.api.main:create_app --reload
+uv run python -m app.cli demo
 ```
 
-That runs without an LLM, on keyword rules, and the chat says so. For the demo with a real LLM, set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` in `.env`: it runs on GPT-5.6 Terra, for synthetic data only. Production uses the same model through OpenAI's own API, with Claude Haiku 5.5 as the fallback: those are the Docker image's defaults, and it won't start without `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+The first time, it asks for a dashboard password (Enter generates one), so run it in a real terminal. It then copies `.env.example` to `.env`, adds the login `tester@sazon.test`, puts nine invented candidates on the dashboard and starts the app, printing the links. Run it again to start the app again: steps already done are skipped. `demo --reset` moves the database aside (to `data/sazon-backup-<time>.db`, nothing is deleted) and starts empty, which also clears old chats, reminders and login lockouts; add `--no-seed` for a dashboard with no invented candidates. Stop the app with Ctrl+C.
+
+It runs without auto-reload, because `--reload` waits for open chat tabs to close and hangs. When changing code, use `uv run uvicorn --factory app.api.main:create_app --reload --timeout-graceful-shutdown 2` instead.
+
+That runs without an LLM, on keyword rules, and the chat says so. For the demo with a real LLM, set `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` in `.env`: it runs on GPT-5.6 Terra, for synthetic data only. If OpenRouter can't be reached, the chat doesn't get stuck: after 8 s (`LLM_TIMEOUT_SECONDS`) and one retry, the keyword mode answers (`LLM_FALLBACK_PROVIDER=fake`). Production uses the same model through OpenAI's own API, with Claude Haiku 5.5 as the fallback: those are the Docker image's defaults, and it won't start without `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
 - Candidate chat: http://127.0.0.1:8000/chat. The demo bar can start a new chat and fast-forward the clock (+2 h / +24 h) to show reminders.
 - Voice call: http://127.0.0.1:8000/voice (Chrome or Edge). Press "Start call", then the button to talk. Replies are spoken by the browser, or by ElevenLabs if `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` are set.
 - WhatsApp: candidates message your WhatsApp number and get the same screening, with reply buttons, and reminders on their phone. Setup below.
-- Recruiter dashboard: http://127.0.0.1:8000/dashboard. To try it locally, run `uv run python -m app.cli create-user` and type a password, or press Enter to get a generated one: it creates `.env` if needed, sets `SESSION_SECRET` and adds the login `tester@sazon.test` (`DEMO_MODE=true` only), then start or restart the app. For a real account, create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
+- Recruiter dashboard: http://127.0.0.1:8000/dashboard. `demo` sets up a login the first time. To add another or change a password, run `uv run python -m app.cli create-user [email]` in a terminal and type a password, or press Enter to get a generated one: it creates `.env` if needed, sets `SESSION_SECRET` and adds the login (`tester@sazon.test` if no email is given; `DEMO_MODE=true` only), then start or restart the app. For a real account, create a password hash with `uv run python -m app.cli hash-password`, then set `RECRUITER_USERS=you@example.com:<hash>` and `SESSION_SECRET` in `.env`.
 
-To see the dashboard with candidates on it, run `uv run python -m app.cli seed-demo` once, with the app stopped. It plays nine invented chats through the real engine: qualified (one with an interview booked), disqualified, needs review, abandoned and in progress. It's free and offline, whatever `LLM_PROVIDER` says, so their replies are the keyword mode's templates. It only fills an empty database, and refuses unless `DEMO_MODE=true` and `INVITE_ONLY=false`.
+The invented candidates come from `uv run python -m app.cli seed-demo`, which `demo` runs on an empty database; it can also be run alone, with the app stopped. It plays nine invented chats through the real engine: qualified (one with an interview booked), disqualified, needs review, abandoned and in progress. It's free and offline, whatever `LLM_PROVIDER` says, so their replies are the keyword mode's templates. It only fills an empty database, and refuses unless `DEMO_MODE=true` and `INVITE_ONLY=false`.
 
 The database schema is managed with Alembic migrations, which run automatically at startup. A demo database created before migrations existed is refused with a clear message: delete `data/sazon.db` once.
 

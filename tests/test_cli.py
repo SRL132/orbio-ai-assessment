@@ -1,6 +1,7 @@
 """The admin CLI that makes password hashes for RECRUITER_USERS."""
 
 import re
+import socket
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -338,3 +339,153 @@ def test_seed_demo_reports_a_candidate_who_ends_up_elsewhere(
 def test_unknown_command_shows_usage(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["cli", "nope"]) == 2
     assert "hash-password" in capsys.readouterr().err
+
+
+@pytest.fixture
+def demo_env(env_dir: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """A fresh clone in a directory of its own, with the server start recorded, not run."""
+    env_dir.with_name(".env.example").write_text("RECRUITER_USERS=\nSESSION_SECRET=\n")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{env_dir.with_name('data') / 'sazon.db'}")
+    monkeypatch.setenv("CLIENT_ID", "grupo_sazon")
+    monkeypatch.setenv("INVITE_ONLY", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "fake")
+    monkeypatch.setattr(cli, "port_in_use", lambda _host, _port: False)
+    started: dict[str, object] = {}
+    monkeypatch.setattr(
+        cli.uvicorn, "run", lambda app, **options: started.update(app=app, **options)
+    )
+    return started
+
+
+def candidate_count() -> int:
+    return (
+        cli.DashboardQueries(make_engine(cli.Settings().database_url), "grupo_sazon")
+        .candidates(Filters())
+        .total
+    )
+
+
+def test_demo_sets_up_a_fresh_clone_and_starts_the_app(
+    demo_env: dict[str, object], env_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["cli", "demo"]) == 0
+
+    out = capsys.readouterr().out
+    users = parse_users(dotenv_values(env_dir).get("RECRUITER_USERS"))
+    assert verify_password(created_password(out), users["tester@sazon.test"])
+    assert candidate_count() == len(DEMO_CANDIDATES)
+    assert "http://127.0.0.1:8000/dashboard" in out
+    assert "Log in as: tester@sazon.test" in out
+    assert demo_env == {
+        "app": "app.api.main:create_app",
+        "factory": True,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "timeout_graceful_shutdown": 2,  # no reload: an open chat stream would hang it
+    }
+
+
+def test_demo_run_again_keeps_the_login_and_the_candidates(
+    demo_env: dict[str, object], env_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert cli.main(["cli", "demo"]) == 0
+    before = env_dir.read_text()
+
+    def no_prompt(_prompt: str) -> str:
+        raise AssertionError("asked for a password again")
+
+    monkeypatch.setattr(cli.getpass, "getpass", no_prompt)
+    demo_env.clear()
+    assert cli.main(["cli", "demo"]) == 0
+
+    assert env_dir.read_text() == before
+    assert candidate_count() == len(DEMO_CANDIDATES)
+    assert demo_env["port"] == 8000
+
+
+def test_demo_no_seed_leaves_the_dashboard_empty(demo_env: dict[str, object]) -> None:
+    assert cli.main(["cli", "demo", "--no-seed"]) == 0
+
+    assert candidate_count() == 0
+    assert demo_env
+
+
+def test_demo_reset_moves_the_old_database_aside_and_starts_fresh(
+    demo_env: dict[str, object], env_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["cli", "demo", "--no-seed"]) == 0
+    assert cli.main(["cli", "seed-demo"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["cli", "demo", "--reset", "--no-seed"]) == 0
+
+    assert "Moved the old database" in capsys.readouterr().out
+    (backup,) = env_dir.with_name("data").glob("sazon-backup-*.db")
+    assert backup.stat().st_size
+    assert candidate_count() == 0
+
+
+def test_demo_refuses_while_something_runs_on_its_port(
+    demo_env: dict[str, object],
+    env_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "port_in_use", lambda _host, _port: True)
+
+    assert cli.main(["cli", "demo", "--reset"]) == 1
+
+    assert "already running" in capsys.readouterr().err
+    assert not demo_env
+    assert not env_dir.with_name("data").exists()  # no reset, no seeding under a live app
+
+
+def test_demo_refuses_outside_demo_mode(
+    demo_env: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DEMO_MODE", "false")
+
+    assert cli.main(["cli", "demo"]) == 1
+    assert not demo_env
+
+
+def test_demo_stops_if_the_login_cant_be_made(
+    demo_env: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "short")
+
+    assert cli.main(["cli", "demo"]) == 1
+    assert not demo_env
+
+
+def test_reset_only_touches_local_sqlite(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.reset_database("postgresql+psycopg://db/sazon") == 1
+    assert cli.reset_database("sqlite:///:memory:") == 1
+    assert "local SQLite" in capsys.readouterr().err
+
+
+def test_create_user_without_a_terminal_says_so(
+    env_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def no_terminal(_prompt: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr(cli.getpass, "getpass", no_terminal)
+
+    assert cli.main(["cli", "create-user"]) == 1
+    assert "Terminal app" in capsys.readouterr().err
+    assert not env_dir.exists()
+
+
+def test_port_in_use_sees_a_listening_socket() -> None:
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        port = server.getsockname()[1]
+        assert cli.port_in_use("127.0.0.1", port)
+    assert not cli.port_in_use("127.0.0.1", port)
+
+
+def test_demo_with_an_unknown_flag_shows_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["cli", "demo", "--fast"]) == 2
+    assert "demo [--reset]" in capsys.readouterr().err
